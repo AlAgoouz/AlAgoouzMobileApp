@@ -271,7 +271,48 @@ export default function App() {
     }, 4500);
   };
 
-  // حفظ تلقائي في الجهاز ومزامنة مع Supabase إن وجد
+  // تحميل البيانات المشتركة من Supabase عند فتح التطبيق لأول مرة
+  const [cloudHydrated, setCloudHydrated] = useState<boolean>(false);
+
+  useEffect(() => {
+    const sb = getSupabaseClient();
+    if (!sb) {
+      setCloudHydrated(true);
+      return;
+    }
+    sb.from('bon_elagouz_store')
+      .select('*')
+      .eq('id', 'main_store')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          if (Array.isArray(data.items) && data.items.length > 0)
+            setItems(data.items);
+          if (Array.isArray(data.production_batches))
+            setProductionBatches(data.production_batches);
+          if (Array.isArray(data.purchase_invoices))
+            setPurchaseInvoices(data.purchase_invoices);
+          if (Array.isArray(data.sales_invoices))
+            setSalesInvoices(data.sales_invoices);
+          if (Array.isArray(data.suppliers)) setSuppliers(data.suppliers);
+          if (Array.isArray(data.customers)) setCustomers(data.customers);
+          if (Array.isArray(data.expenses)) setExpenses(data.expenses);
+          if (Array.isArray(data.partners) && data.partners.length > 0)
+            setPartners(data.partners);
+          if (Array.isArray(data.audit_logs)) setAuditLogs(data.audit_logs);
+          if (Array.isArray(data.employees)) setEmployees(data.employees);
+          if (Array.isArray(data.employee_transactions))
+            setEmployeeTransactions(data.employee_transactions);
+          if (Array.isArray(data.stocktaking_records))
+            setStocktakingRecords(data.stocktaking_records);
+          if (Array.isArray(data.account_payments))
+            setAccountPayments(data.account_payments);
+        }
+        setCloudHydrated(true);
+      });
+  }, []);
+
+  // حفظ تلقائي في الجهاز ومزامنة مع Supabase
   useEffect(() => {
     const payload = {
       items,
@@ -292,6 +333,8 @@ export default function App() {
       localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(payload));
     } catch {}
 
+    if (!cloudHydrated) return;
+
     const sb = getSupabaseClient();
     if (sb) {
       sb.from('bon_elagouz_store')
@@ -308,10 +351,15 @@ export default function App() {
           expenses,
           partners,
           audit_logs: auditLogs,
+          employees,
+          employee_transactions: employeeTransactions,
+          stocktaking_records: stocktakingRecords,
+          account_payments: accountPayments,
         })
         .then(() => {});
     }
   }, [
+    cloudHydrated,
     items,
     productionBatches,
     purchaseInvoices,

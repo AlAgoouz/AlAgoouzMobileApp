@@ -1,6 +1,5 @@
 -- =====================================================================
 -- قاعدة بيانات (بُن العجوز - أصل المزاج) على Supabase
--- انسخ هذا الكود بالكامل وضعه في (SQL Editor) داخل لوحة تحكم Supabase ثم اضغط Run
 -- =====================================================================
 
 -- 1. جدول حالة المتجر الموحدة للمزامنة اللحظية (Realtime State Store)
@@ -17,7 +16,11 @@ create table if not exists public.bon_elagouz_store (
   expenses jsonb not null default '[]'::jsonb,
   partners jsonb not null default '[]'::jsonb,
   audit_logs jsonb not null default '[]'::jsonb,
-  shifts jsonb not null default '[]'::jsonb
+  shifts jsonb not null default '[]'::jsonb,
+  employees jsonb not null default '[]'::jsonb,
+  employee_transactions jsonb not null default '[]'::jsonb,
+  stocktaking_records jsonb not null default '[]'::jsonb,
+  account_payments jsonb not null default '[]'::jsonb
 );
 
 -- 2. جدول استقبال شيتات الكاشير التلقائية (Cashier Watcher Queue)
@@ -31,7 +34,7 @@ create table if not exists public.cashier_sync_queue (
   processed_at timestamptz
 );
 
--- تفعيل الصلاحيات العامة للتطبيق وأداة الكاشير (يمكن تقييدها لاحقاً بـ Auth)
+-- تفعيل الصلاحيات العامة للتطبيق وأداة الكاشير
 alter table public.bon_elagouz_store enable row level security;
 alter table public.cashier_sync_queue enable row level security;
 
@@ -50,5 +53,14 @@ create policy "Allow full access to cashier_sync_queue"
   with check (true);
 
 -- تفعيل المزامنة اللحظية (Realtime) ليظهر أي تحديث فوراً عند الشركاء الأربعة
-alter publication supabase_realtime add table public.bon_elagouz_store;
-alter publication supabase_realtime add table public.cashier_sync_queue;
+do $$
+begin
+  alter publication supabase_realtime add table public.bon_elagouz_store;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.cashier_sync_queue;
+exception when duplicate_object then null;
+end $$;
