@@ -1,0 +1,20 @@
+{
+  "name": "بُن العجوز - أصل المزاج | نظام الإدارة والمخزن والإنتاج",
+  "short_name": "بُن العجوز",
+  "description": "نظام إدارة محل بُن العجوز للمشروبات والبن التركي والوصفات والإنتاج ومبيعات الكاشير والجملة",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F4F6F9",
+  "theme_color": "#1e3a8a",
+  "dir": "rtl",
+  "lang": "ar",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,1052 @@
+import React, { useState, useMemo } from 'react';
+import {
+  ChevronRight,
+  Scale,
+  CheckCircle2,
+  History,
+  Search,
+  Users,
+  Wallet,
+  CalendarCheck,
+  Award,
+  AlertOctagon,
+  Banknote,
+  Check,
+  UserPlus,
+  Trash2,
+} from 'lucide-react';
+import {
+  InventoryItem,
+  StocktakingAuditRecord,
+  StocktakingItemVariance,
+  Employee,
+  EmployeeTransaction,
+} from '../types/erp';
+
+// ============================================================================
+// 1. شاشة الجرد الفعلي على الميزان وكشف العجز والزيادة (StocktakingScreen)
+// ============================================================================
+interface StocktakingScreenProps {
+  items: InventoryItem[];
+  auditRecords: StocktakingAuditRecord[];
+  employees: Employee[];
+  currentPartnerName: string;
+  onCommitStocktaking: (
+    variances: StocktakingItemVariance[],
+    notes: string,
+    chargeShortageToEmployeeId?: string
+  ) => void;
+  onBack: () => void;
+}
+
+export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
+  items,
+  auditRecords,
+  employees,
+  currentPartnerName,
+  onCommitStocktaking,
+  onBack,
+}) => {
+  const [activeTab, setActiveTab] = useState<'new_audit' | 'history'>(
+    'new_audit'
+  );
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [search, setSearch] = useState<string>('');
+  const [inputMode, setInputMode] = useState<'kg' | 'gram'>('kg');
+  const [auditNotes, setAuditNotes] = useState<string>('');
+  const [chargeEmployeeId, setChargeEmployeeId] = useState<string>('');
+  const [savedBanner, setSavedBanner] = useState<string>('');
+
+  // الأصناف القابلة للجرد الفعلي (كل الأصناف ما عدا وصفات المشروبات اللحظية)
+  const auditableItems = useMemo(
+    () => items.filter((i) => i.category !== 'drink_recipe'),
+    [items]
+  );
+
+  // حالة الأوزان/الأعداد الفعلية المدخلة على الميزان (بالوحدة الأساسية kg أو piece أو liter)
+  const [actualCounts, setActualCounts] = useState<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const item of items) {
+      if (item.category !== 'drink_recipe') {
+        map[item.id] = item.stock;
+      }
+    }
+    // وضع فرق تجريبي بسيط في صنف واحد لتوضيح كشف العجز بالجرام والجنيه فوراً
+    if (map['blend-mahoug-special'] !== undefined) {
+      map['blend-mahoug-special'] = Number(
+        Math.max(0, map['blend-mahoug-special'] - 0.35).toFixed(3)
+      );
+    }
+    return map;
+  });
+
+  const filteredItems = useMemo(() => {
+    return auditableItems.filter((i) => {
+      if (categoryFilter !== 'all' && i.category !== categoryFilter)
+        return false;
+      if (
+        search.trim() &&
+        !i.name.toLowerCase().includes(search.toLowerCase()) &&
+        !i.code.toLowerCase().includes(search.toLowerCase())
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [auditableItems, categoryFilter, search]);
+
+  const allVariances: StocktakingItemVariance[] = useMemo(() => {
+    return auditableItems.map((item) => {
+      const actual =
+        actualCounts[item.id] !== undefined ? actualCounts[item.id] : item.stock;
+      const diff = Number((actual - item.stock).toFixed(3));
+      const finDiff = Number((diff * item.costPrice).toFixed(2));
+      return {
+        itemId: item.id,
+        itemName: item.name,
+        baseUnit: item.baseUnit,
+        systemStock: item.stock,
+        actualStock: actual,
+        difference: diff,
+        unitCost: item.costPrice,
+        financialDifference: finDiff,
+      };
+    });
+  }, [auditableItems, actualCounts]);
+
+  const changedVariances = useMemo(
+    () => allVariances.filter((v) => Math.abs(v.difference) > 0.0001),
+    [allVariances]
+  );
+
+  const summary = useMemo(() => {
+    let totalShortage = 0;
+    let totalSurplus = 0;
+    let shortageCount = 0;
+    let surplusCount = 0;
+
+    for (const v of allVariances) {
+      if (v.difference < -0.0001) {
+        totalShortage += Math.abs(v.financialDifference);
+        shortageCount++;
+      } else if (v.difference > 0.0001) {
+        totalSurplus += v.financialDifference;
+        surplusCount++;
+      }
+    }
+
+    return {
+      totalShortage: Number(totalShortage.toFixed(2)),
+      totalSurplus: Number(totalSurplus.toFixed(2)),
+      netVariance: Number((totalSurplus - totalShortage).toFixed(2)),
+      shortageCount,
+      surplusCount,
+      matchingCount:
+        auditableItems.length - shortageCount - surplusCount,
+    };
+  }, [allVariances, auditableItems.length]);
+
+  const handleUpdateActual = (item: InventoryItem, rawVal: string) => {
+    const num = parseFloat(rawVal);
+    if (isNaN(num) || num < 0) {
+      setActualCounts((prev) => ({ ...prev, [item.id]: 0 }));
+      return;
+    }
+    const inBase =
+      item.baseUnit === 'kg' && inputMode === 'gram'
+        ? Number((num / 1000).toFixed(3))
+        : Number(num.toFixed(3));
+    setActualCounts((prev) => ({ ...prev, [item.id]: inBase }));
+  };
+
+  const handleSaveAudit = () => {
+    onCommitStocktaking(
+      allVariances,
+      auditNotes || 'جرد فعلي للمخزن والفرع على الميزان',
+      chargeEmployeeId || undefined
+    );
+    setSavedBanner(
+      `✓ تم اعتماد محضر الجرد وتحديث الأرصدة الفعلية في المخزن بنجاح (بواسطة: ${currentPartnerName})`
+    );
+    setAuditNotes('');
+    setChargeEmployeeId('');
+  };
+
+  return (
+    <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-36">
+      {/* الهيدر */}
+      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
+        <button
+          onClick={onBack}
+          className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
+        >
+          <ChevronRight className="w-6 h-6" />
+        </button>
+        <div className="text-center">
+          <h1 className="text-base font-extrabold flex items-center justify-center gap-1.5">
+            <Scale className="w-5 h-5 text-[#D4AF37]" />
+            الجرد الفعلي على الميزان وكشف العجز
+          </h1>
+          <p className="text-[11px] text-[#D4AF37]">
+            مقارنة أرصدة السيستم بالوزن الفعلي بالجرام والكيلو والعدد
+          </p>
+        </div>
+        <div className="w-8" />
+      </div>
+
+      {/* تبويبات الجرد */}
+      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 sticky top-[64px] z-20">
+        <button
+          onClick={() => setActiveTab('new_audit')}
+          className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
+            activeTab === 'new_audit'
+              ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]'
+              : 'bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]'
+          }`}
+        >
+          <Scale className="w-4 h-4 text-[#D4AF37]" />
+          إجراء جرد فعلي الآن
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
+            activeTab === 'history'
+              ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]'
+              : 'bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]'
+          }`}
+        >
+          <History className="w-4 h-4 text-[#D4AF37]" />
+          سجل محاضر الجرد ({auditRecords.length})
+        </button>
+      </div>
+
+      <div className="p-3.5 space-y-4">
+        {savedBanner && (
+          <div className="bg-emerald-50 border-2 border-emerald-400 text-emerald-900 rounded-2xl p-3.5 flex items-center gap-2.5 text-xs font-extrabold">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>{savedBanner}</span>
+          </div>
+        )}
+
+        {activeTab === 'new_audit' && (
+          <>
+            {/* كارت ملخص فروقات الجرد اللحظي */}
+            <div className="rounded-3xl bg-gradient-to-br from-[#1E1612] via-[#2B201A] to-[#1A130F] text-white p-4 shadow-lg border-2 border-[#C59B27] space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-[#D4AF37]">
+                  نتيجة مطابقة الميزان مع رصيد السيستم
+                </span>
+                <div className="flex items-center gap-1 bg-white/10 rounded-xl p-1">
+                  <button
+                    onClick={() => setInputMode('kg')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition ${
+                      inputMode === 'kg'
+                        ? 'bg-[#C59B27] text-[#1E1612]'
+                        : 'text-stone-300'
+                    }`}
+                  >
+                    إدخال بالكيلو (كجم)
+                  </button>
+                  <button
+                    onClick={() => setInputMode('gram')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition ${
+                      inputMode === 'gram'
+                        ? 'bg-[#C59B27] text-[#1E1612]'
+                        : 'text-stone-300'
+                    }`}
+                  >
+                    إدخال بالجرام (جم)
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5 text-center">
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-2.5">
+                  <div className="text-[10px] text-emerald-300">أصناف مطابقة</div>
+                  <div className="text-base font-black text-white mt-0.5">
+                    {summary.matchingCount} صنف
+                  </div>
+                </div>
+
+                <div className="bg-red-500/15 border border-red-400/30 rounded-2xl p-2.5">
+                  <div className="text-[10px] text-red-300">
+                    إجمالي العجز ({summary.shortageCount} صنف)
+                  </div>
+                  <div className="text-base font-black text-red-400 mt-0.5">
+                    -{summary.totalShortage} ج.م
+                  </div>
+                </div>
+
+                <div className="bg-emerald-500/15 border border-emerald-400/30 rounded-2xl p-2.5">
+                  <div className="text-[10px] text-emerald-300">
+                    إجمالي الزيادة ({summary.surplusCount} صنف)
+                  </div>
+                  <div className="text-base font-black text-emerald-400 mt-0.5">
+                    +{summary.totalSurplus} ج.م
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* فلاتر الأقسام والبحث */}
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {[
+                { id: 'all', label: 'كل المخزن' },
+                { id: 'manufactured_blend', label: '☕ التوليفات الجاهزة' },
+                { id: 'raw_bean', label: '🫘 حبوب البن الخام' },
+                { id: 'raw_spice', label: '🌿 التحويجة واللبن والأكواب' },
+                { id: 'direct_product', label: '💧 المياه والمعلبات' },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setCategoryFilter(cat.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold shrink-0 border transition ${
+                    categoryFilter === cat.id
+                      ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]'
+                      : 'bg-white text-[#5C4B3E] border-[#E6DEC8]'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-white rounded-xl border border-[#E6DEC8] px-3.5 py-2 flex items-center gap-2 shadow-sm">
+              <Search className="w-4 h-4 text-[#A68429]" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="ابحث عن صنف لجرده على الميزان..."
+                className="w-full text-xs font-bold bg-transparent focus:outline-none"
+              />
+            </div>
+
+            {/* قائمة الأصناف وإدخال الوزن الفعلي */}
+            <div className="space-y-2.5">
+              {filteredItems.map((item) => {
+                const actualInBase =
+                  actualCounts[item.id] !== undefined
+                    ? actualCounts[item.id]
+                    : item.stock;
+                const diffInBase = Number(
+                  (actualInBase - item.stock).toFixed(3)
+                );
+                const diffInGrams = Math.round(diffInBase * 1000);
+                const finDiff = Number(
+                  (diffInBase * item.costPrice).toFixed(2)
+                );
+                const isKg = item.baseUnit === 'kg';
+
+                const displayInputValue =
+                  isKg && inputMode === 'gram'
+                    ? Math.round(actualInBase * 1000)
+                    : actualInBase;
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`bg-white rounded-2xl p-3.5 border shadow-sm space-y-2.5 ${
+                      diffInBase < -0.0001
+                        ? 'border-red-400 bg-red-50/20'
+                        : diffInBase > 0.0001
+                        ? 'border-emerald-400 bg-emerald-50/20'
+                        : 'border-[#E6DEC8]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-[10px] font-bold bg-[#FAF8F4] text-[#7A6855] px-2 py-0.5 rounded border border-[#E6DEC8]">
+                          {item.code}
+                        </span>
+                        <h3 className="text-sm font-extrabold text-[#1E1612] mt-1">
+                          {item.name}
+                        </h3>
+                      </div>
+
+                      {/* بادج حالة المطابقة أو العجز */}
+                      {Math.abs(diffInBase) < 0.0001 ? (
+                        <span className="text-[11px] font-extrabold bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-2.5 py-1 rounded-xl shrink-0">
+                          ✓ مطابق للميزان
+                        </span>
+                      ) : diffInBase < 0 ? (
+                        <span className="text-[11px] font-black bg-red-100 text-red-700 px-2.5 py-1 rounded-xl shrink-0">
+                          ⚠️ عجز{' '}
+                          {isKg
+                            ? `${Math.abs(diffInGrams)} جم (${Math.abs(
+                                diffInBase
+                              )} كجم)`
+                            : `${Math.abs(diffInBase)} وحدة`}{' '}
+                          ({finDiff} ج.م)
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-black bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-xl shrink-0">
+                          + زيادة{' '}
+                          {isKg
+                            ? `${diffInGrams} جم`
+                            : `${diffInBase} وحدة`}{' '}
+                          (+{finDiff} ج.م)
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 items-center bg-[#FAF8F4] p-2.5 rounded-xl border border-[#EDE6D8]">
+                      <div>
+                        <div className="text-[10px] text-[#7A6855]">
+                          الرصيد المفترض بالسيستم:
+                        </div>
+                        <div className="text-xs font-black text-[#1E1612]">
+                          {item.stock}{' '}
+                          {isKg
+                            ? `كجم (${Math.round(item.stock * 1000)} جم)`
+                            : item.baseUnit === 'liter'
+                            ? 'لتر'
+                            : 'قطعة'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-extrabold text-[#9E7918] block mb-1">
+                          الوزن/العدد الفعلي على الميزان (
+                          {isKg
+                            ? inputMode === 'gram'
+                              ? 'بالجرام'
+                              : 'بالكيلو'
+                            : item.baseUnit === 'liter'
+                            ? 'باللتر'
+                            : 'بالعدد'}
+                          ):
+                        </label>
+                        <input
+                          type="number"
+                          step={isKg && inputMode === 'kg' ? '0.05' : '1'}
+                          value={displayInputValue}
+                          onChange={(e) =>
+                            handleUpdateActual(item, e.target.value)
+                          }
+                          className="w-full bg-white border-2 border-[#C59B27] rounded-xl px-3 py-1.5 text-sm font-black text-center text-[#1E1612] focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* خيار تحميل العجز على عامل / ملاحظات الجرد */}
+            <div className="bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-3">
+              <div className="text-xs font-extrabold text-[#1E1612]">
+                إعدادات تسوية محضر الجرد:
+              </div>
+
+              {summary.totalShortage > 0 && (
+                <div className="bg-red-50/70 border border-red-200 rounded-xl p-3 space-y-2">
+                  <label className="text-xs font-extrabold text-red-800 block">
+                    هل تريد تحميل قيمة العجز ({summary.totalShortage} ج.م) كخصم على
+                    أحد العمال؟ (اختياري)
+                  </label>
+                  <select
+                    value={chargeEmployeeId}
+                    onChange={(e) => setChargeEmployeeId(e.target.value)}
+                    className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs font-bold text-[#1E1612]"
+                  >
+                    <option value="">
+                      لا — تسجيل العجز كفقد/هدر طحن طبيعي بالمخزن
+                    </option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        تحميل العجز على: {emp.name} ({emp.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <input
+                type="text"
+                value={auditNotes}
+                onChange={(e) => setAuditNotes(e.target.value)}
+                placeholder="ملاحظات محضر الجرد (مثلاً: جرد نهاية الأسبوع للفرع والمخزن)..."
+                className="w-full bg-[#FAF8F4] border border-[#DFD7C6] rounded-xl px-3.5 py-2 text-xs font-bold"
+              />
+            </div>
+          </>
+        )}
+
+        {/* سجل محاضر الجرد السابقة */}
+        {activeTab === 'history' && (
+          <div className="space-y-3">
+            {auditRecords.map((rec) => (
+              <div
+                key={rec.id}
+                className="bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-2.5"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-[#9E7918] bg-[#FDF8EB] px-2.5 py-1 rounded-lg border border-[#E8D8A8]">
+                    #{rec.auditNumber} • {rec.date}
+                  </span>
+                  <span
+                    className={`text-xs font-black ${
+                      rec.netVarianceValue < 0
+                        ? 'text-red-600'
+                        : 'text-emerald-700'
+                    }`}
+                  >
+                    صافي الفروقات: {rec.netVarianceValue} ج.م
+                  </span>
+                </div>
+                <div className="text-xs font-bold text-[#1E1612]">
+                  {rec.notes} — (قام بالجرد: {rec.partnerName})
+                </div>
+                <div className="bg-[#FAF8F4] rounded-xl p-2.5 space-y-1 border border-[#EDE6D8] text-[11px]">
+                  {rec.itemsAudited.map((v, i) => (
+                    <div key={i} className="flex justify-between">
+                      <span>• {v.itemName}</span>
+                      <span
+                        className={
+                          v.difference < 0
+                            ? 'text-red-600 font-bold'
+                            : 'text-emerald-700 font-bold'
+                        }
+                      >
+                        السيستم: {v.systemStock} | الفعلي: {v.actualStock} (
+                        {v.difference} {v.baseUnit === 'kg' ? 'كجم' : 'وحدة'})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* شريط الاعتماد السفلي فوق شريط القوائم المثبت */}
+      {activeTab === 'new_audit' && (
+        <div className="fixed bottom-[58px] left-0 right-0 bg-white border-t border-[#E6DEC8] p-3 flex items-center gap-2.5 z-30 max-w-[445px] mx-auto shadow-md">
+          <button
+            onClick={handleSaveAudit}
+            className="flex-1 bg-[#1E1612] hover:bg-[#2E221A] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-3 rounded-xl shadow-md flex items-center justify-center gap-2"
+          >
+            <Check className="w-5 h-5 text-[#D4AF37]" />
+            <span>
+              اعتماد الجرد وتحديث المخزن ({changedVariances.length} فروقات)
+            </span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================================================
+// 2. شاشة شؤون العمال والباريستا: اليوميات، السلف، والمرتبات (StaffAndPayrollScreen)
+// ============================================================================
+interface StaffAndPayrollScreenProps {
+  employees: Employee[];
+  transactions: EmployeeTransaction[];
+  currentPartnerName: string;
+  onRecordEmployeeAction: (
+    employeeId: string,
+    type: EmployeeTransaction['type'],
+    amount: number,
+    notes: string
+  ) => void;
+  onAddNewEmployee: (emp: Omit<Employee, 'id'>) => void;
+  onDeleteEmployee: (empId: string) => void;
+  onBack: () => void;
+}
+
+export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
+  employees,
+  transactions,
+  onRecordEmployeeAction,
+  onAddNewEmployee,
+  onDeleteEmployee,
+  onBack,
+}) => {
+  const [activeTab, setActiveTab] = useState<'staff' | 'ledger'>('staff');
+  const [actionModal, setActionModal] = useState<{
+    employee: Employee;
+    type: EmployeeTransaction['type'];
+  } | null>(null);
+  const [actionAmount, setActionAmount] = useState<string>('');
+  const [actionNotes, setActionNotes] = useState<string>('');
+
+  // نافذة إضافة عامل جديد
+  const [showAddEmpModal, setShowAddEmpModal] = useState(false);
+  const [newEmpName, setNewEmpName] = useState('');
+  const [newEmpRole, setNewEmpRole] = useState<Employee['role']>('باريستا');
+  const [newEmpPhone, setNewEmpPhone] = useState('');
+  const [newEmpSalaryType, setNewEmpSalaryType] =
+    useState<Employee['salaryType']>('شهري');
+  const [newEmpMonthly, setNewEmpMonthly] = useState('5500');
+  const [newEmpDaily, setNewEmpDaily] = useState('185');
+
+  // حساب مستحقات العامل الصافية
+  const calculateNetPayable = (emp: Employee) => {
+    const earned =
+      emp.salaryType === 'يومية'
+        ? emp.workedDaysThisMonth * emp.dailyRate
+        : emp.baseMonthlySalary;
+    return Math.max(
+      0,
+      earned +
+        emp.totalBonuses -
+        emp.totalAdvances -
+        emp.totalDeductions -
+        emp.totalPaidOut
+    );
+  };
+
+  const totals = useMemo(() => {
+    const totalAdvances = employees.reduce((s, e) => s + e.totalAdvances, 0);
+    const totalDeductions = employees.reduce(
+      (s, e) => s + e.totalDeductions,
+      0
+    );
+    const totalNetRemaining = employees.reduce(
+      (s, e) => s + calculateNetPayable(e),
+      0
+    );
+    return { totalAdvances, totalDeductions, totalNetRemaining };
+  }, [employees]);
+
+  const openActionModal = (
+    emp: Employee,
+    type: EmployeeTransaction['type']
+  ) => {
+    setActionModal({ employee: emp, type });
+    if (type === 'حضور يومية') {
+      setActionAmount(String(emp.dailyRate));
+      setActionNotes('تسجيل حضور يومية عمل');
+    } else if (type === 'صرف راتب') {
+      setActionAmount(String(calculateNetPayable(emp)));
+      setActionNotes('تصفية وصرف مستحقات الراتب');
+    } else if (type === 'سلفة') {
+      setActionAmount('300');
+      setActionNotes('سلفة نقدية للعامل');
+    } else if (type === 'خصم/عجز') {
+      setActionAmount('100');
+      setActionNotes('خصم إداري / عجز');
+    } else {
+      setActionAmount('200');
+      setActionNotes('مكافأة التزام وتميز');
+    }
+  };
+
+  const handleConfirmAction = () => {
+    if (!actionModal) return;
+    const amt = parseFloat(actionAmount) || 0;
+    if (amt <= 0) return;
+    onRecordEmployeeAction(
+      actionModal.employee.id,
+      actionModal.type,
+      amt,
+      actionNotes
+    );
+    setActionModal(null);
+  };
+
+  const handleCreateEmployee = () => {
+    if (!newEmpName.trim()) return;
+    onAddNewEmployee({
+      name: newEmpName.trim(),
+      role: newEmpRole,
+      phone: newEmpPhone || '-',
+      salaryType: newEmpSalaryType,
+      baseMonthlySalary: parseFloat(newEmpMonthly) || 5000,
+      dailyRate: parseFloat(newEmpDaily) || 180,
+      workedDaysThisMonth: 0,
+      totalAdvances: 0,
+      totalDeductions: 0,
+      totalBonuses: 0,
+      totalPaidOut: 0,
+    });
+    setNewEmpName('');
+    setShowAddEmpModal(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
+      {/* الهيدر */}
+      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
+        <button
+          onClick={onBack}
+          className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
+        >
+          <ChevronRight className="w-6 h-6" />
+        </button>
+        <div className="text-center">
+          <h1 className="text-base font-extrabold flex items-center justify-center gap-1.5">
+            <Users className="w-5 h-5 text-[#D4AF37]" />
+            شؤون العمال والباريستا والرواتب
+          </h1>
+          <p className="text-[11px] text-[#D4AF37]">
+            متابعة اليوميات والسلف والخصومات والمرتبات بدفتر مستقل
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAddEmpModal(true)}
+          className="bg-gradient-to-l from-[#D4AF37] to-[#B38728] text-[#1E1612] px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow"
+        >
+          <UserPlus className="w-4 h-4" />
+          عامل جديد
+        </button>
+      </div>
+
+      {/* التبويبات */}
+      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 sticky top-[64px] z-20">
+        <button
+          onClick={() => setActiveTab('staff')}
+          className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
+            activeTab === 'staff'
+              ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]'
+              : 'bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]'
+          }`}
+        >
+          <Users className="w-4 h-4 text-[#D4AF37]" />
+          بطاقات العمال ({employees.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('ledger')}
+          className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
+            activeTab === 'ledger'
+              ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]'
+              : 'bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]'
+          }`}
+        >
+          <History className="w-4 h-4 text-[#D4AF37]" />
+          سجل السلف واليوميات ({transactions.length})
+        </button>
+      </div>
+
+      <div className="p-3.5 space-y-4">
+        {/* ملخص مالي للعمال */}
+        <div className="rounded-3xl bg-gradient-to-br from-[#1E1612] via-[#2B201A] to-[#1A130F] text-white p-4 shadow-lg border-2 border-[#C59B27] grid grid-cols-3 gap-2 text-center">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-2.5">
+            <div className="text-[10px] text-[#D4AF37]">إجمالي السلف</div>
+            <div className="text-sm font-black text-amber-300 mt-0.5">
+              {totals.totalAdvances.toLocaleString('ar-EG')} ج.م
+            </div>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-2.5">
+            <div className="text-[10px] text-[#D4AF37]">الخصومات والعجز</div>
+            <div className="text-sm font-black text-red-400 mt-0.5">
+              {totals.totalDeductions.toLocaleString('ar-EG')} ج.م
+            </div>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-2.5">
+            <div className="text-[10px] text-[#D4AF37]">المتبقي للصرف</div>
+            <div className="text-sm font-black text-emerald-400 mt-0.5">
+              {totals.totalNetRemaining.toLocaleString('ar-EG')} ج.م
+            </div>
+          </div>
+        </div>
+
+        {activeTab === 'staff' && (
+          <div className="space-y-3.5">
+            {employees.map((emp) => {
+              const netPayable = calculateNetPayable(emp);
+              const earned =
+                emp.salaryType === 'يومية'
+                  ? emp.workedDaysThisMonth * emp.dailyRate
+                  : emp.baseMonthlySalary;
+
+              return (
+                <div
+                  key={emp.id}
+                  className="bg-white rounded-3xl p-4 border border-[#E6DEC8] shadow-sm space-y-3"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-[#1E1612]">
+                          {emp.name}
+                        </span>
+                        <span className="text-[10px] font-extrabold bg-[#FDF8EB] text-[#9E7918] px-2 py-0.5 rounded-lg border border-[#E8D8A8]">
+                          {emp.role}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-[#7A6855] mt-0.5">
+                        نظام الحساب: <b>{emp.salaryType}</b> (اليومية:{' '}
+                        {emp.dailyRate} ج.م • حضور: {emp.workedDaysThisMonth}{' '}
+                        يوم)
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <div className="text-left bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-2xl">
+                        <div className="text-[10px] text-emerald-800 font-bold">
+                          الصافي المتبقي
+                        </div>
+                        <div className="text-sm font-black text-emerald-700">
+                          {netPayable.toLocaleString('ar-EG')} ج.م
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => onDeleteEmployee(emp.id)}
+                        className="p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                        title="حذف العامل"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* تفصيل الحساب */}
+                  <div className="grid grid-cols-4 gap-1.5 text-center bg-[#FAF8F4] p-2.5 rounded-2xl border border-[#EDE6D8] text-xs">
+                    <div>
+                      <div className="text-[10px] text-[#7A6855]">المستحق</div>
+                      <div className="font-black text-[#1E1612]">
+                        {earned} ج.م
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-[#7A6855]">السلف</div>
+                      <div className="font-black text-amber-700">
+                        -{emp.totalAdvances}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-[#7A6855]">خصم/عجز</div>
+                      <div className="font-black text-red-600">
+                        -{emp.totalDeductions}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-[#7A6855]">ما تم صرفه</div>
+                      <div className="font-black text-blue-700">
+                        {emp.totalPaidOut}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* أزرار العمليات السريعة للعامل */}
+                  <div className="grid grid-cols-5 gap-1.5 pt-1">
+                    <button
+                      onClick={() => openActionModal(emp, 'سلفة')}
+                      className="bg-[#FDF8EB] hover:bg-[#F5E8C7] text-[#9E7918] border border-[#E8D8A8] rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-[10px] font-extrabold"
+                    >
+                      <Wallet className="w-3.5 h-3.5" />
+                      <span>سلفة</span>
+                    </button>
+
+                    <button
+                      onClick={() => openActionModal(emp, 'حضور يومية')}
+                      className="bg-[#FAF8F4] hover:bg-stone-200/70 text-[#1E1612] border border-[#DFD7C6] rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-[10px] font-extrabold"
+                    >
+                      <CalendarCheck className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>+ يومية</span>
+                    </button>
+
+                    <button
+                      onClick={() => openActionModal(emp, 'خصم/عجز')}
+                      className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-[10px] font-extrabold"
+                    >
+                      <AlertOctagon className="w-3.5 h-3.5" />
+                      <span>خصم/عجز</span>
+                    </button>
+
+                    <button
+                      onClick={() => openActionModal(emp, 'مكافأة')}
+                      className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-[10px] font-extrabold"
+                    >
+                      <Award className="w-3.5 h-3.5" />
+                      <span>مكافأة</span>
+                    </button>
+
+                    <button
+                      onClick={() => openActionModal(emp, 'صرف راتب')}
+                      className="bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-[10px] font-extrabold"
+                    >
+                      <Banknote className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      <span>صرف راتب</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* سجل حركات العمال (السلف واليوميات والخصومات) */}
+        {activeTab === 'ledger' && (
+          <div className="space-y-2.5">
+            {transactions.map((tr) => (
+              <div
+                key={tr.id}
+                className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] shadow-sm flex items-center justify-between"
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-[#1E1612]">
+                      {tr.employeeName}
+                    </span>
+                    <span
+                      className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                        tr.type === 'سلفة'
+                          ? 'bg-amber-100 text-amber-800'
+                          : tr.type === 'خصم/عجز'
+                          ? 'bg-red-100 text-red-700'
+                          : tr.type === 'صرف راتب'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-emerald-100 text-emerald-800'
+                      }`}
+                    >
+                      {tr.type}
+                    </span>
+                  </div>
+                  <div className="text-xs text-[#5C4B3E]">{tr.notes}</div>
+                  <div className="text-[10px] text-[#7A6855]">
+                    بواسطة: {tr.partnerName} • {tr.date}
+                  </div>
+                </div>
+                <div className="text-sm font-black text-[#1E1612]">
+                  {tr.amount.toLocaleString('ar-EG')} ج.م
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* نافذة تسجيل حركة للعامل */}
+      {actionModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-4 shadow-2xl border border-[#C59B27]">
+            <h3 className="text-sm font-extrabold text-[#1E1612]">
+              تسجيل ({actionModal.type}) — {actionModal.employee.name}
+            </h3>
+            <div>
+              <label className="text-xs font-bold text-[#7A6855] block mb-1">
+                المبلغ (ج.م)
+              </label>
+              <input
+                type="number"
+                value={actionAmount}
+                onChange={(e) => setActionAmount(e.target.value)}
+                className="w-full border border-[#DFD7C6] rounded-xl px-3.5 py-2.5 text-base font-black text-center"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-[#7A6855] block mb-1">
+                بيان / ملاحظات
+              </label>
+              <input
+                type="text"
+                value={actionNotes}
+                onChange={(e) => setActionNotes(e.target.value)}
+                className="w-full border border-[#DFD7C6] rounded-xl px-3.5 py-2 text-xs font-bold"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleConfirmAction}
+                className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl"
+              >
+                حفظ وتأكيد
+              </button>
+              <button
+                onClick={() => setActionModal(null)}
+                className="px-4 py-2.5 rounded-xl border border-[#DFD7C6] text-[#5C4B3E] font-bold"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة إضافة عامل جديد */}
+      {showAddEmpModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md p-5 space-y-3.5 shadow-2xl border border-[#C59B27]">
+            <h3 className="text-base font-extrabold text-[#1E1612]">
+              إضافة عامل أو باريستا جديد
+            </h3>
+            <input
+              type="text"
+              value={newEmpName}
+              onChange={(e) => setNewEmpName(e.target.value)}
+              placeholder="اسم العامل ثلاثي..."
+              className="w-full border border-[#DFD7C6] rounded-xl px-3.5 py-2.5 text-sm font-bold"
+            />
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
+                <label className="text-xs font-bold text-[#7A6855] block mb-1">
+                  الوظيفة
+                </label>
+                <select
+                  value={newEmpRole}
+                  onChange={(e) =>
+                    setNewEmpRole(e.target.value as Employee['role'])
+                  }
+                  className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-white"
+                >
+                  <option value="باريستا">باريستا</option>
+                  <option value="كاشير">كاشير</option>
+                  <option value="مسؤول مطحنة وإنتاج">مسؤول مطحنة وإنتاج</option>
+                  <option value="عامل مخزن وفرع">عامل مخزن وفرع</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-[#7A6855] block mb-1">
+                  نظام الراتب
+                </label>
+                <select
+                  value={newEmpSalaryType}
+                  onChange={(e) =>
+                    setNewEmpSalaryType(
+                      e.target.value as Employee['salaryType']
+                    )
+                  }
+                  className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-white"
+                >
+                  <option value="شهري">راتب شهري ثابت</option>
+                  <option value="يومية">حساب باليومية</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-[#7A6855] block mb-1">
+                  الراتب الشهري (ج.م)
+                </label>
+                <input
+                  type="number"
+                  value={newEmpMonthly}
+                  onChange={(e) => setNewEmpMonthly(e.target.value)}
+                  className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-[#7A6855] block mb-1">
+                  قيمة اليومية (ج.م)
+                </label>
+                <input
+                  type="number"
+                  value={newEmpDaily}
+                  onChange={(e) => setNewEmpDaily(e.target.value)}
+                  className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={handleCreateEmployee}
+                className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl"
+              >
+                إضافة العامل
+              </button>
+              <button
+                onClick={() => setShowAddEmpModal(false)}
+                className="px-5 py-2.5 rounded-xl border border-[#DFD7C6] text-[#5C4B3E] font-bold"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
