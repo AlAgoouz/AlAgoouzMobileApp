@@ -102,3 +102,18 @@ it('does not discard a draft on repeated SIGNED_IN events', async () => {
   expect(result.current.engine.hasPending).toBe(true);
   act(() => result.current.engine.logout());
 });
+
+it.each([
+  [{ code: 'email_not_confirmed', status: 400 }, 'البريد لم يُؤكَّد'],
+  [{ code: 'invalid_credentials', status: 400 }, 'البريد أو كلمة المرور غير صحيحين'],
+  [{ code: 'over_request_rate_limit', status: 429 }, 'انتظر بضع دقائق'],
+  [{ name: 'AuthRetryableFetchError', status: 0 }, 'تعذر الاتصال'],
+  [{ status: 503 }, 'مشكلة مؤقتة'],
+])('explains a rejected login without exposing service details: %j', async (error, message) => {
+  const { sb } = client('partner', null);
+  sb.auth.signInWithPassword.mockResolvedValueOnce({ error } as any);
+  const { result } = renderHook(() => useErpStore());
+  await waitFor(() => expect(result.current.authReady).toBe(true));
+  await expect(result.current.signIn('owner@example.test', 'secret', false)).rejects.toThrow(message);
+  expect(result.current.member).toBeNull();
+});

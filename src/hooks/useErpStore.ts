@@ -3,6 +3,7 @@ import { getSupabaseClient } from '../lib/supabaseSync';
 import { StoreEngine } from '../lib/storeEngine';
 import { fromCloud, toCloud } from '../lib/storeState';
 import { scrubLegacyPasswords } from '../lib/legacyCache';
+import { authErrorMessage } from '../lib/authErrors';
 
 export function useErpStore() {
   const [member, setMember] = useState<{
@@ -200,8 +201,7 @@ export function useErpStore() {
       email: email.trim(),
       password,
     });
-    if (error)
-      throw new Error('تعذر الدخول؛ تحقق من البريد وكلمة المرور والاتصال');
+    if (error) throw new Error(authErrorMessage(error, 'signIn'));
   }
   async function signUp(email: string, password: string) {
     const sb = getSupabaseClient();
@@ -213,10 +213,7 @@ export function useErpStore() {
       password,
       options: { emailRedirectTo: window.location.origin },
     });
-    if (error)
-      throw new Error(
-        'تعذر إنشاء الحساب؛ تحقق من البريد أو سجل الدخول إذا كان موجودًا.',
-      );
+    if (error) throw new Error(authErrorMessage(error, 'signUp'));
   }
   async function signOut() {
     if (engine.hasPending)
