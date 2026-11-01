@@ -4,7 +4,7 @@
 
 - المشروع على Vercel: `agouz` داخل `AlAgoouz`.
 - قاعدة Supabase الجديدة: `Agouz` (`srinizbfqozvdqsuvvbc`).
-- رابط المشروع: [Agouz](https://agouz-alagoouz.vercel.app).
+- رابط المشروع: [Agouz](https://agouz.vercel.app).
 - راجع [ملاحظات الإصدار](RELEASE.md) ونتائج الاختبارات داخل `audit` للتمييز بين ما اختُبر وما يحتاج جهازًا أو تأكيدًا من المالك.
 
 ## أول استخدام

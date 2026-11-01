@@ -6,7 +6,7 @@
 
 قاعدة Supabase الجديدة: `Agouz`، مرجعها `srinizbfqozvdqsuvvbc`. تُضبط الواجهة بمتغيري `VITE_SUPABASE_URL` و`VITE_SUPABASE_PUBLISHABLE_KEY` فقط. لا يُستخدم مفتاح خدمة خاص داخل التطبيق.
 
-رابط الإنتاج المخصص للمشروع: [Agouz](https://agouz-alagoouz.vercel.app). الاسم الأقصر `agouz.vercel.app` كان مرتبطًا بمشروع آخر، لذلك لم تتم محاولة انتزاعه أو تغيير مشروع لا يخص هذه العملية.
+رابط الإنتاج: [Agouz](https://agouz.vercel.app)، والرابط الإضافي [agouz-alagoouz.vercel.app](https://agouz-alagoouz.vercel.app). تحقق النشر الأول من ربط الاسمين بالمشروع نفسه وعودة HTTP 200 ومطابقة ملف التطبيق؛ كلا الاسمين موثقان لدى Vercel.
 
 ## بداية التشغيل
 
