@@ -1710,31 +1710,33 @@ export default function App() {
               </div>
 
               {(() => {
-                const total = Math.max(1, dashboardAnalytics.salesTotal);
+                const total = dashboardAnalytics.salesTotal || 1;
                 const wholesalePct = Math.round(
                   (dashboardAnalytics.wholesaleSales / total) * 100,
                 );
                 const retailPct = Math.round(
                   (dashboardAnalytics.retailPosSales / total) * 100,
                 );
-                const cashierPct = Math.max(0, 100 - wholesalePct - retailPct);
+                const cashierPct = Math.round(
+                  (dashboardAnalytics.cashierSales / total) * 100,
+                );
 
                 return (
                   <div className="space-y-3">
                     {/* شريط التوزيع المجمع */}
                     <div className="w-full h-4 rounded-full bg-[#FAF8F4] overflow-hidden flex border border-[#E6DEC8] p-0.5 gap-0.5">
                       <div
-                        style={{ width: `${Math.max(5, wholesalePct)}%` }}
+                        style={{ width: `${wholesalePct}%` }}
                         className="h-full bg-[#1E1612] rounded-r-full transition-all"
                         title="مبيعات الجملة"
                       />
                       <div
-                        style={{ width: `${Math.max(5, retailPct)}%` }}
+                        style={{ width: `${retailPct}%` }}
                         className="h-full bg-[#C59B27] transition-all"
                         title="مبيعات المحل المباشرة"
                       />
                       <div
-                        style={{ width: `${Math.max(5, cashierPct)}%` }}
+                        style={{ width: `${cashierPct}%` }}
                         className="h-full bg-[#1F9D62] rounded-l-full transition-all"
                         title="شيت كاشير المحل"
                       />
