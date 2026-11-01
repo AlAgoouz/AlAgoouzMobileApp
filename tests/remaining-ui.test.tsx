@@ -1,0 +1,172 @@
+// @vitest-environment jsdom
+import React from "react";
+import { afterEach, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  StaffAndPayrollScreen,
+  StocktakingScreen,
+} from "../src/components/StocktakingAndStaffScreens";
+import { SalesPosScreen } from "../src/components/SalesAndCashierSyncScreens";
+import { ProductionAndRecipesScreen } from "../src/components/ProductionAndRecipesScreen";
+import { emptyStore, validateStore } from "../src/lib/storeState";
+import { INITIAL_ITEMS, INITIAL_EMPLOYEES } from "../src/data/initialData";
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+it("creates a valid recipe draft before opening recipe editing", () => {
+  const save = vi.fn((item) => {
+    validateStore({ ...emptyStore, items: [{ ...item, id: "new-blend" }] });
+    return true;
+  });
+  render(
+    <ProductionAndRecipesScreen
+      items={[]}
+      productionBatches={[]}
+      currentPartnerName="Owner"
+      onExecuteProduction={() => ({ ok: false, message: "" })}
+      onSaveItemRecipe={() => {}}
+      onCreateNewBlendOrDrink={save}
+      onBack={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "جديد" }));
+  fireEvent.change(
+    screen.getByPlaceholderText("مثلاً: توليفة بُن العجوز اسبشيال بالبندق"),
+    { target: { value: "New blend" } },
+  );
+  fireEvent.click(screen.getByRole("button", { name: "حفظ وفتح الوصفة" }));
+  expect(save).toHaveBeenCalledOnce();
+  expect(save.mock.calls[0][0].hasRecipe).toBe(false);
+  expect(save.mock.calls[0][0].stock).toBe(0);
+});
+const bean = {
+  ...INITIAL_ITEMS.find((i) => i.category === "raw_bean")!,
+  name: "Test bean",
+  stock: 10,
+};
+const emp = {
+  ...INITIAL_EMPLOYEES[0],
+  salaryType: "شهري" as const,
+  baseMonthlySalary: 100,
+  totalAdvances: 0,
+  totalDeductions: 0,
+  totalPaidOut: 0,
+  totalBonuses: 0,
+};
+it("keeps the payroll amount editable after rejecting an overpayment and permits retry", () => {
+  const save = vi.fn();
+  render(
+    <StaffAndPayrollScreen
+      employees={[emp]}
+      transactions={[]}
+      onRecordEmployeeAction={save}
+      onAddNewEmployee={() => {}}
+      onDeleteEmployee={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "صرف راتب" }));
+  fireEvent.change(screen.getByLabelText("مبلغ حركة العامل"), {
+    target: { value: "101" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "حفظ وتأكيد" }));
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByText(/المبلغ أكبر من صافي/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("مبلغ حركة العامل"), {
+    target: { value: "100" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "حفظ وتأكيد" }));
+  expect(save).toHaveBeenCalledWith(
+    emp.id,
+    "صرف راتب",
+    100,
+    expect.any(String),
+  );
+});
+it("rejects a blank inventory count rather than applying the previous valid number", () => {
+  const save = vi.fn();
+  render(
+    <StocktakingScreen
+      items={[bean]}
+      auditRecords={[]}
+      employees={[]}
+      currentPartnerName="Owner"
+      onCommitStocktaking={save}
+      onBack={() => {}}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("الرصيد الفعلي: Test bean"), {
+    target: { value: "9" },
+  });
+  fireEvent.change(screen.getByLabelText("الرصيد الفعلي: Test bean"), {
+    target: { value: "" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: /اعتماد الجرد وتحديث المخزن/ }),
+  );
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toContain(
+    "الفارغ لا يعني صفرًا",
+  );
+});
+it("preserves grams as a base quantity across count unit changes and retains a rejected count", () => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const save = vi.fn(() => false);
+  render(
+    <StocktakingScreen
+      items={[bean]}
+      auditRecords={[]}
+      employees={[]}
+      currentPartnerName="Owner"
+      onCommitStocktaking={save}
+      onBack={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "إدخال بالجرام (جم)" }));
+  fireEvent.change(screen.getByLabelText("الرصيد الفعلي: Test bean"), {
+    target: { value: "9500" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "إدخال بالكيلو (كجم)" }));
+  expect(
+    (screen.getByLabelText("الرصيد الفعلي: Test bean") as HTMLInputElement)
+      .value,
+  ).toBe("9.5");
+  fireEvent.click(
+    screen.getByRole("button", { name: /اعتماد الجرد وتحديث المخزن/ }),
+  );
+  expect(save.mock.calls[0][0][0].actualStock).toBe(9.5);
+  expect(screen.getByRole("alert").textContent).toContain("لم يُعتمد");
+  expect(
+    (screen.getByLabelText("الرصيد الفعلي: Test bean") as HTMLInputElement)
+      .value,
+  ).toBe("9.5");
+});
+it("does not attach a retail cash sale to the first wholesale customer", () => {
+  const save = vi.fn();
+  render(
+    <SalesPosScreen
+      items={[bean]}
+      customers={[
+        {
+          id: "c",
+          name: "Wholesale",
+          phone: "",
+          type: "جملة - كافيه",
+          balance: 0,
+          totalSales: 0,
+          invoicesCount: 0,
+        },
+      ]}
+      currentPartnerName="Owner"
+      onSaveSale={save}
+      onBack={() => {}}
+      onNavigateToCashierSync={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "بيع المحل" }));
+  fireEvent.click(screen.getByRole("button", { name: "+ ربع" }));
+  fireEvent.click(screen.getByRole("button", { name: /حفظ|إتمام|تأكيد/ }));
+  expect(save.mock.calls[0][0].saleType).toBe("retail");
+  expect(save.mock.calls[0][0].customerId).toBeUndefined();
+});

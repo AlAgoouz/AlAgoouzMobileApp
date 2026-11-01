@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { convertToBaseUnit } from './itemCosts';
+import { z } from "zod";
+import { convertToBaseUnit } from "./itemCosts";
 import type {
   InventoryItem,
   ProductionBatch,
@@ -15,7 +15,7 @@ import type {
   EmployeeTransaction,
   StocktakingAuditRecord,
   AccountPaymentRecord,
-} from '../types/erp';
+} from "../types/erp";
 
 export interface StoreState {
   items: InventoryItem[];
@@ -50,20 +50,20 @@ export const emptyStore: StoreState = {
   accountPayments: [],
 };
 export const cloudFields: Record<keyof StoreState, string> = {
-  items: 'items',
-  productionBatches: 'production_batches',
-  purchaseInvoices: 'purchase_invoices',
-  salesInvoices: 'sales_invoices',
-  suppliers: 'suppliers',
-  customers: 'customers',
-  expenses: 'expenses',
-  partners: 'partners',
-  auditLogs: 'audit_logs',
-  shifts: 'shifts',
-  employees: 'employees',
-  employeeTransactions: 'employee_transactions',
-  stocktakingRecords: 'stocktaking_records',
-  accountPayments: 'account_payments',
+  items: "items",
+  productionBatches: "production_batches",
+  purchaseInvoices: "purchase_invoices",
+  salesInvoices: "sales_invoices",
+  suppliers: "suppliers",
+  customers: "customers",
+  expenses: "expenses",
+  partners: "partners",
+  auditLogs: "audit_logs",
+  shifts: "shifts",
+  employees: "employees",
+  employeeTransactions: "employee_transactions",
+  stocktakingRecords: "stocktaking_records",
+  accountPayments: "account_payments",
 };
 const text = z.string(),
   id = text.min(1),
@@ -73,21 +73,21 @@ const base = z.object({ id });
 const ingredient = z.object({
   ingredientId: id,
   ingredientName: text,
-  quantity: money,
-  unit: z.enum(['kg', 'gram', 'piece', 'liter', 'ml']),
+  quantity: number.positive(),
+  unit: z.enum(["kg", "gram", "piece", "liter", "ml"]),
 });
 const item = base
   .extend({
     code: id,
     name: id,
     category: z.enum([
-      'raw_bean',
-      'raw_spice',
-      'manufactured_blend',
-      'drink_recipe',
-      'direct_product',
+      "raw_bean",
+      "raw_spice",
+      "manufactured_blend",
+      "drink_recipe",
+      "direct_product",
     ]),
-    baseUnit: z.enum(['kg', 'piece', 'liter']),
+    baseUnit: z.enum(["kg", "piece", "liter"]),
     stock: money,
     minStock: money,
     costPrice: money,
@@ -182,7 +182,7 @@ const schema = z.object({
   ),
   salesInvoices: z.array(
     invoice.extend({
-      saleType: z.enum(['retail', 'wholesale', 'cashier_sync']),
+      saleType: z.enum(["retail", "wholesale", "cashier_sync"]),
       customerName: text,
       isReturned: z.boolean().optional(),
       returnedAt: text.optional(),
@@ -329,7 +329,7 @@ const schema = z.object({
   accountPayments: z.array(
     base.extend({
       date: id,
-      targetType: z.enum(['supplier', 'customer']),
+      targetType: z.enum(["supplier", "customer"]),
       targetId: id,
       targetName: text,
       amount: money,
@@ -350,18 +350,18 @@ export function validateStore(value: unknown): StoreState {
   if (!result.success) {
     const first = result.error.issues[0];
     const labels: Record<string, string> = {
-      items: 'الأصناف',
-      partners: 'الشركاء',
-      salesInvoices: 'فواتير البيع',
-      purchaseInvoices: 'فواتير الشراء',
-      suppliers: 'الموردين',
-      customers: 'العملاء',
-      expenses: 'المصروفات',
-      employees: 'العمال',
-      auditLogs: 'سجل الحركات',
+      items: "الأصناف",
+      partners: "الشركاء",
+      salesInvoices: "فواتير البيع",
+      purchaseInvoices: "فواتير الشراء",
+      suppliers: "الموردين",
+      customers: "العملاء",
+      expenses: "المصروفات",
+      employees: "العمال",
+      auditLogs: "سجل الحركات",
     };
     throw new Error(
-      `بيانات غير صالحة في ${labels[String(first.path[0])] ?? 'النسخة'}؛ راجع القيم والحقول المطلوبة قبل الاعتماد.`,
+      `بيانات غير صالحة في ${labels[String(first.path[0])] ?? "النسخة"}؛ راجع القيم والحقول المطلوبة قبل الاعتماد.`,
     );
   }
   const parsed = result.data;
@@ -370,12 +370,22 @@ export function validateStore(value: unknown): StoreState {
       throw new Error(`معرفات مكررة في ${key}`);
   }
   const ids = new Set(parsed.items.map((i) => i.id));
+  if (
+    new Set(parsed.items.map((i) => i.code.trim().toUpperCase())).size !==
+    parsed.items.length
+  )
+    throw new Error("أكواد أصناف مكررة؛ يجب أن يكون لكل صنف كود مستقل");
   for (const item of parsed.items) {
     if (item.hasRecipe && !item.recipe?.length)
       throw new Error(`الوصفة ناقصة: ${item.name}`);
     for (const ing of item.recipe ?? []) {
       if (!ids.has(ing.ingredientId) || ing.ingredientId === item.id)
         throw new Error(`مكون مفقود أو دائري في وصفة ${item.name}`);
+      if (
+        parsed.items.find((i) => i.id === ing.ingredientId)?.category ===
+        "drink_recipe"
+      )
+        throw new Error("المشروب المحضر لا يُستخدم كمكون مخزني في وصفة أخرى");
       convertToBaseUnit(
         ing.quantity,
         ing.unit,
@@ -387,7 +397,7 @@ export function validateStore(value: unknown): StoreState {
     visiting = new Set<string>();
   const walk = (id: string) => {
     if (visiting.has(id))
-      throw new Error('تحتوي الوصفات اعتمادًا دائريًا؛ راجع المكونات.');
+      throw new Error("تحتوي الوصفات اعتمادًا دائريًا؛ راجع المكونات.");
     if (visited.has(id)) return;
     visiting.add(id);
     for (const ing of parsed.items.find((i) => i.id === id)?.recipe ?? [])
@@ -425,18 +435,18 @@ export function toCloud(state: StoreState) {
 }
 export function createBackup(state: StoreState) {
   return {
-    format: 'bon-elagouz-store',
+    format: "bon-elagouz-store",
     schemaVersion: 1,
     createdAt: new Date().toISOString(),
     state: validateStore(state),
   };
 }
 export function parseBackup(value: unknown): StoreState {
-  if (!value || typeof value !== 'object') throw new Error('النسخة غير صالحة');
+  if (!value || typeof value !== "object") throw new Error("النسخة غير صالحة");
   const envelope = value as Record<string, unknown>;
-  if ('schemaVersion' in envelope) {
-    if (envelope.schemaVersion !== 1 || envelope.format !== 'bon-elagouz-store')
-      throw new Error('إصدار النسخة غير مدعوم');
+  if ("schemaVersion" in envelope) {
+    if (envelope.schemaVersion !== 1 || envelope.format !== "bon-elagouz-store")
+      throw new Error("إصدار النسخة غير مدعوم");
     return validateStore(envelope.state);
   }
   // Explicit compatibility with the original complete backup format.

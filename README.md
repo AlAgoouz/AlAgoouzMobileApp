@@ -29,7 +29,7 @@ npm run build
 
 ## قاعدة مستقلة جديدة
 
-طبّق `supabase/schema.sql` ثم ملفي الترقية في `supabase/migrations` بالترتيب. ملف `20261101001820_owner_bootstrap.sql` يتيح ربط أول مالك بعد تحقق بريده؛ يضبط المسؤول البريد المسموح داخل `bon_erp_private.owner_config` على الخادم فقط. لا تُعد منح المستخدمين كتابة مباشرة على جدولي المتجر والكاشير.
+طبّق `supabase/schema.sql` ثم ملفات الترقية في `supabase/migrations` بالترتيب. ملف `20261101001820_owner_bootstrap.sql` يتيح ربط أول مالك بعد تحقق بريده؛ يضبط المسؤول البريد المسموح داخل `bon_erp_private.owner_config` على الخادم فقط. لا تُعد منح المستخدمين كتابة مباشرة على جدولي المتجر والكاشير.
 
 الحفظ يمر عبر `bon_erp_save_store`، والرفع عبر `bon_erp_enqueue_export`. إعداد أعضاء إضافيين يتم بصورة صريحة عبر نسخة خاصة من `supabase/member-mapping.example.json` وأداة `supabase/generate-member-setup.mjs` التي تولد SQL للمراجعة دون الاتصال بالخادم أو استبدال متجر موجود.
 

@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from "react";
+import { nextItemCode } from "../lib/operationChecks";
 import {
   ChevronRight,
   Flame,
@@ -12,18 +13,18 @@ import {
   Sparkles,
   Scale,
   Save,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   InventoryItem,
   ProductionBatch,
   RecipeIngredient,
   UnitType,
-} from '../types/erp';
+} from "../types/erp";
 import {
   calculateRecipeTotalCost,
   convertToBaseUnit,
   getIngredientCostContribution,
-} from '../lib/itemCosts';
+} from "../lib/itemCosts";
 
 interface ProductionAndRecipesScreenProps {
   items: InventoryItem[];
@@ -32,15 +33,17 @@ interface ProductionAndRecipesScreenProps {
   onExecuteProduction: (
     blendId: string,
     quantityKg: number,
-    notes: string
+    notes: string,
   ) => { ok: boolean; message: string };
   onSaveItemRecipe: (
     targetItemId: string,
     recipe: RecipeIngredient[],
     retailPrice?: number,
-    wholesalePrice?: number
-  ) => void;
-  onCreateNewBlendOrDrink: (newItem: Omit<InventoryItem, 'id'>) => void;
+    wholesalePrice?: number,
+  ) => void | boolean;
+  onCreateNewBlendOrDrink: (
+    newItem: Omit<InventoryItem, "id">,
+  ) => void | boolean;
   onDeleteItem?: (id: string) => void;
   onDeleteBatch?: (id: string) => void;
   onBack: () => void;
@@ -58,14 +61,14 @@ export const ProductionAndRecipesScreen: React.FC<
   onDeleteBatch,
   onBack,
 }) => {
-  const [activeTab, setActiveTab] = useState<'produce' | 'recipes' | 'history'>(
-    'produce'
+  const [activeTab, setActiveTab] = useState<"produce" | "recipes" | "history">(
+    "produce",
   );
 
   // الأصناف التي هي توليفات بن مصنعة
   const blendItems = useMemo(
-    () => items.filter((i) => i.category === 'manufactured_blend'),
-    [items]
+    () => items.filter((i) => i.category === "manufactured_blend"),
+    [items],
   );
 
   // الخامات التي يمكن سحبها في الوصفات (حبوب بن خام، تحويجة، مستلزمات، أو توليفات تدخل في المشروبات)
@@ -73,45 +76,54 @@ export const ProductionAndRecipesScreen: React.FC<
     () =>
       items.filter(
         (i) =>
-          i.category === 'raw_bean' ||
-          i.category === 'raw_spice' ||
-          i.category === 'manufactured_blend'
+          i.category === "raw_bean" ||
+          i.category === "raw_spice" ||
+          i.category === "manufactured_blend",
       ),
-    [items]
+    [items],
   );
 
   // حالة تبويب (أمر إنتاج جديد)
   const [selectedBlendId, setSelectedBlendId] = useState<string>(
-    blendItems[0]?.id || ''
+    blendItems[0]?.id || "",
   );
   const [produceQtyKg, setProduceQtyKg] = useState<number>(10);
-  const [produceNotes, setProduceNotes] = useState<string>('');
+  const [produceNotes, setProduceNotes] = useState<string>("");
   const [bannerMessage, setBannerMessage] = useState<{
-    type: 'success' | 'error';
+    type: "success" | "error";
     text: string;
   } | null>(null);
 
   const selectedBlend = useMemo(
     () => items.find((i) => i.id === selectedBlendId) || blendItems[0],
-    [items, selectedBlendId, blendItems]
+    [items, selectedBlendId, blendItems],
   );
 
-  // حساب الخامات المطلوبة لأمر الإنتاج الحالي
+  // حساب الخامات المطلوبة لأمر الإنتاج الحالي (آمن ضد وحدات غير متوافقة حتى لا تتعطل الشاشة)
   const productionSimulation = useMemo(() => {
     if (!selectedBlend || !selectedBlend.recipe) return [];
     return selectedBlend.recipe.map((ing) => {
       const rawItem = items.find((i) => i.id === ing.ingredientId);
-      const baseUnit = rawItem?.baseUnit || 'kg';
-      const perKgInBaseUnit = convertToBaseUnit(ing.quantity, ing.unit, baseUnit);
-      const totalRequiredInBase = Number(
-        (perKgInBaseUnit * produceQtyKg).toFixed(3)
-      );
+      const baseUnit = rawItem?.baseUnit || "kg";
+      let perKgInBaseUnit = NaN;
+      try {
+        perKgInBaseUnit = convertToBaseUnit(ing.quantity, ing.unit, baseUnit);
+      } catch {
+        perKgInBaseUnit = NaN;
+      }
+      const invalidUnit = !Number.isFinite(perKgInBaseUnit);
+      const totalRequiredInBase = invalidUnit
+        ? 0
+        : Number((perKgInBaseUnit * produceQtyKg).toFixed(3));
       const totalRequiredGrams = Math.round(totalRequiredInBase * 1000);
       const availableInBase = rawItem?.stock || 0;
-      const isEnough = availableInBase >= totalRequiredInBase;
-      const cost = Number(
-        (totalRequiredInBase * (rawItem?.costPrice || 0)).toFixed(2)
-      );
+      const isEnough =
+        !invalidUnit &&
+        rawItem !== undefined &&
+        availableInBase >= totalRequiredInBase;
+      const cost = invalidUnit
+        ? 0
+        : Number((totalRequiredInBase * (rawItem?.costPrice || 0)).toFixed(2));
 
       return {
         ingredientId: ing.ingredientId,
@@ -120,6 +132,7 @@ export const ProductionAndRecipesScreen: React.FC<
         perKgUnit: ing.unit,
         totalRequiredInBase,
         totalRequiredGrams,
+        invalidUnit,
         availableInBase,
         baseUnit,
         isEnough,
@@ -132,13 +145,12 @@ export const ProductionAndRecipesScreen: React.FC<
     () =>
       productionSimulation.length > 0 &&
       productionSimulation.every((s) => s.isEnough),
-    [productionSimulation]
+    [productionSimulation],
   );
 
   const totalBatchEstimatedCost = useMemo(
-    () =>
-      productionSimulation.reduce((sum, s) => sum + s.cost, 0),
-    [productionSimulation]
+    () => productionSimulation.reduce((sum, s) => sum + s.cost, 0),
+    [productionSimulation],
   );
 
   const handleRunProduction = () => {
@@ -146,49 +158,51 @@ export const ProductionAndRecipesScreen: React.FC<
     const res = onExecuteProduction(
       selectedBlend.id,
       produceQtyKg,
-      produceNotes
+      produceNotes,
     );
     setBannerMessage({
-      type: res.ok ? 'success' : 'error',
+      type: res.ok ? "success" : "error",
       text: res.message,
     });
     if (res.ok) {
-      setProduceNotes('');
+      setProduceNotes("");
     }
   };
 
   // ================= حالة تبويب (إدارة وبناء الوصفات) =================
   const [recipeTargetId, setRecipeTargetId] = useState<string>(
-    blendItems[0]?.id || ''
+    blendItems[0]?.id || "",
   );
   const recipeTargetItem = useMemo(
     () => items.find((i) => i.id === recipeTargetId),
-    [items, recipeTargetId]
+    [items, recipeTargetId],
   );
 
-  const [editingIngredients, setEditingIngredients] = useState<RecipeIngredient[]>(
-    () => blendItems[0]?.recipe || []
-  );
+  const [editingIngredients, setEditingIngredients] = useState<
+    RecipeIngredient[]
+  >(() => blendItems[0]?.recipe || []);
   const [newIngId, setNewIngId] = useState<string>(
-    rawAndBlendIngredients[0]?.id || ''
+    rawAndBlendIngredients[0]?.id || "",
   );
-  const [newIngQty, setNewIngQty] = useState<string>('250');
-  const [newIngUnit, setNewIngUnit] = useState<UnitType>('gram');
-  const [editRetailPrice, setEditRetailPrice] = useState<string>(
-    String(blendItems[0]?.retailPrice || 550)
+  const [newIngQty, setNewIngQty] = useState<string>("250");
+  const [newIngUnit, setNewIngUnit] = useState<UnitType>("gram");
+  const [editRetailPrice, setEditRetailPrice] = useState<string>(() =>
+    blendItems[0] ? String(blendItems[0].retailPrice) : "",
   );
-  const [editWholesalePrice, setEditWholesalePrice] = useState<string>(
-    String(blendItems[0]?.wholesalePrice || 480)
+  const [editWholesalePrice, setEditWholesalePrice] = useState<string>(() =>
+    blendItems[0] ? String(blendItems[0].wholesalePrice) : "",
   );
+  const [recipeEditError, setRecipeEditError] = useState("");
+  const [newModalError, setNewModalError] = useState("");
 
   // نافذة إنشاء توليفة أو مشروب جديد
   const [showNewModal, setShowNewModal] = useState(false);
   const [newModalType, setNewModalType] = useState<
-    'manufactured_blend' | 'drink_recipe'
-  >('manufactured_blend');
-  const [newModalName, setNewModalName] = useState('');
-  const [newModalRetail, setNewModalRetail] = useState('560');
-  const [newModalWholesale, setNewModalWholesale] = useState('490');
+    "manufactured_blend" | "drink_recipe"
+  >("manufactured_blend");
+  const [newModalName, setNewModalName] = useState("");
+  const [newModalRetail, setNewModalRetail] = useState("560");
+  const [newModalWholesale, setNewModalWholesale] = useState("490");
 
   const handleSelectRecipeTarget = (id: string) => {
     setRecipeTargetId(id);
@@ -198,12 +212,72 @@ export const ProductionAndRecipesScreen: React.FC<
       setEditRetailPrice(String(found.retailPrice));
       setEditWholesalePrice(String(found.wholesalePrice));
     }
+    setRecipeEditError("");
+  };
+
+  // مزامنة التحديد مع الكتالوج عند تغيّره (حتى لا يبقى التحديد على صنف محذوف أو لم يُحمّل بعد)
+  useEffect(() => {
+    if (
+      blendItems.length &&
+      !blendItems.some((b) => b.id === selectedBlendId)
+    ) {
+      setSelectedBlendId(blendItems[0].id);
+    }
+    if (items.length && !items.some((i) => i.id === recipeTargetId)) {
+      const first = blendItems[0];
+      if (first) {
+        setRecipeTargetId(first.id);
+        setEditingIngredients(first.recipe ? [...first.recipe] : []);
+        setEditRetailPrice(String(first.retailPrice));
+        setEditWholesalePrice(String(first.wholesalePrice));
+      } else {
+        setRecipeTargetId("");
+        setEditingIngredients([]);
+      }
+    }
+  }, [items, blendItems, selectedBlendId, recipeTargetId]);
+
+  // وحدات الكمية المسموح بها حسب وحدة الصنف المختار (تمنع جملًا يحوّلها الشريط الصامت لصفر)
+  const newIngBaseUnit =
+    rawAndBlendIngredients.find((i) => i.id === newIngId)?.baseUnit || "kg";
+  const allowedIngUnits: UnitType[] =
+    newIngBaseUnit === "piece"
+      ? ["piece"]
+      : newIngBaseUnit === "liter"
+        ? ["ml", "liter"]
+        : ["gram", "kg"];
+
+  const ingredientUnitValid = (
+    ing: Pick<RecipeIngredient, "quantity" | "unit">,
+    baseUnit: "kg" | "piece" | "liter",
+  ): boolean => {
+    if (!Number.isFinite(ing.quantity) || ing.quantity <= 0) return false;
+    try {
+      convertToBaseUnit(ing.quantity, ing.unit, baseUnit);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const handleAddIngredientToRecipe = () => {
     const raw = items.find((i) => i.id === newIngId);
     const qty = parseFloat(newIngQty);
-    if (!raw || !qty || qty <= 0) return;
+    if (!raw) {
+      setRecipeEditError("اختر مكوّنًا من القائمة أولاً");
+      return;
+    }
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setRecipeEditError("أدخل كمية صحيحة أكبر من صفر");
+      return;
+    }
+    if (!allowedIngUnits.includes(newIngUnit)) {
+      setRecipeEditError(
+        "وحدة الكمية لا تطابق وحدة الصنف؛ اختر وحدة منخفضة تطابق وحدة الصنف",
+      );
+      return;
+    }
+    setRecipeEditError("");
 
     setEditingIngredients((prev) => {
       const existing = prev.find((p) => p.ingredientId === raw.id);
@@ -211,7 +285,7 @@ export const ProductionAndRecipesScreen: React.FC<
         return prev.map((p) =>
           p.ingredientId === raw.id
             ? { ...p, quantity: qty, unit: newIngUnit }
-            : p
+            : p,
         );
       }
       return [
@@ -228,72 +302,137 @@ export const ProductionAndRecipesScreen: React.FC<
 
   const handleRemoveIngredientFromRecipe = (ingId: string) => {
     setEditingIngredients((prev) =>
-      prev.filter((p) => p.ingredientId !== ingId)
+      prev.filter((p) => p.ingredientId !== ingId),
     );
   };
 
-  const liveRecipeCost = useMemo(
-    () => calculateRecipeTotalCost(editingIngredients, items),
-    [editingIngredients, items]
-  );
+  // تكلفة حية للوصفة — آمنة ضد وحدات غير متوافقة أو مكوّنات محذوفة (كانت تُعطّل الشاشة كلها)
+  const liveRecipeCost = useMemo(() => {
+    try {
+      return calculateRecipeTotalCost(editingIngredients, items);
+    } catch {
+      return NaN;
+    }
+  }, [editingIngredients, items]);
+
+  const fmtCost = (v: number) => (Number.isFinite(v) ? v.toFixed(2) : "—");
 
   const totalGramsInBlendRecipe = useMemo(
     () =>
       editingIngredients.reduce(
         (sum, ing) =>
           sum +
-          (ing.unit === 'gram'
+          (ing.unit === "gram"
             ? ing.quantity
-            : ing.unit === 'kg'
-            ? ing.quantity * 1000
-            : 0),
-        0
+            : ing.unit === "kg"
+              ? ing.quantity * 1000
+              : 0),
+        0,
       ),
-    [editingIngredients]
+    [editingIngredients],
   );
 
   const handleSaveRecipeChanges = () => {
     if (!recipeTargetItem) return;
-    onSaveItemRecipe(
-      recipeTargetItem.id,
-      editingIngredients,
-      parseFloat(editRetailPrice) || recipeTargetItem.retailPrice,
-      parseFloat(editWholesalePrice) || recipeTargetItem.wholesalePrice
-    );
+    for (const ing of editingIngredients) {
+      const raw = items.find((i) => i.id === ing.ingredientId);
+      if (!raw) {
+        setBannerMessage({
+          type: "error",
+          text: `مكوّن الوصفة (${ing.ingredientName}) لم يُعثر عليه في الكتالوج؛ احذفه من الوصفة قبل الحفظ`,
+        });
+        return;
+      }
+      if (!ingredientUnitValid(ing, raw.baseUnit)) {
+        setBannerMessage({
+          type: "error",
+          text: `مقدار (${ing.ingredientName}) صفر أو وحدته غير متوافقة مع وحدة الصنف (${raw.baseUnit === "kg" ? "كجم" : raw.baseUnit === "liter" ? "لتر" : "قطعة"})؛ صحّحه قبل الحفظ`,
+        });
+        return;
+      }
+    }
+    const retail = Number(editRetailPrice);
+    const wholesale = Number(editWholesalePrice);
+    if (
+      !editRetailPrice.trim() ||
+      !editWholesalePrice.trim() ||
+      !Number.isFinite(retail) ||
+      retail < 0 ||
+      !Number.isFinite(wholesale) ||
+      wholesale < 0
+    ) {
+      setRecipeEditError("أدخل أسعارًا صحيحة غير سالبة قبل حفظ الوصفة");
+      return;
+    }
+    setRecipeEditError("");
+    if (
+      onSaveItemRecipe(
+        recipeTargetItem.id,
+        editingIngredients,
+        retail,
+        wholesale,
+      ) === false
+    ) {
+      setRecipeEditError("لم تُحفظ الوصفة؛ راجع التنبيه وصحّح البيانات");
+      return;
+    }
     setBannerMessage({
-      type: 'success',
-      text: `تم حفظ وصفة (${recipeTargetItem.name}) وتحديث تكلفتها الآلية إلى ${liveRecipeCost} ج.م بنجاح!`,
+      type: "success",
+      text: `تم حفظ وصفة (${recipeTargetItem.name}) وتحديث تكلفتها الآلية إلى ${fmtCost(liveRecipeCost)} ج.م بنجاح!`,
     });
   };
 
   const handleCreateNewItemWithRecipe = () => {
-    if (!newModalName.trim()) return;
-    const isBlend = newModalType === 'manufactured_blend';
-    onCreateNewBlendOrDrink({
-      code: isBlend
-        ? `BL-${Math.floor(310 + Math.random() * 89)}`
-        : `DR-${Math.floor(410 + Math.random() * 89)}`,
+    if (!newModalName.trim()) {
+      setNewModalError("أدخل اسم التوليفة أو المشروب أولاً");
+      return;
+    }
+    const retail = parseFloat(newModalRetail);
+    const wholesale = parseFloat(newModalWholesale);
+    if (
+      !Number.isFinite(retail) ||
+      retail <= 0 ||
+      !Number.isFinite(wholesale) ||
+      wholesale <= 0
+    ) {
+      setNewModalError("أدخل أسعار بيع صحيحة (أرقام أكبر من صفر) في الخانتين");
+      return;
+    }
+    setNewModalError("");
+    const isBlend = newModalType === "manufactured_blend";
+    // توليد كود فريد لا يتعارض مع الأكواد الحالية
+    const code = nextItemCode(
+      items,
+      isBlend ? "BL" : "DR",
+      isBlend ? 310 : 410,
+    );
+    const accepted = onCreateNewBlendOrDrink({
+      code,
       name: newModalName.trim(),
       category: newModalType,
-      roastLevel: 'وسط',
-      baseUnit: isBlend ? 'kg' : 'piece',
+      roastLevel: "وسط",
+      baseUnit: isBlend ? "kg" : "piece",
       stock: isBlend ? 0 : 999,
       minStock: isBlend ? 5 : 0,
       costPrice: 0,
       lastPurchasePrice: 0,
-      retailPrice: parseFloat(newModalRetail) || (isBlend ? 550 : 35),
-      wholesalePrice: parseFloat(newModalWholesale) || (isBlend ? 480 : 35),
+      retailPrice: retail,
+      wholesalePrice: wholesale,
       canSellDirectly: true,
-      hasRecipe: true,
+      hasRecipe: false,
       recipeYield: 1,
       recipe: [],
       supplierPrices: [],
     });
-    setNewModalName('');
+    if (accepted === false) {
+      setNewModalError("لم يُحفظ الصنف؛ راجع البيانات والتنبيه");
+      return;
+    }
+    setNewModalName("");
     setShowNewModal(false);
     setBannerMessage({
-      type: 'success',
-      text: 'تم إنشاء الصنف الجديد! يمكنك الآن اختياره وتحديد مكونات وصفته.',
+      type: "success",
+      text: "تم إنشاء الصنف الجديد! يمكنك الآن اختياره وتحديد مكونات وصفته.",
     });
   };
 
@@ -314,7 +453,10 @@ export const ProductionAndRecipesScreen: React.FC<
           </h1>
         </div>
         <button
-          onClick={() => setShowNewModal(true)}
+          onClick={() => {
+            setNewModalError("");
+            setShowNewModal(true);
+          }}
           className="bg-[#C59B27] text-[#1E1612] px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow"
         >
           <Plus className="w-4 h-4" />
@@ -326,13 +468,13 @@ export const ProductionAndRecipesScreen: React.FC<
       <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-3 gap-2 sticky top-[58px] z-20">
         <button
           onClick={() => {
-            setActiveTab('produce');
+            setActiveTab("produce");
             setBannerMessage(null);
           }}
           className={`py-2 px-2 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === 'produce'
-              ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27] shadow'
-              : 'bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]'
+            activeTab === "produce"
+              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27] shadow"
+              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
           }`}
         >
           <Scale className="w-4 h-4 text-[#D4AF37]" />
@@ -340,13 +482,13 @@ export const ProductionAndRecipesScreen: React.FC<
         </button>
         <button
           onClick={() => {
-            setActiveTab('recipes');
+            setActiveTab("recipes");
             setBannerMessage(null);
           }}
           className={`py-2 px-2 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === 'recipes'
-              ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27] shadow'
-              : 'bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]'
+            activeTab === "recipes"
+              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27] shadow"
+              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
           }`}
         >
           <Layers className="w-4 h-4 text-[#D4AF37]" />
@@ -354,13 +496,13 @@ export const ProductionAndRecipesScreen: React.FC<
         </button>
         <button
           onClick={() => {
-            setActiveTab('history');
+            setActiveTab("history");
             setBannerMessage(null);
           }}
           className={`py-2 px-2 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === 'history'
-              ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27] shadow'
-              : 'bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]'
+            activeTab === "history"
+              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27] shadow"
+              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
           }`}
         >
           <History className="w-4 h-4 text-[#D4AF37]" />
@@ -372,12 +514,12 @@ export const ProductionAndRecipesScreen: React.FC<
         {bannerMessage && (
           <div
             className={`p-3.5 rounded-2xl border flex items-center gap-2.5 text-xs font-extrabold ${
-              bannerMessage.type === 'success'
-                ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                : 'bg-red-50 border-red-300 text-red-800'
+              bannerMessage.type === "success"
+                ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                : "bg-red-50 border-red-300 text-red-800"
             }`}
           >
-            {bannerMessage.type === 'success' ? (
+            {bannerMessage.type === "success" ? (
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             ) : (
               <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
@@ -387,7 +529,7 @@ export const ProductionAndRecipesScreen: React.FC<
         )}
 
         {/* ================= التبويب الأول: أمر إنتاج وتخليط توليفة ================= */}
-        {activeTab === 'produce' && (
+        {activeTab === "produce" && (
           <div className="space-y-4">
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3.5">
               <div className="flex items-center justify-between">
@@ -400,7 +542,7 @@ export const ProductionAndRecipesScreen: React.FC<
               </div>
 
               <select
-                value={selectedBlend?.id || ''}
+                value={selectedBlend?.id || ""}
                 onChange={(e) => setSelectedBlendId(e.target.value)}
                 className="w-full border-2 border-amber-800/20 rounded-xl px-3.5 py-3 text-sm font-extrabold text-slate-900 bg-amber-50/30 focus:outline-none"
               >
@@ -414,21 +556,28 @@ export const ProductionAndRecipesScreen: React.FC<
               {selectedBlend && (
                 <div className="grid grid-cols-3 gap-2 pt-1 text-center">
                   <div className="bg-slate-50 rounded-xl p-2 border border-slate-200/70">
-                    <div className="text-[11px] text-slate-500">الرصيد الجاهز</div>
+                    <div className="text-[11px] text-slate-500">
+                      الرصيد الجاهز
+                    </div>
                     <div className="text-sm font-black text-slate-800">
                       {selectedBlend.stock} كجم
                     </div>
                   </div>
                   <div className="bg-slate-50 rounded-xl p-2 border border-slate-200/70">
-                    <div className="text-[11px] text-slate-500">تكلفة الكيلو</div>
+                    <div className="text-[11px] text-slate-500">
+                      تكلفة الكيلو
+                    </div>
                     <div className="text-sm font-black text-amber-800">
                       {selectedBlend.costPrice} ج.م
                     </div>
                   </div>
                   <div className="bg-slate-50 rounded-xl p-2 border border-slate-200/70">
-                    <div className="text-[11px] text-slate-500">بيع قطاعي / جملة</div>
+                    <div className="text-[11px] text-slate-500">
+                      بيع قطاعي / جملة
+                    </div>
                     <div className="text-sm font-black text-emerald-700">
-                      {selectedBlend.retailPrice} / {selectedBlend.wholesalePrice}
+                      {selectedBlend.retailPrice} /{" "}
+                      {selectedBlend.wholesalePrice}
                     </div>
                   </div>
                 </div>
@@ -447,12 +596,15 @@ export const ProductionAndRecipesScreen: React.FC<
                   step="0.5"
                   value={produceQtyKg}
                   onChange={(e) =>
-                    setProduceQtyKg(Math.max(0.5, parseFloat(e.target.value) || 1))
+                    setProduceQtyKg(
+                      Math.max(0.5, parseFloat(e.target.value) || 1),
+                    )
                   }
                   className="w-28 text-center text-xl font-black text-amber-900 bg-amber-50 border-2 border-amber-400 rounded-2xl py-2.5 focus:outline-none"
                 />
                 <span className="text-sm font-extrabold text-slate-700">
-                  كيلو جرام ({Math.round(produceQtyKg * 1000).toLocaleString('ar-EG')}{' '}
+                  كيلو جرام (
+                  {Math.round(produceQtyKg * 1000).toLocaleString("ar-EG")}{" "}
                   جرام)
                 </span>
               </div>
@@ -465,8 +617,8 @@ export const ProductionAndRecipesScreen: React.FC<
                     onClick={() => setProduceQtyKg(q)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition ${
                       produceQtyKg === q
-                        ? 'bg-amber-800 text-white border-amber-800'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-amber-50'
+                        ? "bg-amber-800 text-white border-amber-800"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-amber-50"
                     }`}
                   >
                     {q} كيلو
@@ -492,8 +644,8 @@ export const ProductionAndRecipesScreen: React.FC<
                     key={sim.ingredientId}
                     className={`p-3 rounded-xl border flex items-center justify-between ${
                       sim.isEnough
-                        ? 'bg-slate-50/70 border-slate-200'
-                        : 'bg-red-50 border-red-300'
+                        ? "bg-slate-50/70 border-slate-200"
+                        : "bg-red-50 border-red-300"
                     }`}
                   >
                     <div className="space-y-0.5">
@@ -501,21 +653,30 @@ export const ProductionAndRecipesScreen: React.FC<
                         {sim.ingredientName}
                       </div>
                       <div className="text-[11px] text-slate-500">
-                        في الكيلو الواحد: {sim.perKgQty}{' '}
-                        {sim.perKgUnit === 'gram' ? 'جرام' : 'كجم'} • المتاح بالمخزن:{' '}
+                        في الكيلو الواحد: {sim.perKgQty}{" "}
+                        {sim.perKgUnit === "gram"
+                          ? "جرام"
+                          : sim.perKgUnit === "kg"
+                            ? "كجم"
+                            : sim.perKgUnit === "ml"
+                              ? "مللي"
+                              : "قطعة"}{" "}
+                        • المتاح بالمخزن:{" "}
                         <b>
-                          {sim.availableInBase.toFixed(2)}{' '}
-                          {sim.baseUnit === 'kg' ? 'كجم' : 'وحدة'}
+                          {sim.availableInBase.toFixed(2)}{" "}
+                          {sim.baseUnit === "kg" ? "كجم" : "وحدة"}
                         </b>
                       </div>
                     </div>
                     <div className="text-left shrink-0">
                       <div className="text-xs font-black text-amber-900">
-                        مطلوب: {sim.totalRequiredInBase} كجم ({sim.totalRequiredGrams} جم)
+                        {sim.invalidUnit
+                          ? "⚠️ وحدة الكمية غير متوافقة مع وحدة الصنف"
+                          : `مطلوب: ${sim.totalRequiredInBase} كجم (${sim.totalRequiredGrams} جم)`}
                       </div>
                       <div
                         className={`text-[11px] font-bold ${
-                          sim.isEnough ? 'text-emerald-600' : 'text-red-600'
+                          sim.isEnough ? "text-emerald-600" : "text-red-600"
                         }`}
                       >
                         {sim.isEnough
@@ -546,7 +707,7 @@ export const ProductionAndRecipesScreen: React.FC<
                 <span>
                   {canProduceAll
                     ? `تنفيذ الإنتاج: سحب الخامات وإضافة ${produceQtyKg} كجم للرصيد`
-                    : 'الرصيد غير كافٍ لبعض الخامات (راجع النواقص)'}
+                    : "الرصيد غير كافٍ لبعض الخامات (راجع النواقص)"}
                 </span>
               </button>
             </div>
@@ -554,7 +715,7 @@ export const ProductionAndRecipesScreen: React.FC<
         )}
 
         {/* ================= التبويب الثاني: إدارة الوصفات والتكلفة ================= */}
-        {activeTab === 'recipes' && (
+        {activeTab === "recipes" && (
           <div className="space-y-4">
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
               <div className="text-sm font-extrabold text-slate-800">
@@ -567,7 +728,7 @@ export const ProductionAndRecipesScreen: React.FC<
               >
                 <optgroup label="توليفات البن المصنعة (وصفة لكل 1 كيلو)">
                   {items
-                    .filter((i) => i.category === 'manufactured_blend')
+                    .filter((i) => i.category === "manufactured_blend")
                     .map((i) => (
                       <option key={i.id} value={i.id}>
                         ☕ {i.name} (تكلفة الكيلو: {i.costPrice} ج.م)
@@ -576,7 +737,7 @@ export const ProductionAndRecipesScreen: React.FC<
                 </optgroup>
                 <optgroup label="المشروبات المحضرة (وصفة لكل 1 كوب)">
                   {items
-                    .filter((i) => i.category === 'drink_recipe')
+                    .filter((i) => i.category === "drink_recipe")
                     .map((i) => (
                       <option key={i.id} value={i.id}>
                         🥤 {i.name} (تكلفة الكوب: {i.costPrice} ج.م)
@@ -587,8 +748,8 @@ export const ProductionAndRecipesScreen: React.FC<
                   {items
                     .filter(
                       (i) =>
-                        i.category !== 'manufactured_blend' &&
-                        i.category !== 'drink_recipe'
+                        i.category !== "manufactured_blend" &&
+                        i.category !== "drink_recipe",
                     )
                     .map((i) => (
                       <option key={i.id} value={i.id}>
@@ -605,26 +766,30 @@ export const ProductionAndRecipesScreen: React.FC<
                       تكلفة الوصفة المحسوبة
                     </div>
                     <div className="text-base font-black text-amber-900">
-                      {liveRecipeCost.toFixed(2)} ج.م
+                      {fmtCost(liveRecipeCost)} ج.م
                     </div>
                   </div>
                   <div>
-                    <div className="text-[11px] text-slate-500">ربح القطاعي المتوقع</div>
+                    <div className="text-[11px] text-slate-500">
+                      ربح القطاعي المتوقع
+                    </div>
                     <div className="text-base font-black text-emerald-700">
-                      {(
-                        (parseFloat(editRetailPrice) || 0) - liveRecipeCost
-                      ).toFixed(2)}{' '}
+                      {Number.isFinite(liveRecipeCost)
+                        ? (
+                            (parseFloat(editRetailPrice) || 0) - liveRecipeCost
+                          ).toFixed(2)
+                        : "—"}{" "}
                       ج.م
                     </div>
                   </div>
                   <div>
                     <div className="text-[11px] text-slate-500">
-                      {recipeTargetItem.category === 'manufactured_blend'
-                        ? 'مجموع أوزان الوصفة'
-                        : 'عدد المكونات'}
+                      {recipeTargetItem.category === "manufactured_blend"
+                        ? "مجموع أوزان الوصفة"
+                        : "عدد المكونات"}
                     </div>
                     <div className="text-base font-black text-blue-800">
-                      {recipeTargetItem.category === 'manufactured_blend'
+                      {recipeTargetItem.category === "manufactured_blend"
                         ? `${totalGramsInBlendRecipe} جم`
                         : `${editingIngredients.length} مكون`}
                     </div>
@@ -640,9 +805,9 @@ export const ProductionAndRecipesScreen: React.FC<
                   مكونات الوصفة ({editingIngredients.length})
                 </span>
                 <span className="text-xs text-slate-500">
-                  {recipeTargetItem?.category === 'manufactured_blend'
-                    ? 'المقادير لإنتاج 1 كيلو (1000 جرام)'
-                    : 'المقادير لتحضير 1 كوب مشروب'}
+                  {recipeTargetItem?.category === "manufactured_blend"
+                    ? "المقادير لإنتاج 1 كيلو (1000 جرام)"
+                    : "المقادير لتحضير 1 كوب مشروب"}
                 </span>
               </div>
 
@@ -653,45 +818,62 @@ export const ProductionAndRecipesScreen: React.FC<
               ) : (
                 <div className="space-y-2">
                   {editingIngredients.map((ing) => {
-                    const costContribution = getIngredientCostContribution(
-                      ing,
-                      items
-                    );
+                    let costContribution = NaN;
+                    try {
+                      costContribution = getIngredientCostContribution(
+                        ing,
+                        items,
+                      );
+                    } catch {
+                      costContribution = NaN;
+                    }
                     return (
                       <div
                         key={ing.ingredientId}
-                        className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between"
+                        className={`p-3 rounded-xl border space-y-1 ${
+                          Number.isFinite(costContribution)
+                            ? "bg-slate-50 border-slate-200 flex items-center justify-between"
+                            : "bg-red-50 border-red-300"
+                        }`}
                       >
-                        <div>
-                          <div className="text-xs font-extrabold text-slate-900">
-                            {ing.ingredientName}
+                        {!Number.isFinite(costContribution) && (
+                          <div className="text-[11px] font-bold text-red-700">
+                            ⚠️ وحدة غير متوافقة مع وحدة الصنف أو المكوّن غير
+                            موجود في الكتالوج — صحّح أو احذف هذا السطر قبل الحفظ
                           </div>
-                          <div className="text-[11px] text-slate-500">
-                            الكمية:{' '}
-                            <b className="text-blue-700">
-                              {ing.quantity}{' '}
-                              {ing.unit === 'gram'
-                                ? 'جرام'
-                                : ing.unit === 'kg'
-                                ? 'كجم'
-                                : ing.unit === 'ml'
-                                ? 'مللي'
-                                : 'قطعة'}
-                            </b>{' '}
-                            • التكلفة في الوصفة:{' '}
-                            <b className="text-emerald-700">
-                              {costContribution.toFixed(2)} ج.م
-                            </b>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs font-extrabold text-slate-900">
+                              {ing.ingredientName}
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              الكمية:{" "}
+                              <b className="text-blue-700">
+                                {ing.quantity}{" "}
+                                {ing.unit === "gram"
+                                  ? "جرام"
+                                  : ing.unit === "kg"
+                                    ? "كجم"
+                                    : ing.unit === "ml"
+                                      ? "مللي"
+                                      : "قطعة"}
+                              </b>{" "}
+                              • التكلفة في الوصفة:{" "}
+                              <b className="text-emerald-700">
+                                {fmtCost(costContribution)} ج.م
+                              </b>
+                            </div>
                           </div>
+                          <button
+                            onClick={() =>
+                              handleRemoveIngredientFromRecipe(ing.ingredientId)
+                            }
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                        <button
-                          onClick={() =>
-                            handleRemoveIngredientFromRecipe(ing.ingredientId)
-                          }
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </div>
                     );
                   })}
@@ -705,17 +887,30 @@ export const ProductionAndRecipesScreen: React.FC<
                 </div>
                 <select
                   value={newIngId}
-                  onChange={(e) => setNewIngId(e.target.value)}
+                  onChange={(e) => {
+                    setNewIngId(e.target.value);
+                    const base =
+                      rawAndBlendIngredients.find(
+                        (i) => i.id === e.target.value,
+                      )?.baseUnit || "kg";
+                    setNewIngUnit(
+                      base === "piece"
+                        ? "piece"
+                        : base === "liter"
+                          ? "ml"
+                          : "gram",
+                    );
+                  }}
                   className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold bg-white"
                 >
                   {rawAndBlendIngredients.map((raw) => (
                     <option key={raw.id} value={raw.id}>
-                      {raw.name} (تكلفته: {raw.costPrice} ج.م /{' '}
-                      {raw.baseUnit === 'kg'
-                        ? 'كجم'
-                        : raw.baseUnit === 'liter'
-                        ? 'لتر'
-                        : 'قطعة'}
+                      {raw.name} (تكلفته: {raw.costPrice} ج.م /{" "}
+                      {raw.baseUnit === "kg"
+                        ? "كجم"
+                        : raw.baseUnit === "liter"
+                          ? "لتر"
+                          : "قطعة"}
                       )
                     </option>
                   ))}
@@ -734,10 +929,21 @@ export const ProductionAndRecipesScreen: React.FC<
                     onChange={(e) => setNewIngUnit(e.target.value as UnitType)}
                     className="border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold bg-white"
                   >
-                    <option value="gram">جرام (جم)</option>
-                    <option value="kg">كيلو (كجم)</option>
-                    <option value="ml">مللي (مل)</option>
-                    <option value="piece">قطعة / كوب</option>
+                    {allowedIngUnits.includes("gram") && (
+                      <option value="gram">جرام (جم)</option>
+                    )}
+                    {allowedIngUnits.includes("kg") && (
+                      <option value="kg">كيلو (كجم)</option>
+                    )}
+                    {allowedIngUnits.includes("ml") && (
+                      <option value="ml">مللي (مل)</option>
+                    )}
+                    {allowedIngUnits.includes("liter") && (
+                      <option value="liter">لتر (ل)</option>
+                    )}
+                    {allowedIngUnits.includes("piece") && (
+                      <option value="piece">قطعة / كوب</option>
+                    )}
                   </select>
                   <button
                     onClick={handleAddIngredientToRecipe}
@@ -747,6 +953,11 @@ export const ProductionAndRecipesScreen: React.FC<
                     إضافة للمكونات
                   </button>
                 </div>
+                {recipeEditError && (
+                  <p className="text-[11px] font-bold text-red-600">
+                    {recipeEditError}
+                  </p>
+                )}
               </div>
 
               {/* أسعار البيع وحفظ الوصفة */}
@@ -781,7 +992,7 @@ export const ProductionAndRecipesScreen: React.FC<
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow flex items-center justify-center gap-2 text-xs"
                 >
                   <Save className="w-4 h-4" />
-                  حفظ الوصفة ({liveRecipeCost.toFixed(2)} ج.م)
+                  <span>حفظ الوصفة ({fmtCost(liveRecipeCost)} ج.م)</span>
                 </button>
                 {onDeleteItem && recipeTargetItem && (
                   <button
@@ -799,7 +1010,7 @@ export const ProductionAndRecipesScreen: React.FC<
         )}
 
         {/* ================= التبويب الثالث: سجل تشغيلات الإنتاج ================= */}
-        {activeTab === 'history' && (
+        {activeTab === "history" && (
           <div className="space-y-3">
             {productionBatches.map((batch) => (
               <div
@@ -829,8 +1040,8 @@ export const ProductionAndRecipesScreen: React.FC<
                   {batch.blendName}
                 </div>
                 <div className="text-xs text-slate-600">
-                  تكلفة الكيلو: <b>{batch.unitCostPerKg} ج.م</b> • إجمالي تكلفة التشغيلة:{' '}
-                  <b>{batch.totalBatchCost.toFixed(2)} ج.م</b>
+                  تكلفة الكيلو: <b>{batch.unitCostPerKg} ج.م</b> • إجمالي تكلفة
+                  التشغيلة: <b>{batch.totalBatchCost.toFixed(2)} ج.م</b>
                 </div>
                 <div className="bg-slate-50 rounded-xl p-2.5 space-y-1 border border-slate-100">
                   <div className="text-[11px] font-bold text-slate-500">
@@ -867,21 +1078,21 @@ export const ProductionAndRecipesScreen: React.FC<
             </h3>
             <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => setNewModalType('manufactured_blend')}
+                onClick={() => setNewModalType("manufactured_blend")}
                 className={`py-2.5 rounded-xl text-xs font-extrabold border ${
-                  newModalType === 'manufactured_blend'
-                    ? 'bg-amber-800 text-white border-amber-800'
-                    : 'bg-slate-50 text-slate-700 border-slate-200'
+                  newModalType === "manufactured_blend"
+                    ? "bg-amber-800 text-white border-amber-800"
+                    : "bg-slate-50 text-slate-700 border-slate-200"
                 }`}
               >
                 ☕ توليفة بن تُصنّع بالكيلو
               </button>
               <button
-                onClick={() => setNewModalType('drink_recipe')}
+                onClick={() => setNewModalType("drink_recipe")}
                 className={`py-2.5 rounded-xl text-xs font-extrabold border ${
-                  newModalType === 'drink_recipe'
-                    ? 'bg-amber-800 text-white border-amber-800'
-                    : 'bg-slate-50 text-slate-700 border-slate-200'
+                  newModalType === "drink_recipe"
+                    ? "bg-amber-800 text-white border-amber-800"
+                    : "bg-slate-50 text-slate-700 border-slate-200"
                 }`}
               >
                 🥤 مشروب يُحضّر بالكوب
@@ -937,6 +1148,11 @@ export const ProductionAndRecipesScreen: React.FC<
                 إلغاء
               </button>
             </div>
+            {newModalError && (
+              <p className="text-[11px] font-bold text-red-600 text-center">
+                {newModalError}
+              </p>
+            )}
           </div>
         </div>
       )}

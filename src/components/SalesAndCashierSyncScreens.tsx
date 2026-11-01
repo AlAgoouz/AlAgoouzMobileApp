@@ -1,5 +1,5 @@
-import {businessDate} from '../lib/dates';
-import React, { useState, useMemo } from 'react';
+import { businessDate } from "../lib/dates";
+import React, { useState, useMemo } from "react";
 import {
   ChevronRight,
   ShoppingBag,
@@ -17,24 +17,25 @@ import {
   FolderSync,
   Coffee,
   Scale,
-} from 'lucide-react';
+  AlertTriangle,
+} from "lucide-react";
 import {
   InventoryItem,
   Customer,
   SalesInvoice,
   SalesInvoiceItem,
-} from '../types/erp';
+} from "../types/erp";
 import {
   parseCashierExcelBuffer,
   downloadSampleCashierExcel,
   ParsedCashierRow,
-} from '../lib/cashierExcelParser';
+} from "../lib/cashierExcelParser";
 
 interface SalesPosScreenProps {
   items: InventoryItem[];
   customers: Customer[];
   currentPartnerName: string;
-  onSaveSale: (invoice: Omit<SalesInvoice, 'id' | 'invoiceNumber'>) => void;
+  onSaveSale: (invoice: Omit<SalesInvoice, "id" | "invoiceNumber">) => void;
   onNavigateToCashierSync: () => void;
   onBack: () => void;
 }
@@ -47,26 +48,28 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
   onNavigateToCashierSync,
   onBack,
 }) => {
-  const [saleMode, setSaleMode] = useState<'wholesale' | 'retail'>('wholesale');
+  const [saleMode, setSaleMode] = useState<"wholesale" | "retail">("wholesale");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(
-    customers[0]?.id || ''
+    customers[0]?.id || "",
   );
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<
-    'نقدي' | 'آجل' | 'محفظة/انستا باي'
-  >('نقدي');
-  const [paidAmountInput, setPaidAmountInput] = useState<string>('');
-  const [discountInput, setDiscountInput] = useState<string>('0');
+    "نقدي" | "آجل" | "محفظة/انستا باي"
+  >("نقدي");
+  const [paidAmountInput, setPaidAmountInput] = useState<string>("");
+  const [discountInput, setDiscountInput] = useState<string>("0");
+  const [saleError, setSaleError] = useState("");
 
   const sellableItems = useMemo(
     () => items.filter((i) => i.canSellDirectly),
-    [items]
+    [items],
   );
 
   const filteredItems = useMemo(() => {
     return sellableItems.filter((i) => {
-      if (categoryFilter !== 'all' && i.category !== categoryFilter) return false;
+      if (categoryFilter !== "all" && i.category !== categoryFilter)
+        return false;
       if (
         searchQuery.trim() &&
         !i.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
@@ -90,25 +93,26 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
   const addToCart = (
     item: InventoryItem,
     presetKgOrCount?: number,
-    label?: string
+    label?: string,
   ) => {
     const defaultPrice =
-      saleMode === 'wholesale' ? item.wholesalePrice : item.retailPrice;
+      saleMode === "wholesale" ? item.wholesalePrice : item.retailPrice;
     const qtyToAdd =
-      presetKgOrCount ?? (item.baseUnit === 'kg' ? (saleMode === 'wholesale' ? 5 : 0.25) : 1);
+      presetKgOrCount ??
+      (item.baseUnit === "kg" ? (saleMode === "wholesale" ? 5 : 0.25) : 1);
     const unitLabel =
       label ??
-      (item.baseUnit === 'kg'
+      (item.baseUnit === "kg"
         ? qtyToAdd === 0.125
-          ? 'ثمن كيلو (125 جم)'
+          ? "ثمن كيلو (125 جم)"
           : qtyToAdd === 0.25
-          ? 'ربع كيلو (250 جم)'
-          : qtyToAdd === 0.5
-          ? 'نصف كيلو (500 جم)'
-          : `${qtyToAdd} كجم`
-        : item.category === 'drink_recipe'
-        ? 'كوب'
-        : 'قطعة');
+            ? "ربع كيلو (250 جم)"
+            : qtyToAdd === 0.5
+              ? "نصف كيلو (500 جم)"
+              : `${qtyToAdd} كجم`
+        : item.category === "drink_recipe"
+          ? "كوب"
+          : "قطعة");
 
     setCart((prev) => {
       const existing = prev.find((c) => c.item.id === item.id);
@@ -120,11 +124,11 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                 ...c,
                 qtyInBaseUnit: nextQty,
                 weightLabel:
-                  item.baseUnit === 'kg'
+                  item.baseUnit === "kg"
                     ? `${nextQty} كجم (${Math.round(nextQty * 1000)} جم)`
                     : `${nextQty} ${unitLabel}`,
               }
-            : c
+            : c,
         );
       }
       return [
@@ -139,18 +143,18 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
     });
   };
 
-  const handleModeSwitch = (mode: 'wholesale' | 'retail') => {
+  const handleModeSwitch = (mode: "wholesale" | "retail") => {
     setSaleMode(mode);
     setCart((prev) =>
       prev.map((c) => ({
         ...c,
         customUnitPrice:
-          mode === 'wholesale' ? c.item.wholesalePrice : c.item.retailPrice,
-      }))
+          mode === "wholesale" ? c.item.wholesalePrice : c.item.retailPrice,
+      })),
     );
-    if (mode === 'retail') {
-      setSelectedCustomerId('cust-cash');
-      setPaymentMethod('نقدي');
+    if (mode === "retail") {
+      setSelectedCustomerId("cust-cash");
+      setPaymentMethod("نقدي");
     } else if (customers[0]) {
       setSelectedCustomerId(customers[0].id);
     }
@@ -161,34 +165,67 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
       cart.reduce(
         (sum, c) =>
           sum + Number((c.qtyInBaseUnit * c.customUnitPrice).toFixed(2)),
-        0
+        0,
       ),
-    [cart]
+    [cart],
   );
 
-  const discount = parseFloat(discountInput) || 0;
+  // منع الخصم السالب أو الخصم الأكبر من إجمالي الفاتورة
+  const discount = Math.min(
+    Math.max(0, parseFloat(discountInput) || 0),
+    subtotal,
+  );
   const totalAmount = Math.max(0, subtotal - discount);
 
   const handleCompleteSale = () => {
     if (cart.length === 0) return;
+    setSaleError("");
+    const enteredDiscount = Number(discountInput);
+    const enteredPaid = Number(paidAmountInput);
+    if (
+      !discountInput.trim() ||
+      !Number.isFinite(enteredDiscount) ||
+      enteredDiscount < 0 ||
+      enteredDiscount > subtotal
+    ) {
+      setSaleError(`أدخل خصمًا صحيحًا بين صفر و${subtotal.toFixed(2)} ج.م`);
+      return;
+    }
+    if (
+      paymentMethod === "آجل" &&
+      (!Number.isFinite(enteredPaid) ||
+        enteredPaid < 0 ||
+        enteredPaid > totalAmount)
+    ) {
+      setSaleError(`أدخل مدفوعًا بين صفر و${totalAmount.toFixed(2)} ج.م`);
+      return;
+    }
     const customer =
-      customers.find((c) => c.id === selectedCustomerId) || customers[0];
+      saleMode === "wholesale"
+        ? customers.find((c) => c.id === selectedCustomerId)
+        : undefined;
+    if (saleMode === "wholesale" && !customer) {
+      setSaleError("اختر عميل الجملة قبل حفظ الفاتورة");
+      return;
+    }
 
     const invoiceItems: SalesInvoiceItem[] = cart.map((c) => {
-      const linePrice = Number((c.qtyInBaseUnit * c.customUnitPrice).toFixed(2));
+      const linePrice = Number(
+        (c.qtyInBaseUnit * c.customUnitPrice).toFixed(2),
+      );
       const lineCost = Number((c.qtyInBaseUnit * c.item.costPrice).toFixed(2));
       const deductionNote =
-        c.item.category === 'drink_recipe' && c.item.recipe
+        c.item.category === "drink_recipe" && c.item.recipe
           ? `فك وصفة المشروب وخصم: ${c.item.recipe
               .map(
                 (r) =>
                   `${r.quantity * c.qtyInBaseUnit} ${
-                    r.unit === 'gram' ? 'جم' : r.unit === 'ml' ? 'مل' : 'قطعة'
-                  } ${r.ingredientName.split('(')[0]}`
+                    r.unit === "gram" ? "جم" : r.unit === "ml" ? "مل" : "قطعة"
+                  } ${r.ingredientName.split("(")[0]}`,
               )
-              .join(' + ')}`
+              .join(" + ")}`
           : `خصم مباشر: ${c.qtyInBaseUnit} ${
-              c.item.baseUnit === 'kg' ? 'كجم' : 'قطعة'
+              c.item.baseUnit === "kg" ? "كجم" : "قطعة"
             } من المخزن`;
 
       return {
@@ -210,18 +247,18 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
     const totalCost = invoiceItems.reduce((s, i) => s + i.totalCost, 0);
     const netProfit = Number((totalAmount - totalCost).toFixed(2));
     const paid =
-      paymentMethod === 'نقدي' || paymentMethod === 'محفظة/انستا باي'
+      paymentMethod === "نقدي" || paymentMethod === "محفظة/انستا باي"
         ? totalAmount
-        : Math.min(totalAmount, parseFloat(paidAmountInput) || 0);
+        : Math.min(totalAmount, Math.max(0, parseFloat(paidAmountInput) || 0));
 
     onSaveSale({
       date: businessDate(),
       saleType: saleMode,
       customerId: customer?.id,
       customerName:
-        saleMode === 'retail'
-          ? 'عميل نقدي (مبيعات المحل)'
-          : customer?.name || 'عميل جملة',
+        saleMode === "retail"
+          ? "عميل نقدي (مبيعات المحل)"
+          : customer?.name || "عميل جملة",
       items: invoiceItems,
       subtotal,
       discount,
@@ -237,6 +274,11 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-36">
+      {saleError && (
+        <p role="alert" className="text-red-700 bg-red-50 p-3 font-bold">
+          {saleError}
+        </p>
+      )}
       {/* الهيدر */}
       <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
         <button
@@ -247,9 +289,9 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
         </button>
         <div className="text-center">
           <h1 className="text-base font-extrabold">
-            {saleMode === 'wholesale'
-              ? 'فاتورة بيع جملة (بُن العجوز)'
-              : 'نقطة بيع المحل (قطاعي ومشروبات)'}
+            {saleMode === "wholesale"
+              ? "فاتورة بيع جملة (بُن العجوز)"
+              : "نقطة بيع المحل (قطاعي ومشروبات)"}
           </h1>
         </div>
         <button
@@ -266,22 +308,22 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
         {/* التبديل بين بيع الجملة وبيع المحل */}
         <div className="bg-white p-1.5 rounded-2xl border border-[#E6DEC8] grid grid-cols-2 gap-1.5 shadow-sm">
           <button
-            onClick={() => handleModeSwitch('wholesale')}
+            onClick={() => handleModeSwitch("wholesale")}
             className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition ${
-              saleMode === 'wholesale'
-                ? 'bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] shadow'
-                : 'text-[#5C4B3E] hover:bg-[#FAF8F4]'
+              saleMode === "wholesale"
+                ? "bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] shadow"
+                : "text-[#5C4B3E] hover:bg-[#FAF8F4]"
             }`}
           >
             <ShoppingBag className="w-4 h-4 text-[#D4AF37]" />
             بيع جملة
           </button>
           <button
-            onClick={() => handleModeSwitch('retail')}
+            onClick={() => handleModeSwitch("retail")}
             className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition ${
-              saleMode === 'retail'
-                ? 'bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] shadow'
-                : 'text-[#5C4B3E] hover:bg-[#FAF8F4]'
+              saleMode === "retail"
+                ? "bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] shadow"
+                : "text-[#5C4B3E] hover:bg-[#FAF8F4]"
             }`}
           >
             <Coffee className="w-4 h-4 text-[#D4AF37]" />
@@ -290,7 +332,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
         </div>
 
         {/* اختيار عميل الجملة */}
-        {saleMode === 'wholesale' && (
+        {saleMode === "wholesale" && (
           <div className="bg-white rounded-2xl border border-blue-200 p-3.5 flex items-center gap-3 shadow-sm">
             <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
               <Users className="w-5 h-5" />
@@ -305,7 +347,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                 className="w-full text-sm font-extrabold text-slate-900 bg-transparent focus:outline-none"
               >
                 {customers
-                  .filter((c) => c.id !== 'cust-cash')
+                  .filter((c) => c.id !== "cust-cash")
                   .map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name} ({c.type}) — عليه: {c.balance} ج.م
@@ -319,19 +361,19 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
         {/* فلاتر الأقسام السريعة */}
         <div className="flex gap-2 overflow-x-auto pb-1">
           {[
-            { id: 'all', label: 'الكل' },
-            { id: 'manufactured_blend', label: '☕ توليفات بُن العجوز' },
-            { id: 'raw_bean', label: '🫘 حبوب بن محمصة' },
-            { id: 'drink_recipe', label: '🥤 مشروبات ساخنة' },
-            { id: 'direct_product', label: '💧 مياه ومعلبات' },
+            { id: "all", label: "الكل" },
+            { id: "manufactured_blend", label: "☕ توليفات بُن العجوز" },
+            { id: "raw_bean", label: "🫘 حبوب بن محمصة" },
+            { id: "drink_recipe", label: "🥤 مشروبات ساخنة" },
+            { id: "direct_product", label: "💧 مياه ومعلبات" },
           ].map((cat) => (
             <button
               key={cat.id}
               onClick={() => setCategoryFilter(cat.id)}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold shrink-0 border transition ${
                 categoryFilter === cat.id
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-700 border-slate-200'
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-700 border-slate-200"
               }`}
             >
               {cat.label}
@@ -355,8 +397,8 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {filteredItems.map((item) => {
             const activePrice =
-              saleMode === 'wholesale' ? item.wholesalePrice : item.retailPrice;
-            const isKg = item.baseUnit === 'kg';
+              saleMode === "wholesale" ? item.wholesalePrice : item.retailPrice;
+            const isKg = item.baseUnit === "kg";
 
             return (
               <div
@@ -369,32 +411,34 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                       {item.name}
                     </div>
                     <div className="text-[11px] text-slate-400">
-                      {item.category === 'drink_recipe'
-                        ? 'يحضر بالوصفة ويخصم الخامات تلقائياً'
-                        : `الرصيد المتاح: ${item.stock} ${isKg ? 'كجم' : 'قطعة'}`}
+                      {item.category === "drink_recipe"
+                        ? "يحضر بالوصفة ويخصم الخامات تلقائياً"
+                        : `الرصيد المتاح: ${item.stock} ${isKg ? "كجم" : "قطعة"}`}
                     </div>
                   </div>
                   <span className="text-xs font-black text-blue-700 bg-blue-50 px-2 py-1 rounded-lg shrink-0">
-                    {activePrice} ج.م/{isKg ? 'كجم' : 'وحدة'}
+                    {activePrice} ج.م/{isKg ? "كجم" : "وحدة"}
                   </span>
                 </div>
 
                 {isKg ? (
                   <div className="grid grid-cols-4 gap-1.5 pt-1">
                     <button
-                      onClick={() => addToCart(item, 0.125, 'ثمن كيلو (125 جم)')}
+                      onClick={() =>
+                        addToCart(item, 0.125, "ثمن كيلو (125 جم)")
+                      }
                       className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg py-1 text-[11px] font-extrabold"
                     >
                       + ثمن
                     </button>
                     <button
-                      onClick={() => addToCart(item, 0.25, 'ربع كيلو (250 جم)')}
+                      onClick={() => addToCart(item, 0.25, "ربع كيلو (250 جم)")}
                       className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg py-1 text-[11px] font-extrabold"
                     >
                       + ربع
                     </button>
                     <button
-                      onClick={() => addToCart(item, 0.5, 'نصف كيلو (500 جم)')}
+                      onClick={() => addToCart(item, 0.5, "نصف كيلو (500 جم)")}
                       className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg py-1 text-[11px] font-extrabold"
                     >
                       + نصف
@@ -403,13 +447,13 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                       onClick={() =>
                         addToCart(
                           item,
-                          saleMode === 'wholesale' ? 5 : 1,
-                          saleMode === 'wholesale' ? '5 كجم جملة' : '1 كيلو'
+                          saleMode === "wholesale" ? 5 : 1,
+                          saleMode === "wholesale" ? "5 كجم جملة" : "1 كيلو",
                         )
                       }
                       className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-1 text-[11px] font-extrabold"
                     >
-                      + {saleMode === 'wholesale' ? '5 كجم' : '1 كجم'}
+                      + {saleMode === "wholesale" ? "5 كجم" : "1 كجم"}
                     </button>
                   </div>
                 ) : (
@@ -439,9 +483,9 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                     (s, c) =>
                       s +
                       c.qtyInBaseUnit * (c.customUnitPrice - c.item.costPrice),
-                    0
+                    0,
                   )
-                  .toFixed(1)}{' '}
+                  .toFixed(1)}{" "}
                 ج.م
               </span>
             </div>
@@ -459,7 +503,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                     <button
                       onClick={() =>
                         setCart((prev) =>
-                          prev.filter((x) => x.item.id !== c.item.id)
+                          prev.filter((x) => x.item.id !== c.item.id),
                         )
                       }
                       className="text-red-500 p-1"
@@ -470,7 +514,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] text-slate-500">
-                        الكمية ({c.item.baseUnit === 'kg' ? 'كجم' : 'عدد'}):
+                        الكمية ({c.item.baseUnit === "kg" ? "كجم" : "عدد"}):
                       </span>
                       <input
                         type="number"
@@ -479,7 +523,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                         onChange={(e) => {
                           const val = Math.max(
                             0.05,
-                            parseFloat(e.target.value) || 0.125
+                            parseFloat(e.target.value) || 0.125,
                           );
                           setCart((prev) =>
                             prev.map((x) =>
@@ -488,12 +532,12 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                                     ...x,
                                     qtyInBaseUnit: val,
                                     weightLabel:
-                                      c.item.baseUnit === 'kg'
+                                      c.item.baseUnit === "kg"
                                         ? `${val} كجم (${Math.round(val * 1000)} جم)`
                                         : `${val} وحدة`,
                                   }
-                                : x
-                            )
+                                : x,
+                            ),
                           );
                         }}
                         className="w-16 border border-slate-300 rounded-lg px-2 py-1 text-xs font-extrabold text-center bg-white"
@@ -505,13 +549,16 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                         type="number"
                         value={c.customUnitPrice}
                         onChange={(e) => {
-                          const p = Math.max(0, parseFloat(e.target.value) || 0);
+                          const p = Math.max(
+                            0,
+                            parseFloat(e.target.value) || 0,
+                          );
                           setCart((prev) =>
                             prev.map((x) =>
                               x.item.id === c.item.id
                                 ? { ...x, customUnitPrice: p }
-                                : x
-                            )
+                                : x,
+                            ),
                           );
                         }}
                         className="w-16 border border-slate-300 rounded-lg px-2 py-1 text-xs font-extrabold text-center bg-white"
@@ -546,19 +593,21 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                   value={paymentMethod}
                   onChange={(e) =>
                     setPaymentMethod(
-                      e.target.value as 'نقدي' | 'آجل' | 'محفظة/انستا باي'
+                      e.target.value as "نقدي" | "آجل" | "محفظة/انستا باي",
                     )
                   }
                   className="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold bg-white"
                 >
                   <option value="نقدي">نقدي (كاش)</option>
-                  <option value="آجل">آجل (على حساب العميل)</option>
+                  {saleMode === "wholesale" && (
+                    <option value="آجل">آجل (على حساب العميل)</option>
+                  )}
                   <option value="محفظة/انستا باي">محفظة / إنستا باي</option>
                 </select>
               </div>
             </div>
 
-            {paymentMethod === 'آجل' && (
+            {paymentMethod === "آجل" && (
               <div className="flex items-center justify-between bg-amber-50 p-2.5 rounded-xl border border-amber-200">
                 <span className="text-xs font-bold text-amber-900">
                   المبلغ المدفوع تحت الحساب الآن:
@@ -584,9 +633,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
           className="flex-[2] bg-[#1E1612] hover:bg-[#2E221A] disabled:opacity-50 text-[#FBF5B7] border border-[#C59B27] font-extrabold py-3 rounded-xl shadow-md flex items-center justify-center gap-2 text-xs"
         >
           <Check className="w-4 h-4 text-[#D4AF37]" />
-          <span>
-            حفظ الفاتورة ({totalAmount.toLocaleString('ar-EG')} ج.م)
-          </span>
+          <span>حفظ الفاتورة ({totalAmount.toLocaleString("ar-EG")} ج.م)</span>
         </button>
         <button
           onClick={onBack}
@@ -607,7 +654,7 @@ interface CashierSyncScreenProps {
   onImportCashierRows: (
     rows: ParsedCashierRow[],
     sourceFileName: string,
-    saleDate?: string
+    saleDate?: string,
   ) => Promise<boolean>;
   onBack: () => void;
 }
@@ -618,27 +665,52 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
   onBack,
 }) => {
   const [parsedRows, setParsedRows] = useState<ParsedCashierRow[]>([]);
-  const [fileName, setFileName] = useState<string>('');
-  const [saleDate,setSaleDate] = useState(businessDate());
-  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string>('');
+  const [fileName, setFileName] = useState<string>("");
+  const [saleDate, setSaleDate] = useState(businessDate());
+  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string>("");
+  const [syncMsgKind, setSyncMsgKind] = useState<"success" | "error">(
+    "success",
+  );
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
     setParsedRows([]);
-    try {const buffer=await file.arrayBuffer();const rows=await parseCashierExcelBuffer(buffer,items);setParsedRows(rows);setSyncSuccessMsg('');}
-    catch(error){setSyncSuccessMsg((error as Error).message);}
-    e.target.value='';
+    try {
+      const buffer = await file.arrayBuffer();
+      const rows = await parseCashierExcelBuffer(buffer, items);
+      setParsedRows(rows);
+      setSyncSuccessMsg("");
+    } catch (error) {
+      setSyncSuccessMsg((error as Error).message);
+      setSyncMsgKind("error");
+    }
+    e.target.value = "";
   };
 
-  const [importing,setImporting]=useState(false);
+  const [importing, setImporting] = useState(false);
   const handleConfirmImport = async () => {
     if (!parsedRows.length || importing) return;
     setImporting(true);
-    try {if(await onImportCashierRows(parsedRows,fileName||'cashier_sheet.xlsx',saleDate)){setSyncSuccessMsg('تم حفظ المبيعات على السحابة وخصم المخزون.');setParsedRows([]);}}
-    catch(error){setSyncSuccessMsg((error as Error).message);}
-    finally{setImporting(false);}
+    try {
+      if (
+        await onImportCashierRows(
+          parsedRows,
+          fileName || "cashier_sheet.xlsx",
+          saleDate,
+        )
+      ) {
+        setSyncSuccessMsg("تم حفظ المبيعات على السحابة وخصم المخزون.");
+        setSyncMsgKind("success");
+        setParsedRows([]);
+      }
+    } catch (error) {
+      setSyncSuccessMsg((error as Error).message);
+      setSyncMsgKind("error");
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -670,7 +742,17 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
       </div>
 
       <div className="p-3.5 space-y-4">
-        <label className="block text-sm font-bold">تاريخ مبيعات الملف<input aria-label="تاريخ مبيعات الملف" type="date" required value={saleDate} onChange={e=>setSaleDate(e.target.value)} className="block border p-2 rounded-lg mt-1"/></label>
+        <label className="block text-sm font-bold">
+          تاريخ مبيعات الملف
+          <input
+            aria-label="تاريخ مبيعات الملف"
+            type="date"
+            required
+            value={saleDate}
+            onChange={(e) => setSaleDate(e.target.value)}
+            className="block border p-2 rounded-lg mt-1"
+          />
+        </label>
         {/* كارت حالة الربط الأوتوماتيكي للفولدر */}
         <div className="bg-slate-900 text-white rounded-3xl p-4 shadow-lg space-y-2.5">
           <div className="flex items-center justify-between">
@@ -683,18 +765,29 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-300 leading-relaxed">
-            على جهاز كاشير المحل، شغّل ملف{' '}
+            على جهاز كاشير المحل، شغّل ملف{" "}
             <code className="bg-black/40 text-amber-300 px-1.5 py-0.5 rounded">
               cashier-watcher/START_CASHIER_SYNC.bat
-            </code>{' '}
-            ليقوم بمراقبة فولدر الكاشير، وبمجرد خروج شيت الإكسيل يرفعه تلقائياً ويخصم
-            الأصناف والوصفات!
+            </code>{" "}
+            ليقوم بمراقبة فولدر الكاشير، وبمجرد خروج شيت الإكسيل يرفعه تلقائياً
+            ويخصم الأصناف والوصفات!
           </p>
         </div>
 
         {syncSuccessMsg && (
-          <div className="bg-emerald-50 border-2 border-emerald-400 text-emerald-900 rounded-2xl p-4 flex items-center gap-3 text-xs font-extrabold">
-            <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+          <div
+            role="alert"
+            className={`rounded-2xl p-4 flex items-center gap-3 text-xs font-extrabold border-2 ${
+              syncMsgKind === "success"
+                ? "bg-emerald-50 border-emerald-400 text-emerald-900"
+                : "bg-red-50 border-red-400 text-red-900"
+            }`}
+          >
+            {syncMsgKind === "success" ? (
+              <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-6 h-6 text-red-600 shrink-0" />
+            )}
             <span>{syncSuccessMsg}</span>
           </div>
         )}
@@ -717,8 +810,6 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
                 className="hidden"
               />
             </label>
-
-
           </div>
         </div>
 
@@ -730,13 +821,15 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
                 <div className="text-sm font-extrabold text-slate-900">
                   معاينة شيت الكاشير قبل الخصم ({parsedRows.length} سطر)
                 </div>
-                <div className="text-[11px] text-slate-500">الملف: {fileName}</div>
+                <div className="text-[11px] text-slate-500">
+                  الملف: {fileName}
+                </div>
               </div>
               <span className="text-xs font-black text-emerald-700">
-                الإجمالي:{' '}
+                الإجمالي:{" "}
                 {parsedRows
                   .reduce((s, r) => s + (r.totalPrice || 0), 0)
-                  .toLocaleString('ar-EG')}{' '}
+                  .toLocaleString("ar-EG")}{" "}
                 ج.م
               </span>
             </div>
@@ -744,9 +837,10 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
             <div className="space-y-2.5">
               {parsedRows.map((row, idx) => {
                 const matched = row.matchedItem;
-                const isDrink = matched?.category === 'drink_recipe';
-                const qtyInBase =
-                  ['gram','ml'].includes(row.unitHint) ? row.quantity / 1000 : row.quantity;
+                const isDrink = matched?.category === "drink_recipe";
+                const qtyInBase = ["gram", "ml"].includes(row.unitHint)
+                  ? row.quantity / 1000
+                  : row.quantity;
 
                 return (
                   <div
@@ -758,16 +852,23 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
                         {row.rawName}
                       </span>
                       <span className="text-xs font-black text-blue-700">
-                        {row.quantity}{' '}
-                        {row.unitHint === 'gram'
-                          ? 'جرام'
-                          : row.unitHint === 'kg'
-                          ? 'كجم'
-                          : 'وحدة'}
+                        {row.quantity}{" "}
+                        {row.unitHint === "gram"
+                          ? "جرام"
+                          : row.unitHint === "kg"
+                            ? "كجم"
+                            : "وحدة"}
                       </span>
                     </div>
 
-                    {row.error && <div role="alert" className="text-xs text-red-700 font-bold">{row.error}</div>}
+                    {row.error && (
+                      <div
+                        role="alert"
+                        className="text-xs text-red-700 font-bold"
+                      >
+                        {row.error}
+                      </div>
+                    )}
                     {matched && !row.error ? (
                       <div className="text-[11px] bg-white p-2 rounded-lg border border-slate-200/80 space-y-1">
                         <div className="text-emerald-700 font-bold">
@@ -775,24 +876,25 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
                         </div>
                         {isDrink && matched.recipe ? (
                           <div className="text-amber-800 font-semibold">
-                            ⚡ منتج له وصفة مشروب — سيخصم من المخزون:{' '}
+                            ⚡ منتج له وصفة مشروب — سيخصم من المخزون:{" "}
                             {matched.recipe
                               .map(
                                 (ing) =>
                                   `${ing.quantity * qtyInBase} ${
-                                    ing.unit === 'gram'
-                                      ? 'جم'
-                                      : ing.unit === 'ml'
-                                      ? 'مل'
-                                      : 'قطعة'
-                                  } (${ing.ingredientName.split('(')[0]})`
+                                    ing.unit === "gram"
+                                      ? "جم"
+                                      : ing.unit === "ml"
+                                        ? "مل"
+                                        : "قطعة"
+                                  } (${ing.ingredientName.split("(")[0]})`,
                               )
-                              .join(' + ')}
+                              .join(" + ")}
                           </div>
                         ) : (
                           <div className="text-blue-800 font-semibold">
-                            📦 منتج / توليفة جاهزة — سيخصم مباشرة: {qtyInBase}{' '}
-                            {matched.baseUnit === 'kg' ? 'كجم' : 'قطعة'} من رصيد الصنف
+                            📦 منتج / توليفة جاهزة — سيخصم مباشرة: {qtyInBase}{" "}
+                            {matched.baseUnit === "kg" ? "كجم" : "قطعة"} من رصيد
+                            الصنف
                           </div>
                         )}
                       </div>
@@ -808,7 +910,11 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
 
             <button
               onClick={handleConfirmImport}
-                  disabled={!saleDate || importing || parsedRows.some(r=>Boolean(r.error)||!r.matchedItem)}
+              disabled={
+                !saleDate ||
+                importing ||
+                parsedRows.some((r) => Boolean(r.error) || !r.matchedItem)
+              }
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2"
             >
               <Check className="w-5 h-5" />

@@ -1,0 +1,27 @@
+{
+  "environment": "Disposable local PostgreSQL; no production writes",
+  "verifiedAt": "2026-11-01T04:00:51.290Z",
+  "version": 3,
+  "purchase": {
+    "amount": 360,
+    "rawBefore": 42.5,
+    "rawAfterPurchase": 43.5
+  },
+  "production": {
+    "quantity": 10,
+    "cost": 3940,
+    "rawAfterProduction": 38.5
+  },
+  "sale": {
+    "quantity": 0.25,
+    "amount": 135,
+    "cost": 98.5,
+    "profit": 36.5,
+    "blendFinalStock": 32.25,
+    "customerAccountsUnchanged": true
+  },
+  "backup": {
+    "restoredAndMatched": true,
+    "sha256": "c7b8758d22a0096479708205ce20fb5be451d360b50b8bb1a2c25193053a91bd"
+  }
+}

@@ -67,6 +67,8 @@ it('generates setup that rolls back missing accounts and never replaces existing
     ).toEqual([{ id: 'different' }]);
   } finally {
     await db.close();
+    if (path.dirname(path.resolve(directory)) !== path.resolve(os.tmpdir()) || !path.basename(directory).startsWith('bon-erp-setup-'))
+      throw new Error('Refusing to remove an unexpected test directory');
     rmSync(directory, { recursive: true, force: true });
   }
 });

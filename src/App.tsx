@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Settings,
   LayoutGrid,
@@ -28,7 +28,7 @@ import {
   UserCheck,
   Trash2,
   Tag,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   InventoryItem,
   ProductionBatch,
@@ -43,14 +43,19 @@ import {
   EmployeeTransaction,
   StocktakingAuditRecord,
   StocktakingItemVariance,
-} from './types/erp';
-import { calculateRecipeTotalCost } from './lib/itemCosts';
+} from "./types/erp";
+import { recalculateRecipeCosts } from "./lib/itemCosts";
+import {
+  checkPurchase,
+  prepareSale,
+  checkStocktaking,
+} from "./lib/operationChecks";
 
-import { ParsedCashierRow, mapRawCashierRows } from './lib/cashierExcelParser';
-import { getSupabaseClient, getSupabaseCredentials } from './lib/supabaseSync';
-import { useErpStore } from './hooks/useErpStore';
-import { parseBackup, createBackup, type StoreState } from './lib/storeState';
-import { deductInventory, productionNeeds } from './lib/inventory';
+import { ParsedCashierRow, mapRawCashierRows } from "./lib/cashierExcelParser";
+import { getSupabaseClient, getSupabaseCredentials } from "./lib/supabaseSync";
+import { useErpStore } from "./hooks/useErpStore";
+import { parseBackup, createBackup, type StoreState } from "./lib/storeState";
+import { deductInventory, productionNeeds } from "./lib/inventory";
 import {
   reversePayment,
   returnSale,
@@ -59,120 +64,167 @@ import {
   recordExpense,
   cancelExpense,
   operatingExpenses,
-} from './lib/ledger';
-import { businessDate } from './lib/dates';
-import { cashierSourceId } from './lib/cashierRows';
+} from "./lib/ledger";
+import { businessDate } from "./lib/dates";
+import { cashierSourceId } from "./lib/cashierRows";
 import {
   downloadFullBackupJson,
   exportFullStoreExcel,
-} from './lib/backupExport';
+} from "./lib/backupExport";
 
 const unloadedPartner: Partner = {
-  id: '',
-  username: '',
-  name: '',
-  role: '',
-  avatarLetter: '',
-  phone: '',
+  id: "",
+  username: "",
+  name: "",
+  role: "",
+  avatarLetter: "",
+  phone: "",
   sharePercent: 0,
   totalPaidFromPocket: 0,
   totalWithdrawals: 0,
 };
+
+// صافي مستحقات العامل (نفس معادلة شاشة شؤون العمال) لمحاربة تجاوز الصرف
+function employeeNetPayable(emp: Employee): number {
+  const earned =
+    emp.salaryType === "يومية"
+      ? emp.workedDaysThisMonth * emp.dailyRate
+      : emp.baseMonthlySalary;
+  return Math.max(
+    0,
+    earned +
+      emp.totalBonuses -
+      emp.totalAdvances -
+      emp.totalDeductions -
+      emp.totalPaidOut,
+  );
+}
+
+// ترقيم مسلسل فريد لا يتكرر حتى بعد حذف سجلات قديمة (خطأ تكرار PRD/AUD القديم)
+function nextSequentialNumber(
+  existing: string[],
+  prefix: string,
+  startFrom: number,
+): string {
+  const suffixes = existing
+    .map((value) => Number(value.match(/(\d+)$/)?.[1]))
+    .filter((n) => Number.isFinite(n));
+  const next = suffixes.reduce((max, value) => Math.max(max, value), startFrom) + 1;
+  return `${prefix}-${next}`;
+}
+// التحقق من الأرقام عند التعريف/التحديث: أرقام صالحة وغير سالبة
+function hasInvalidNumbers(values: (number | undefined)[]): boolean {
+  return values.some((v) => v !== undefined && (!Number.isFinite(v) || v < 0));
+}
+
+// إزالة الرصيد الوهمي (999) عند تحويل مشروب بوصفة إلى صنف عادي
+function resetPhantomStock(
+  beforeCategory: string,
+  afterCategory: string | undefined,
+  stock: number,
+): number {
+  return beforeCategory === "drink_recipe" &&
+    (afterCategory ?? "drink_recipe") !== "drink_recipe" &&
+    Math.abs(stock - 999) < 0.0001
+    ? 0
+    : stock;
+}
+
 const LoginScreen = React.lazy(() =>
-  import('./components/LoginScreen').then((module) => ({
+  import("./components/LoginScreen").then((module) => ({
     default: module.LoginScreen,
   })),
 );
 
 const PurchaseScreen = React.lazy(() =>
-  import('./components/PurchaseScreen').then((module) => ({
+  import("./components/PurchaseScreen").then((module) => ({
     default: module.PurchaseScreen,
   })),
 );
 
 const ProductionAndRecipesScreen = React.lazy(() =>
-  import('./components/ProductionAndRecipesScreen').then((module) => ({
+  import("./components/ProductionAndRecipesScreen").then((module) => ({
     default: module.ProductionAndRecipesScreen,
   })),
 );
 
 const SmartInsightsScreen = React.lazy(() =>
-  import('./components/ReportsAndInsightsScreens').then((module) => ({
+  import("./components/ReportsAndInsightsScreens").then((module) => ({
     default: module.SmartInsightsScreen,
   })),
 );
 const ProfitReportsScreen = React.lazy(() =>
-  import('./components/ReportsAndInsightsScreens').then((module) => ({
+  import("./components/ReportsAndInsightsScreens").then((module) => ({
     default: module.ProfitReportsScreen,
   })),
 );
 
 const SalesPosScreen = React.lazy(() =>
-  import('./components/SalesAndCashierSyncScreens').then((module) => ({
+  import("./components/SalesAndCashierSyncScreens").then((module) => ({
     default: module.SalesPosScreen,
   })),
 );
 const CashierSyncScreen = React.lazy(() =>
-  import('./components/SalesAndCashierSyncScreens').then((module) => ({
+  import("./components/SalesAndCashierSyncScreens").then((module) => ({
     default: module.CashierSyncScreen,
   })),
 );
 
 const ProductsCatalogScreen = React.lazy(() =>
-  import('./components/ManagementScreens').then((module) => ({
+  import("./components/ManagementScreens").then((module) => ({
     default: module.ProductsCatalogScreen,
   })),
 );
 const InventoryScreen = React.lazy(() =>
-  import('./components/ManagementScreens').then((module) => ({
+  import("./components/ManagementScreens").then((module) => ({
     default: module.InventoryScreen,
   })),
 );
 const ShortagesScreen = React.lazy(() =>
-  import('./components/ManagementScreens').then((module) => ({
+  import("./components/ManagementScreens").then((module) => ({
     default: module.ShortagesScreen,
   })),
 );
 const SuppliersAndCustomersScreen = React.lazy(() =>
-  import('./components/ManagementScreens').then((module) => ({
+  import("./components/ManagementScreens").then((module) => ({
     default: module.SuppliersAndCustomersScreen,
   })),
 );
 const SalesInvoicesAndReturnsScreen = React.lazy(() =>
-  import('./components/ManagementScreens').then((module) => ({
+  import("./components/ManagementScreens").then((module) => ({
     default: module.SalesInvoicesAndReturnsScreen,
   })),
 );
 const MoreMenuScreen = React.lazy(() =>
-  import('./components/ManagementScreens').then((module) => ({
+  import("./components/ManagementScreens").then((module) => ({
     default: module.MoreMenuScreen,
   })),
 );
 
 const StocktakingScreen = React.lazy(() =>
-  import('./components/StocktakingAndStaffScreens').then((module) => ({
+  import("./components/StocktakingAndStaffScreens").then((module) => ({
     default: module.StocktakingScreen,
   })),
 );
 const StaffAndPayrollScreen = React.lazy(() =>
-  import('./components/StocktakingAndStaffScreens').then((module) => ({
+  import("./components/StocktakingAndStaffScreens").then((module) => ({
     default: module.StaffAndPayrollScreen,
   })),
 );
 
 const InvoiceReceiptModal = React.lazy(() =>
-  import('./components/ReceiptAndStatementModals').then((module) => ({
+  import("./components/ReceiptAndStatementModals").then((module) => ({
     default: module.InvoiceReceiptModal,
   })),
 );
 
 export default function App() {
-  const [activeScreen, setActiveScreen] = useState<string>('home');
+  const [activeScreen, setActiveScreen] = useState<string>("home");
   const [moreInitialTab, setMoreInitialTab] = useState<
-    'menu' | 'data_control' | 'expenses' | 'partners' | 'shifts' | 'cloud'
-  >('menu');
+    "menu" | "data_control" | "expenses" | "partners" | "shifts" | "cloud"
+  >("menu");
   const [hideProfits, setHideProfits] = useState<boolean>(false);
-  const [globalSearch, setGlobalSearch] = useState<string>('');
+  const [globalSearch, setGlobalSearch] = useState<string>("");
   const [toastNotification, setToastNotification] = useState<string | null>(
     null,
   );
@@ -203,87 +255,87 @@ export default function App() {
       engine.transaction(action);
       return true;
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'تعذر تنفيذ العملية');
+      showToast(error instanceof Error ? error.message : "تعذر تنفيذ العملية");
       return false;
     }
   };
   const setItems = (
     next:
-      | StoreState['items']
-      | ((previous: StoreState['items']) => StoreState['items']),
-  ) => engine.field('items', next);
+      | StoreState["items"]
+      | ((previous: StoreState["items"]) => StoreState["items"]),
+  ) => engine.field("items", next);
   const setProductionBatches = (
     next:
-      | StoreState['productionBatches']
+      | StoreState["productionBatches"]
       | ((
-          previous: StoreState['productionBatches'],
-        ) => StoreState['productionBatches']),
-  ) => engine.field('productionBatches', next);
+          previous: StoreState["productionBatches"],
+        ) => StoreState["productionBatches"]),
+  ) => engine.field("productionBatches", next);
   const setPurchaseInvoices = (
     next:
-      | StoreState['purchaseInvoices']
+      | StoreState["purchaseInvoices"]
       | ((
-          previous: StoreState['purchaseInvoices'],
-        ) => StoreState['purchaseInvoices']),
-  ) => engine.field('purchaseInvoices', next);
+          previous: StoreState["purchaseInvoices"],
+        ) => StoreState["purchaseInvoices"]),
+  ) => engine.field("purchaseInvoices", next);
   const setSalesInvoices = (
     next:
-      | StoreState['salesInvoices']
+      | StoreState["salesInvoices"]
       | ((
-          previous: StoreState['salesInvoices'],
-        ) => StoreState['salesInvoices']),
-  ) => engine.field('salesInvoices', next);
+          previous: StoreState["salesInvoices"],
+        ) => StoreState["salesInvoices"]),
+  ) => engine.field("salesInvoices", next);
   const setSuppliers = (
     next:
-      | StoreState['suppliers']
-      | ((previous: StoreState['suppliers']) => StoreState['suppliers']),
-  ) => engine.field('suppliers', next);
+      | StoreState["suppliers"]
+      | ((previous: StoreState["suppliers"]) => StoreState["suppliers"]),
+  ) => engine.field("suppliers", next);
   const setCustomers = (
     next:
-      | StoreState['customers']
-      | ((previous: StoreState['customers']) => StoreState['customers']),
-  ) => engine.field('customers', next);
+      | StoreState["customers"]
+      | ((previous: StoreState["customers"]) => StoreState["customers"]),
+  ) => engine.field("customers", next);
   const setExpenses = (
     next:
-      | StoreState['expenses']
-      | ((previous: StoreState['expenses']) => StoreState['expenses']),
-  ) => engine.field('expenses', next);
+      | StoreState["expenses"]
+      | ((previous: StoreState["expenses"]) => StoreState["expenses"]),
+  ) => engine.field("expenses", next);
   const setPartners = (
     next:
-      | StoreState['partners']
-      | ((previous: StoreState['partners']) => StoreState['partners']),
-  ) => engine.field('partners', next);
+      | StoreState["partners"]
+      | ((previous: StoreState["partners"]) => StoreState["partners"]),
+  ) => engine.field("partners", next);
   const setAuditLogs = (
     next:
-      | StoreState['auditLogs']
-      | ((previous: StoreState['auditLogs']) => StoreState['auditLogs']),
-  ) => engine.field('auditLogs', next);
+      | StoreState["auditLogs"]
+      | ((previous: StoreState["auditLogs"]) => StoreState["auditLogs"]),
+  ) => engine.field("auditLogs", next);
   const setEmployees = (
     next:
-      | StoreState['employees']
-      | ((previous: StoreState['employees']) => StoreState['employees']),
-  ) => engine.field('employees', next);
+      | StoreState["employees"]
+      | ((previous: StoreState["employees"]) => StoreState["employees"]),
+  ) => engine.field("employees", next);
   const setEmployeeTransactions = (
     next:
-      | StoreState['employeeTransactions']
+      | StoreState["employeeTransactions"]
       | ((
-          previous: StoreState['employeeTransactions'],
-        ) => StoreState['employeeTransactions']),
-  ) => engine.field('employeeTransactions', next);
+          previous: StoreState["employeeTransactions"],
+        ) => StoreState["employeeTransactions"]),
+  ) => engine.field("employeeTransactions", next);
   const setStocktakingRecords = (
     next:
-      | StoreState['stocktakingRecords']
+      | StoreState["stocktakingRecords"]
       | ((
-          previous: StoreState['stocktakingRecords'],
-        ) => StoreState['stocktakingRecords']),
-  ) => engine.field('stocktakingRecords', next);
+          previous: StoreState["stocktakingRecords"],
+        ) => StoreState["stocktakingRecords"]),
+  ) => engine.field("stocktakingRecords", next);
   const setAccountPayments = (
     next:
-      | StoreState['accountPayments']
+      | StoreState["accountPayments"]
       | ((
-          previous: StoreState['accountPayments'],
-        ) => StoreState['accountPayments']),
-  ) => engine.field('accountPayments', next);
+          previous: StoreState["accountPayments"],
+        ) => StoreState["accountPayments"]),
+  ) => engine.field("accountPayments", next);
 
   const [receiptModalInvoice, setReceiptModalInvoice] =
     useState<SalesInvoice | null>(null);
@@ -295,7 +347,7 @@ export default function App() {
     }, 4500);
   };
 
-  const [queueError, setQueueError] = useState('');
+  const [queueError, setQueueError] = useState("");
   const queueBusy = React.useRef(false);
   const queueHandler =
     React.useRef<
@@ -312,20 +364,20 @@ export default function App() {
     if (!sb) return;
     let disposed = false;
     const processPending = async () => {
-      if (disposed || queueBusy.current || engine.snapshot.status !== 'ready')
+      if (disposed || queueBusy.current || engine.snapshot.status !== "ready")
         return;
       queueBusy.current = true;
       try {
         const { data, error } = await sb
-          .from('cashier_sync_queue')
-          .select('id,file_name,sale_date,raw_rows')
-          .eq('processed', false)
-          .order('created_at')
+          .from("cashier_sync_queue")
+          .select("id,file_name,sale_date,raw_rows")
+          .eq("processed", false)
+          .order("created_at")
           .limit(20);
-        if (error) throw new Error('تعذر قراءة الملفات المعلقة للكاشير');
+        if (error) throw new Error("تعذر قراءة الملفات المعلقة للكاشير");
         const failures: string[] = [];
         for (const record of data ?? []) {
-          if (disposed || engine.snapshot.status !== 'ready') break;
+          if (disposed || engine.snapshot.status !== "ready") break;
           try {
             await queueHandler.current?.(record);
           } catch (error) {
@@ -335,23 +387,23 @@ export default function App() {
         if (!disposed)
           setQueueError(
             failures.length
-              ? `ملفات لم تعتمد وتحتاج مراجعة: ${failures.slice(0, 3).join('؛ ')}`
-              : '',
+              ? `ملفات لم تعتمد وتحتاج مراجعة: ${failures.slice(0, 3).join("؛ ")}`
+              : "",
           );
       } catch (error) {
         if (!disposed)
           setQueueError(
-            error instanceof Error ? error.message : 'تعذر معالجة ملف الكاشير',
+            error instanceof Error ? error.message : "تعذر معالجة ملف الكاشير",
           );
       } finally {
         queueBusy.current = false;
       }
     };
     const channel = sb
-      .channel('erp-cashier-v4')
+      .channel("erp-cashier-v4")
       .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'cashier_sync_queue' },
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "cashier_sync_queue" },
         () => {
           void processPending();
         },
@@ -361,17 +413,17 @@ export default function App() {
       void processPending();
     }, 10000);
     void processPending();
-    window.addEventListener('online', processPending);
+    window.addEventListener("online", processPending);
     return () => {
       disposed = true;
       clearInterval(timer);
-      window.removeEventListener('online', processPending);
+      window.removeEventListener("online", processPending);
       void sb.removeChannel(channel);
     };
   }, [member?.userId, engine]);
 
   const addAuditLog = (
-    actionType: AuditLogEntry['actionType'],
+    actionType: AuditLogEntry["actionType"],
     description: string,
     amount?: number,
     customActor?: string,
@@ -393,32 +445,7 @@ export default function App() {
   };
 
   // إعادة حساب تكلفة جميع التوليفات والمشروبات التي لها وصفة بناءً على أحدث تكلفة للخامات
-  const recalculateAllRecipeCosts = (currentCatalog: InventoryItem[]) => {
-    const step1 = currentCatalog.map((item) => {
-      if (
-        item.category === 'manufactured_blend' &&
-        item.hasRecipe &&
-        item.recipe &&
-        item.recipe.length > 0
-      ) {
-        const newCost = calculateRecipeTotalCost(item.recipe, currentCatalog);
-        return { ...item, costPrice: newCost };
-      }
-      return item;
-    });
-    return step1.map((item) => {
-      if (
-        item.category === 'drink_recipe' &&
-        item.hasRecipe &&
-        item.recipe &&
-        item.recipe.length > 0
-      ) {
-        const newCost = calculateRecipeTotalCost(item.recipe, step1);
-        return { ...item, costPrice: newCost };
-      }
-      return item;
-    });
-  };
+  const recalculateAllRecipeCosts = recalculateRecipeCosts;
 
   // 1. تنفيذ أمر إنتاج وتخليط توليفة في قسم الإنتاج
   const handleExecuteProduction = (
@@ -428,7 +455,7 @@ export default function App() {
   ): { ok: boolean; message: string } => {
     const blend = items.find((i) => i.id === blendId);
     if (!blend || !blend.recipe || blend.recipe.length === 0) {
-      return { ok: false, message: 'هذه التوليفة ليس لها وصفة محددة بعد.' };
+      return { ok: false, message: "هذه التوليفة ليس لها وصفة محددة بعد." };
     }
 
     let needs: Map<string, number>;
@@ -438,7 +465,7 @@ export default function App() {
       return { ok: false, message: (error as Error).message };
     }
 
-    const consumedDetails: ProductionBatch['ingredientsConsumed'] = [];
+    const consumedDetails: ProductionBatch["ingredientsConsumed"] = [];
     let totalBatchCost = 0;
 
     const updatedCatalog = items.map((item) => {
@@ -452,7 +479,7 @@ export default function App() {
           ingredientName: item.name,
           quantityUsed: usedInBase,
           displayQuantity:
-            item.baseUnit === 'kg'
+            item.baseUnit === "kg"
               ? `${usedInBase} كجم (${Math.round(usedInBase * 1000)} جم)`
               : `${usedInBase} قطعة`,
           cost: ingCost,
@@ -480,7 +507,11 @@ export default function App() {
 
     const newBatch: ProductionBatch = {
       id: crypto.randomUUID(),
-      batchNumber: `PRD-2026-${15 + productionBatches.length}`,
+      batchNumber: nextSequentialNumber(
+        productionBatches.map((b) => b.batchNumber),
+        "PRD-2026",
+        15,
+      ),
       date: businessDate(),
       blendId: blend.id,
       blendName: blend.name,
@@ -495,7 +526,7 @@ export default function App() {
     setItems(recalculateAllRecipeCosts(finalCatalog));
     setProductionBatches((prev) => [newBatch, ...prev]);
     addAuditLog(
-      'إنتاج توليفة',
+      "إنتاج توليفة",
       `تم تصنيع ${quantityKg} كجم من (${blend.name}) وسحب الحبوب الخام والتحويجة من المخزن وإضافتها لرصيد التوليفة`,
       totalBatchCost,
     );
@@ -512,8 +543,9 @@ export default function App() {
 
   // 2. حفظ فاتورة شراء جديدة وتحديث متوسط التكلفة المرجح (WAC) والوصفات
   const handleSavePurchase = (
-    invoiceData: Omit<PurchaseInvoice, 'id' | 'invoiceNumber'>,
+    invoiceData: Omit<PurchaseInvoice, "id" | "invoiceNumber">,
   ) => {
+    checkPurchase(invoiceData, engine.snapshot.state.items);
     if (
       !invoiceData.items.length ||
       invoiceData.items.some(
@@ -521,12 +553,22 @@ export default function App() {
           !Number.isFinite(l.quantity) ||
           l.quantity <= 0 ||
           !Number.isFinite(l.purchasePrice) ||
-          l.purchasePrice < 0,
+          l.purchasePrice < 0 ||
+          (l.newRetailPrice !== undefined &&
+            (!Number.isFinite(l.newRetailPrice) || l.newRetailPrice < 0)) ||
+          (l.newWholesalePrice !== undefined &&
+            (!Number.isFinite(l.newWholesalePrice) || l.newWholesalePrice < 0)),
       ) ||
+      !Number.isFinite(invoiceData.totalAmount) ||
+      invoiceData.totalAmount < 0 ||
+      !Number.isFinite(invoiceData.paidAmount) ||
+      invoiceData.paidAmount < 0 ||
+      !Number.isFinite(invoiceData.remainingAmount) ||
+      invoiceData.remainingAmount < 0 ||
       !suppliers.some((s) => s.id === invoiceData.supplierId)
     )
       throw new Error(
-        'راجع الأصناف والكميات والأسعار والمورد قبل حفظ الفاتورة',
+        "راجع الأصناف والكميات والأسعار والمورد والمبالغ قبل حفظ الفاتورة",
       );
     const invNum = `PUR-${crypto.randomUUID().slice(0, 8)}`;
     const newInvoice: PurchaseInvoice = {
@@ -574,7 +616,8 @@ export default function App() {
         stock: newStock,
         costPrice: newWac,
         lastPurchasePrice: purchasedLine.purchasePrice,
-        retailPrice: purchasedLine.newRetailPrice || item.retailPrice,
+        retailPrice: purchasedLine.newRetailPrice ?? item.retailPrice,
+        wholesalePrice: purchasedLine.newWholesalePrice ?? item.wholesalePrice,
         supplierPrices: updatedSupplierPrices,
       };
     });
@@ -600,7 +643,7 @@ export default function App() {
     );
 
     addAuditLog(
-      'شراء',
+      "شراء",
       `فاتورة شراء #${invNum} من (${invoiceData.supplierName}) وتحديث متوسط التكلفة (WAC) وتكلفة التوليفات المرتبطة`,
       invoiceData.totalAmount,
     );
@@ -614,37 +657,70 @@ export default function App() {
 
   // 3. حفظ فاتورة بيع (جملة أو قطاعي مباشر)
   const handleSaveSale = (
-    saleData: Omit<SalesInvoice, 'id' | 'invoiceNumber'>,
+    saleData: Omit<SalesInvoice, "id" | "invoiceNumber">,
   ) => {
     let updatedInventory: InventoryItem[];
+    let invoiceItems: SalesInvoiceItem[];
+    let liveTotalCost = 0;
     try {
+      const liveItems = engine.snapshot.state.items;
       if (
-        saleData.saleType === 'wholesale' &&
+        saleData.saleType === "wholesale" &&
         !engine.snapshot.state.customers.some(
           (c) => c.id === saleData.customerId,
         )
       )
-        throw new Error('اختر عميل جملة موجودًا قبل حفظ الفاتورة');
-      updatedInventory = deductInventory(
-        saleData.items,
-        engine.snapshot.state.items,
-      );
+        throw new Error("اختر عميل جملة موجودًا قبل حفظ الفاتورة");
       if (
-        saleData.totalAmount < 0 ||
-        saleData.discount < 0 ||
-        saleData.paidAmount < 0
+        saleData.saleType === "retail" &&
+        saleData.customerId === "cust-cash" &&
+        saleData.remainingAmount > 0
       )
-        throw new Error('مبالغ الفاتورة غير صالحة');
+        throw new Error(
+          "البيع بالقطاعي نقدًا فوري؛ لا يمكن ترك مبلغ متأخر على العميل السريع",
+        );
+      if (
+        !saleData.items.length ||
+        saleData.items.some(
+          (l) =>
+            !Number.isFinite(l.quantity) ||
+            l.quantity <= 0 ||
+            !Number.isFinite(l.unitPrice) ||
+            l.unitPrice < 0,
+        )
+      )
+        throw new Error("أصناف الفاتورة أو كمياتها غير صالحة");
+      if (
+        !Number.isFinite(saleData.subtotal) ||
+        saleData.subtotal < 0 ||
+        !Number.isFinite(saleData.totalAmount) ||
+        saleData.totalAmount < 0 ||
+        !Number.isFinite(saleData.discount) ||
+        saleData.discount < 0 ||
+        saleData.discount > saleData.subtotal + 0.011 ||
+        !Number.isFinite(saleData.paidAmount) ||
+        saleData.paidAmount < 0 ||
+        !Number.isFinite(saleData.remainingAmount) ||
+        saleData.remainingAmount < 0
+      )
+        throw new Error("مبالغ الفاتورة غير صالحة");
+      const prepared = prepareSale(saleData, liveItems);
+      invoiceItems = prepared.items;
+      liveTotalCost = prepared.totalCost;
+      updatedInventory = deductInventory(invoiceItems, liveItems);
     } catch (error) {
       showToast((error as Error).message);
       return false;
     }
-    const prefix = saleData.saleType === 'wholesale' ? 'WH' : 'POS';
+    const prefix = saleData.saleType === "wholesale" ? "WH" : "POS";
     const invNum = `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
     const newSale: SalesInvoice = {
       ...saleData,
       id: crypto.randomUUID(),
       invoiceNumber: invNum,
+      items: invoiceItems,
+      totalCost: liveTotalCost,
+      netProfit: Number((saleData.totalAmount - liveTotalCost).toFixed(2)),
     };
 
     setItems(updatedInventory);
@@ -667,9 +743,9 @@ export default function App() {
     }
 
     addAuditLog(
-      saleData.saleType === 'wholesale' ? 'بيع جملة' : 'بيع محل',
+      saleData.saleType === "wholesale" ? "بيع جملة" : "بيع محل",
       `فاتورة ${
-        saleData.saleType === 'wholesale' ? 'بيع جملة' : 'بيع محل'
+        saleData.saleType === "wholesale" ? "بيع جملة" : "بيع محل"
       } #${invNum} للعميل (${saleData.customerName}) وخصم الأصناف من المخزن`,
       saleData.totalAmount,
     );
@@ -677,7 +753,7 @@ export default function App() {
       `تم تسجيل الفاتورة #${invNum}؛ تابع حالة حفظ السحابة أعلى الشاشة.`,
     );
     setReceiptModalInvoice(newSale);
-    setActiveScreen('home');
+    setActiveScreen("home");
     return true;
   };
 
@@ -693,14 +769,14 @@ export default function App() {
       rows.some((r) => !r.matchedItem || r.error || r.quantity <= 0)
     )
       throw new Error(
-        'الملف يحتوي صفوفًا غير مطابقة أو مرتجعات أو كميات غير صالحة؛ أصلحها قبل الاعتماد.',
+        "الملف يحتوي صفوفًا غير مطابقة أو مرتجعات أو كميات غير صالحة؛ أصلحها قبل الاعتماد.",
       );
     const sourceId = await cashierSourceId(rows, saleDate);
     const state = engine.snapshot.state;
     const duplicate = state.salesInvoices.find((i) => i.sourceId === sourceId);
     if (duplicate) {
       if (!queueId)
-        throw new Error('هذا الملف مستورد بالفعل؛ لم يتم تكرار الخصم.');
+        throw new Error("هذا الملف مستورد بالفعل؛ لم يتم تكرار الخصم.");
       const next = {
         ...state,
         salesInvoices: state.salesInvoices.map((i) =>
@@ -709,12 +785,12 @@ export default function App() {
       };
       engine.replace(next, queueId);
       await engine.flush();
-      return engine.snapshot.status === 'ready';
+      return engine.snapshot.status === "ready";
     }
     const invoiceItems: SalesInvoiceItem[] = rows.map((r) => {
       const item = state.items.find((i) => i.id === r.matchedItem!.id);
-      if (!item) throw new Error('تغير كتالوج الأصناف؛ أعد قراءة الملف.');
-      const quantity = ['gram', 'ml'].includes(r.unitHint)
+      if (!item) throw new Error("تغير كتالوج الأصناف؛ أعد قراءة الملف.");
+      const quantity = ["gram", "ml"].includes(r.unitHint)
         ? r.quantity / 1000
         : r.quantity;
       const totalPrice =
@@ -751,7 +827,7 @@ export default function App() {
       id: crypto.randomUUID(),
       invoiceNumber: `POS-SYNC-${crypto.randomUUID().slice(0, 8)}`,
       date: saleDate,
-      saleType: 'cashier_sync',
+      saleType: "cashier_sync",
       customerName: `مبيعات كاشير (${sourceFileName})`,
       sourceFile: sourceFileName,
       sourceId,
@@ -764,7 +840,7 @@ export default function App() {
       netProfit: Number((totalAmount - totalCost).toFixed(2)),
       paidAmount: totalAmount,
       remainingAmount: 0,
-      paymentMethod: 'نقدي',
+      paymentMethod: "نقدي",
       partnerName: currentPartner.name,
     };
     engine.replace(
@@ -778,7 +854,7 @@ export default function App() {
             timestamp: new Date().toISOString(),
             actorId: member?.userId,
             partnerName: currentPartner.name,
-            actionType: 'مزامنة كاشير',
+            actionType: "مزامنة كاشير",
             description: `استيراد ${sourceFileName}`,
             amount: totalAmount,
           },
@@ -788,12 +864,12 @@ export default function App() {
       queueId,
     );
     await engine.flush();
-    if (engine.snapshot.status !== 'ready')
+    if (engine.snapshot.status !== "ready")
       throw new Error(
-        'لم يتأكد الحفظ؛ الملف لم يُعتمد. أعد محاولة الحفظ من التنبيه.',
+        "لم يتأكد الحفظ؛ الملف لم يُعتمد. أعد محاولة الحفظ من التنبيه.",
       );
-    showToast('تم حفظ ملف الكاشير على السحابة وخصم المخزون.');
-    setQueueError('');
+    showToast("تم حفظ ملف الكاشير على السحابة وخصم المخزون.");
+    setQueueError("");
     return true;
   };
   queueHandler.current = async (record) => {
@@ -811,6 +887,12 @@ export default function App() {
     notes: string,
     chargeShortageToEmployeeId?: string,
   ) => {
+    variances = checkStocktaking(variances, engine.snapshot.state.items);
+    if (
+      chargeShortageToEmployeeId &&
+      !employees.some((e) => e.id === chargeShortageToEmployeeId)
+    )
+      throw new Error("العامل المختار لتحميل العجز غير موجود");
     const changed = variances.filter((v) => Math.abs(v.difference) > 0.0001);
     const totalShortage = changed
       .filter((v) => v.difference < 0)
@@ -830,14 +912,18 @@ export default function App() {
 
     const newRecord: StocktakingAuditRecord = {
       id: crypto.randomUUID(),
-      auditNumber: `AUD-2026-0${2 + stocktakingRecords.length}`,
+      auditNumber: nextSequentialNumber(
+        stocktakingRecords.map((r) => r.auditNumber),
+        "AUD-2026",
+        2,
+      ),
       date: businessDate(),
       partnerName: currentPartner.name,
       notes,
       totalShortageValue: Number(totalShortage.toFixed(2)),
       totalSurplusValue: Number(totalSurplus.toFixed(2)),
       netVarianceValue: Number((totalSurplus - totalShortage).toFixed(2)),
-      itemsAudited: changed.length > 0 ? changed : variances.slice(0, 3),
+      itemsAudited: variances,
     };
 
     setStocktakingRecords((prev) => [newRecord, ...prev]);
@@ -846,14 +932,14 @@ export default function App() {
     if (chargeShortageToEmployeeId && totalShortage > 0) {
       handleRecordEmployeeAction(
         chargeShortageToEmployeeId,
-        'خصم/عجز',
+        "خصم/عجز",
         Number(totalShortage.toFixed(2)),
         `تحميل عجز محضر الجرد #${newRecord.auditNumber}`,
       );
     }
 
     addAuditLog(
-      'جرد مخزن',
+      "جرد مخزن",
       `اعتماد محضر الجرد الفعلي #${newRecord.auditNumber} (${changed.length} فروقات على الميزان) — صافي الفرق: ${newRecord.netVarianceValue} ج.م`,
       Math.abs(newRecord.netVarianceValue),
     );
@@ -865,32 +951,46 @@ export default function App() {
   // 6. تسجيل حركة للعامل (سلفة، يومية حضور، خصم/عجز، مكافأة، صرف راتب)
   const handleRecordEmployeeAction = (
     employeeId: string,
-    type: EmployeeTransaction['type'],
+    type: EmployeeTransaction["type"],
     amount: number,
     notes: string,
   ) => {
     const targetEmp = employees.find((e) => e.id === employeeId);
-    if (!targetEmp) return;
+    if (!targetEmp) throw new Error("العامل غير موجود");
+
+    if (type !== "حضور يومية") {
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("أدخل مبلغًا صحيحًا أكبر من صفر");
+      }
+      if (type === "صرف راتب") {
+        const net = employeeNetPayable(targetEmp);
+        if (amount > net + 0.011) {
+          throw new Error(
+            `لا يمكن صرف أكثر من صافي مستحقات العامل (${net.toFixed(2)} ج.م)`,
+          );
+        }
+      }
+    }
 
     setEmployees((prev) =>
       prev.map((emp) => {
         if (emp.id !== employeeId) return emp;
-        if (type === 'سلفة') {
+        if (type === "سلفة") {
           return { ...emp, totalAdvances: emp.totalAdvances + amount };
         }
-        if (type === 'حضور يومية') {
+        if (type === "حضور يومية") {
           return {
             ...emp,
             workedDaysThisMonth: emp.workedDaysThisMonth + 1,
           };
         }
-        if (type === 'خصم/عجز') {
+        if (type === "خصم/عجز") {
           return { ...emp, totalDeductions: emp.totalDeductions + amount };
         }
-        if (type === 'مكافأة') {
+        if (type === "مكافأة") {
           return { ...emp, totalBonuses: emp.totalBonuses + amount };
         }
-        if (type === 'صرف راتب') {
+        if (type === "صرف راتب") {
           return { ...emp, totalPaidOut: emp.totalPaidOut + amount };
         }
         return emp;
@@ -910,7 +1010,7 @@ export default function App() {
 
     setEmployeeTransactions((prev) => [newTr, ...prev]);
     addAuditLog(
-      'شؤون عمال',
+      "شؤون عمال",
       `${type} للعامل (${targetEmp.name}): ${notes}`,
       amount,
     );
@@ -922,7 +1022,7 @@ export default function App() {
     setItems((prev) =>
       prev.map((item) => ({
         ...item,
-        stock: item.category === 'drink_recipe' ? 999 : 0,
+        stock: item.category === "drink_recipe" ? 999 : 0,
       })),
     );
     setSalesInvoices([]);
@@ -958,15 +1058,15 @@ export default function App() {
     );
     setAuditLogs([
       {
-        id: `log-${Date.now()}`,
-        timestamp: 'الآن',
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
         partnerName: currentPartner.name,
-        actionType: 'تعديل وصفة/صنف',
+        actionType: "تعديل وصفة/صنف",
         description:
-          'تصفير الفواتير والأرصدة مع الإبقاء على كتالوج الأصناف والوصفات',
+          "تصفير الفواتير والأرصدة مع الإبقاء على كتالوج الأصناف والوصفات",
       },
     ]);
-    showToast('🧹 تم تصفير الفواتير والأرصدة مع الاحتفاظ بالأصناف والوصفات!');
+    showToast("🧹 تم تصفير الفواتير والأرصدة مع الاحتفاظ بالأصناف والوصفات!");
   };
 
   const handleClearAllDemoData = () => {
@@ -986,24 +1086,24 @@ export default function App() {
     );
     setAuditLogs([
       {
-        id: `log-${Date.now()}`,
-        timestamp: 'الآن',
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
         partnerName: currentPartner.name,
-        actionType: 'تعديل وصفة/صنف',
-        description: 'حذف كافة البيانات التجريبية بالكامل للبدء من الصفر',
+        actionType: "تعديل وصفة/صنف",
+        description: "حذف كافة البيانات التجريبية بالكامل للبدء من الصفر",
       },
     ]);
-    showToast('🗑️ تم حذف جميع البيانات التجريبية بالكامل!');
+    showToast("🗑️ تم حذف جميع البيانات التجريبية بالكامل!");
   };
 
   const handleRestoreDefaultDemoData = () => {
-    showToast('بيانات العرض التجريبية متاحة في بيئة الاختبار المنفصلة فقط.');
+    showToast("بيانات العرض التجريبية متاحة في بيئة الاختبار المنفصلة فقط.");
   };
 
   const shortagesCount = useMemo(
     () =>
       items.filter(
-        (i) => i.category !== 'drink_recipe' && i.stock <= i.minStock,
+        (i) => i.category !== "drink_recipe" && i.stock <= i.minStock,
       ).length,
     [items],
   );
@@ -1019,26 +1119,26 @@ export default function App() {
 
     // توزيع المبيعات حسب القناة
     const cashierSales = activeSales
-      .filter((i) => i.saleType === 'cashier_sync')
+      .filter((i) => i.saleType === "cashier_sync")
       .reduce((s, i) => s + i.totalAmount, 0);
     const retailPosSales = activeSales
-      .filter((i) => i.saleType === 'retail')
+      .filter((i) => i.saleType === "retail")
       .reduce((s, i) => s + i.totalAmount, 0);
     const wholesaleSales = activeSales
-      .filter((i) => i.saleType === 'wholesale')
+      .filter((i) => i.saleType === "wholesale")
       .reduce((s, i) => s + i.totalAmount, 0);
 
     // قيمة المخزن الفعلية بالتكلفة وتوزيعها
     const rawStockValue = items
       .filter(
         (i) =>
-          i.category === 'raw_bean' ||
-          i.category === 'raw_spice' ||
-          i.category === 'direct_product',
+          i.category === "raw_bean" ||
+          i.category === "raw_spice" ||
+          i.category === "direct_product",
       )
       .reduce((s, i) => s + Math.max(0, i.stock) * i.costPrice, 0);
     const blendStockValue = items
-      .filter((i) => i.category === 'manufactured_blend')
+      .filter((i) => i.category === "manufactured_blend")
       .reduce((s, i) => s + Math.max(0, i.stock) * i.costPrice, 0);
     const totalInventoryValue = Math.round(rawStockValue + blendStockValue);
 
@@ -1124,24 +1224,24 @@ export default function App() {
       />
     );
   const blocked =
-    !['ready', 'dirty'].includes(cloud.status) ||
+    !["ready", "dirty"].includes(cloud.status) ||
     !partners.some((p) => p.id === loggedPartnerId);
   const statusText =
-    cloud.status === 'saving'
-      ? 'جارٍ الحفظ على السحابة…'
-      : cloud.status === 'dirty'
-        ? 'تعديلات بانتظار الحفظ'
-        : cloud.status === 'ready'
-          ? 'محفوظ على السحابة'
-          : cloud.status === 'loading'
-            ? 'جارٍ تحميل بيانات المحل…'
-            : cloud.status === 'conflict'
-              ? 'تعارض مع تعديلات جهاز آخر'
-              : 'تعذر تأكيد الحفظ';
+    cloud.status === "saving"
+      ? "جارٍ الحفظ على السحابة…"
+      : cloud.status === "dirty"
+        ? "تعديلات بانتظار الحفظ"
+        : cloud.status === "ready"
+          ? "محفوظ على السحابة"
+          : cloud.status === "loading"
+            ? "جارٍ تحميل بيانات المحل…"
+            : cloud.status === "conflict"
+              ? "تعارض مع تعديلات جهاز آخر"
+              : "تعذر تأكيد الحفظ";
 
   return (
     <div className="min-h-screen bg-[#EFECE4] flex flex-col items-center justify-start">
-      {getSupabaseCredentials().url.startsWith('http://127.0.0.1:') && (
+      {getSupabaseCredentials().url.startsWith("http://127.0.0.1:") && (
         <div className="w-full bg-amber-100 p-2 text-center text-xs font-bold">
           بيئة اختبار محلية — بيانات تجريبية منفصلة
         </div>
@@ -1170,11 +1270,11 @@ export default function App() {
             <p>
               {cloud.error ||
                 (!partners.some((p) => p.id === loggedPartnerId) &&
-                cloud.status === 'ready'
-                  ? 'هذا الحساب غير مرتبط بملف شريك داخل بيانات المحل'
-                  : '')}
+                cloud.status === "ready"
+                  ? "هذا الحساب غير مرتبط بملف شريك داخل بيانات المحل"
+                  : "")}
             </p>
-            {['error', 'conflict'].includes(cloud.status) && (
+            {["error", "conflict"].includes(cloud.status) && (
               <>
                 <button
                   className="border rounded p-2 m-1"
@@ -1184,7 +1284,7 @@ export default function App() {
                 >
                   حفظ نسخة من العمل الحالي
                 </button>
-                {cloud.status === 'error' && engine.hasPending && (
+                {cloud.status === "error" && engine.hasPending && (
                   <button
                     className="border rounded p-2 m-1"
                     onClick={() => void engine.flush()}
@@ -1198,7 +1298,7 @@ export default function App() {
                     if (
                       !engine.hasPending ||
                       window.confirm(
-                        'هل حفظت نسخة من العمل؟ إعادة التحميل تستبدل التعديلات غير المحفوظة ببيانات السحابة.',
+                        "هل حفظت نسخة من العمل؟ إعادة التحميل تستبدل التعديلات غير المحفوظة ببيانات السحابة.",
                       )
                     )
                       void engine.load();
@@ -1231,7 +1331,7 @@ export default function App() {
       {/* حاوية التطبيق بهوية بُن العجوز الفاتحة والذهبية */}
       <div className="w-full max-w-[445px] min-h-screen bg-[#FAF8F4] text-[#1E1612] shadow-2xl relative pb-16">
         {/* ================= 1. الشاشة الرئيسية: لوحة الإحصائيات والرسوم البيانية الاحترافية ================= */}
-        {activeScreen === 'home' && (
+        {activeScreen === "home" && (
           <div className="px-4 pt-4 pb-24 space-y-4">
             {/* الهيدر الاحترافي الأول بهوية الإسبريسو والذهبي وأيقونة الخروج في الرئيسية فقط */}
             <div className="bg-white rounded-2xl p-3 border border-[#E6DEC8] shadow-sm flex items-center justify-between">
@@ -1261,7 +1361,7 @@ export default function App() {
               {/* أيقونات التحكم السريعة بدون نصوص (منها أيقونة تسجيل الخروج في الرئيسية فقط) */}
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => setActiveScreen('insights')}
+                  onClick={() => setActiveScreen("insights")}
                   className="p-2 rounded-xl bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] hover:bg-[#F5EBD0] transition"
                   title="التحليلات الذكية"
                 >
@@ -1269,8 +1369,8 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => {
-                    setMoreInitialTab('data_control');
-                    setActiveScreen('more');
+                    setMoreInitialTab("data_control");
+                    setActiveScreen("more");
                   }}
                   className="p-2 rounded-xl bg-[#FAF8F4] text-[#7A6855] border border-[#E6DEC8] hover:text-red-600 transition"
                   title="إدارة البيانات والنسخ الاحتياطي"
@@ -1279,8 +1379,8 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => {
-                    setMoreInitialTab('menu');
-                    setActiveScreen('more');
+                    setMoreInitialTab("menu");
+                    setActiveScreen("more");
                   }}
                   className="p-2 rounded-xl bg-[#FAF8F4] text-[#7A6855] border border-[#E6DEC8] hover:text-[#1E1612] transition"
                   title="الإعدادات"
@@ -1316,8 +1416,8 @@ export default function App() {
                     <button
                       key={item.id}
                       onClick={() => {
-                        setGlobalSearch('');
-                        setActiveScreen('inventory');
+                        setGlobalSearch("");
+                        setActiveScreen("inventory");
                       }}
                       className="w-full px-4 py-2.5 text-right hover:bg-[#FDF8EB] flex items-center justify-between"
                     >
@@ -1326,8 +1426,8 @@ export default function App() {
                           {item.name}
                         </div>
                         <div className="text-[11px] text-[#7A6855]">
-                          الرصيد: {item.stock}{' '}
-                          {item.baseUnit === 'kg' ? 'كجم' : 'وحدة'} • التكلفة:{' '}
+                          الرصيد: {item.stock}{" "}
+                          {item.baseUnit === "kg" ? "كجم" : "وحدة"} • التكلفة:{" "}
                           {item.costPrice} ج.م
                         </div>
                       </div>
@@ -1343,7 +1443,7 @@ export default function App() {
             {/* شريط تنبيه النواقص الفاخر */}
             {shortagesCount > 0 && (
               <button
-                onClick={() => setActiveScreen('shortages')}
+                onClick={() => setActiveScreen("shortages")}
                 className="w-full bg-gradient-to-l from-[#FFF8E7] to-[#FDF2D0] border border-[#E5C158] rounded-2xl px-3.5 py-2.5 flex items-center justify-between shadow-sm transition"
               >
                 <div className="flex items-center gap-2.5">
@@ -1384,7 +1484,7 @@ export default function App() {
                   <button
                     onClick={() => setHideProfits(!hideProfits)}
                     className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-[#FBF5B7] border border-[#C59B27]/40 transition"
-                    title={hideProfits ? 'إظهار الأرباح' : 'إخفاء الأرباح'}
+                    title={hideProfits ? "إظهار الأرباح" : "إخفاء الأرباح"}
                   >
                     {hideProfits ? (
                       <Lock className="w-3.5 h-3.5" />
@@ -1393,7 +1493,7 @@ export default function App() {
                     )}
                   </button>
                   <button
-                    onClick={() => setActiveScreen('sections')}
+                    onClick={() => setActiveScreen("sections")}
                     className="bg-gradient-to-r from-[#C59B27] to-[#E5C158] text-[#1E1612] px-3 py-1.5 rounded-xl text-[11px] font-black shadow flex items-center gap-1"
                   >
                     <LayoutGrid className="w-3.5 h-3.5" />
@@ -1409,7 +1509,7 @@ export default function App() {
                     إجمالي المبيعات ({dashboardAnalytics.invoicesCount} فاتورة)
                   </div>
                   <div className="text-lg font-black text-white mt-0.5">
-                    {dashboardAnalytics.salesTotal.toLocaleString('ar-EG')}{' '}
+                    {dashboardAnalytics.salesTotal.toLocaleString("ar-EG")}{" "}
                     <span className="text-[10px] text-[#D4AF37] font-normal">
                       ج.م
                     </span>
@@ -1423,16 +1523,16 @@ export default function App() {
                     </span>
                     <span className="text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">
                       {hideProfits
-                        ? '••%'
+                        ? "••%"
                         : `${dashboardAnalytics.margin.toFixed(1)}%`}
                     </span>
                   </div>
                   <div className="text-lg font-black text-emerald-400 mt-0.5">
                     {hideProfits
-                      ? '••••••'
+                      ? "••••••"
                       : dashboardAnalytics.netProfitAfterExpenses.toLocaleString(
-                          'ar-EG',
-                        )}{' '}
+                          "ar-EG",
+                        )}{" "}
                     <span className="text-[10px] text-emerald-300 font-normal">
                       ج.م
                     </span>
@@ -1446,8 +1546,8 @@ export default function App() {
                     </div>
                     <div className="text-xs font-black text-[#FBF5B7] mt-0.5">
                       {dashboardAnalytics.totalInventoryValue.toLocaleString(
-                        'ar-EG',
-                      )}{' '}
+                        "ar-EG",
+                      )}{" "}
                       ج.م
                     </div>
                   </div>
@@ -1461,12 +1561,12 @@ export default function App() {
                     </div>
                     <div className="text-xs font-black text-[#FBF5B7] mt-0.5">
                       {hideProfits
-                        ? '••••'
+                        ? "••••"
                         : Math.round(
                             (dashboardAnalytics.netProfitAfterExpenses *
                               currentPartner.sharePercent) /
                               100,
-                          ).toLocaleString('ar-EG')}{' '}
+                          ).toLocaleString("ar-EG")}{" "}
                       ج.م
                     </div>
                   </div>
@@ -1492,7 +1592,7 @@ export default function App() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setActiveScreen('reports')}
+                  onClick={() => setActiveScreen("reports")}
                   className="text-[11px] font-extrabold text-[#9E7918] hover:underline"
                 >
                   التقرير الكامل &gt;
@@ -1507,41 +1607,41 @@ export default function App() {
                 );
                 const bars = [
                   {
-                    label: 'المبيعات',
+                    label: "المبيعات",
                     value: dashboardAnalytics.salesTotal,
-                    color: 'from-[#1E1612] to-[#3A2B22]',
-                    textColor: 'text-[#1E1612]',
+                    color: "from-[#1E1612] to-[#3A2B22]",
+                    textColor: "text-[#1E1612]",
                     hide: false,
                   },
                   {
-                    label: 'تكلفة البن',
+                    label: "تكلفة البن",
                     value: dashboardAnalytics.costTotal,
-                    color: 'from-[#9E7918] to-[#D4AF37]',
-                    textColor: 'text-[#9E7918]',
+                    color: "from-[#9E7918] to-[#D4AF37]",
+                    textColor: "text-[#9E7918]",
                     hide: hideProfits,
                   },
                   {
-                    label: 'مجمل الربح',
+                    label: "مجمل الربح",
                     value: dashboardAnalytics.grossProfit,
-                    color: 'from-[#1F9D62] to-[#34D399]',
-                    textColor: 'text-[#1F9D62]',
+                    color: "from-[#1F9D62] to-[#34D399]",
+                    textColor: "text-[#1F9D62]",
                     hide: hideProfits,
                   },
                   {
-                    label: 'المصروفات',
+                    label: "المصروفات",
                     value: dashboardAnalytics.expensesTotal,
-                    color: 'from-[#D97706] to-[#F59E0B]',
-                    textColor: 'text-[#D97706]',
+                    color: "from-[#D97706] to-[#F59E0B]",
+                    textColor: "text-[#D97706]",
                     hide: false,
                   },
                   {
-                    label: 'الصافي النهائي',
+                    label: "الصافي النهائي",
                     value: Math.max(
                       0,
                       dashboardAnalytics.netProfitAfterExpenses,
                     ),
-                    color: 'from-[#047857] to-[#10B981]',
-                    textColor: 'text-[#047857]',
+                    color: "from-[#047857] to-[#10B981]",
+                    textColor: "text-[#047857]",
                     hide: hideProfits,
                   },
                 ];
@@ -1563,8 +1663,8 @@ export default function App() {
                               className={`text-[10px] font-black mb-1 ${bar.textColor}`}
                             >
                               {bar.hide
-                                ? '•••'
-                                : bar.value.toLocaleString('ar-EG')}
+                                ? "•••"
+                                : bar.value.toLocaleString("ar-EG")}
                             </span>
                             <div className="w-full max-w-[38px] bg-[#FAF8F4] rounded-t-xl h-24 flex items-end overflow-hidden border border-[#EDE6D8]">
                               <div
@@ -1648,8 +1748,8 @@ export default function App() {
                         </div>
                         <div className="text-xs font-black text-[#1E1612] mt-1">
                           {dashboardAnalytics.wholesaleSales.toLocaleString(
-                            'ar-EG',
-                          )}{' '}
+                            "ar-EG",
+                          )}{" "}
                           ج.م
                         </div>
                         <div className="text-[10px] text-[#9E7918] font-bold">
@@ -1664,8 +1764,8 @@ export default function App() {
                         </div>
                         <div className="text-xs font-black text-[#1E1612] mt-1">
                           {dashboardAnalytics.retailPosSales.toLocaleString(
-                            'ar-EG',
-                          )}{' '}
+                            "ar-EG",
+                          )}{" "}
                           ج.م
                         </div>
                         <div className="text-[10px] text-[#9E7918] font-bold">
@@ -1680,8 +1780,8 @@ export default function App() {
                         </div>
                         <div className="text-xs font-black text-[#1E1612] mt-1">
                           {dashboardAnalytics.cashierSales.toLocaleString(
-                            'ar-EG',
-                          )}{' '}
+                            "ar-EG",
+                          )}{" "}
                           ج.م
                         </div>
                         <div className="text-[10px] text-[#1F9D62] font-bold">
@@ -1737,11 +1837,11 @@ export default function App() {
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="font-black text-[#1E1612]">
-                              {prod.revenue.toLocaleString('ar-EG')} ج.م
+                              {prod.revenue.toLocaleString("ar-EG")} ج.م
                             </span>
                             {!hideProfits && (
                               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                                ربح: {prod.profit.toLocaleString('ar-EG')}
+                                ربح: {prod.profit.toLocaleString("ar-EG")}
                               </span>
                             )}
                           </div>
@@ -1762,7 +1862,7 @@ export default function App() {
             {/* مؤشرات المخزن والمديونيات السريعة */}
             <div className="grid grid-cols-2 gap-2.5">
               <button
-                onClick={() => setActiveScreen('customers')}
+                onClick={() => setActiveScreen("customers")}
                 className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm text-right transition"
               >
                 <div className="flex items-center justify-between">
@@ -1773,8 +1873,8 @@ export default function App() {
                 </div>
                 <div className="text-base font-black text-[#1E1612] mt-1">
                   {dashboardAnalytics.totalCustomerDebts.toLocaleString(
-                    'ar-EG',
-                  )}{' '}
+                    "ar-EG",
+                  )}{" "}
                   <span className="text-[10px] font-normal text-[#7A6855]">
                     ج.م
                   </span>
@@ -1785,7 +1885,7 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => setActiveScreen('suppliers')}
+                onClick={() => setActiveScreen("suppliers")}
                 className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm text-right transition"
               >
                 <div className="flex items-center justify-between">
@@ -1796,8 +1896,8 @@ export default function App() {
                 </div>
                 <div className="text-base font-black text-[#1E1612] mt-1">
                   {dashboardAnalytics.totalSupplierBalances.toLocaleString(
-                    'ar-EG',
-                  )}{' '}
+                    "ar-EG",
+                  )}{" "}
                   <span className="text-[10px] font-normal text-[#7A6855]">
                     ج.م
                   </span>
@@ -1838,7 +1938,7 @@ export default function App() {
                     </div>
                     {log.amount !== undefined && (
                       <span className="text-[11px] font-black text-[#9E7918] bg-[#FDF8EB] border border-[#E8D8A8] px-2 py-0.5 rounded-lg shrink-0">
-                        {log.amount.toLocaleString('ar-EG')} ج.م
+                        {log.amount.toLocaleString("ar-EG")} ج.م
                       </span>
                     )}
                   </div>
@@ -1849,7 +1949,7 @@ export default function App() {
         )}
 
         {/* ================= 2. قسم الأقسام (بالتصميم الاحترافي الأول الفخم بالإسبريسو والذهبي) ================= */}
-        {activeScreen === 'sections' && (
+        {activeScreen === "sections" && (
           <div className="px-4 pt-4 pb-24 space-y-4">
             {/* هيدر قسم الأقسام الفاخر */}
             <div className="bg-gradient-to-l from-[#1E1612] via-[#2A1F1A] to-[#1E1612] rounded-2xl p-3.5 text-[#FAF8F4] border border-[#C59B27]/60 shadow-lg flex items-center justify-between">
@@ -1870,7 +1970,7 @@ export default function App() {
               </div>
 
               <button
-                onClick={() => setActiveScreen('home')}
+                onClick={() => setActiveScreen("home")}
                 className="bg-white/10 hover:bg-white/20 text-[#FBF5B7] border border-[#C59B27]/40 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition"
               >
                 <BarChart3 className="w-3.5 h-3.5 text-[#D4AF37]" />
@@ -1897,8 +1997,8 @@ export default function App() {
                     <button
                       key={item.id}
                       onClick={() => {
-                        setGlobalSearch('');
-                        setActiveScreen('inventory');
+                        setGlobalSearch("");
+                        setActiveScreen("inventory");
                       }}
                       className="w-full px-4 py-2.5 text-right hover:bg-[#FDF8EB] flex items-center justify-between"
                     >
@@ -1907,8 +2007,8 @@ export default function App() {
                           {item.name}
                         </div>
                         <div className="text-[11px] text-[#7A6855]">
-                          الرصيد: {item.stock}{' '}
-                          {item.baseUnit === 'kg' ? 'كجم' : 'وحدة'} • التكلفة:{' '}
+                          الرصيد: {item.stock}{" "}
+                          {item.baseUnit === "kg" ? "كجم" : "وحدة"} • التكلفة:{" "}
                           {item.costPrice} ج.م
                         </div>
                       </div>
@@ -1929,7 +2029,7 @@ export default function App() {
 
               {/* كارت المنتجات والتسعير (الأساس الذي تعتمد عليه الدورة التشغيلية كلها) */}
               <button
-                onClick={() => setActiveScreen('products')}
+                onClick={() => setActiveScreen("products")}
                 className="w-full bg-gradient-to-l from-[#1E1612] via-[#2A1F1A] to-[#1E1612] rounded-2xl p-3.5 border border-[#C59B27] shadow-md text-right transition flex items-center justify-between gap-3 group"
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -1957,7 +2057,7 @@ export default function App() {
               <div className="grid grid-cols-2 gap-2.5">
                 {/* 1. بيع جملة ومحل */}
                 <button
-                  onClick={() => setActiveScreen('sales_pos')}
+                  onClick={() => setActiveScreen("sales_pos")}
                   className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm text-right transition flex items-start gap-3 group"
                 >
                   <div className="w-11 h-11 rounded-xl bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition">
@@ -1975,7 +2075,7 @@ export default function App() {
 
                 {/* 2. شيت الكاشير */}
                 <button
-                  onClick={() => setActiveScreen('cashier_sync')}
+                  onClick={() => setActiveScreen("cashier_sync")}
                   className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm text-right transition flex items-start gap-3 group"
                 >
                   <div className="w-11 h-11 rounded-xl bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition">
@@ -1993,7 +2093,7 @@ export default function App() {
 
                 {/* 3. الإنتاج والوصفات */}
                 <button
-                  onClick={() => setActiveScreen('production')}
+                  onClick={() => setActiveScreen("production")}
                   className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm text-right transition flex items-start gap-3 group"
                 >
                   <div className="w-11 h-11 rounded-xl bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition">
@@ -2011,7 +2111,7 @@ export default function App() {
 
                 {/* 4. جرد الميزان */}
                 <button
-                  onClick={() => setActiveScreen('stocktaking')}
+                  onClick={() => setActiveScreen("stocktaking")}
                   className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm text-right transition flex items-start gap-3 group"
                 >
                   <div className="w-11 h-11 rounded-xl bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition">
@@ -2037,7 +2137,7 @@ export default function App() {
               <div className="grid grid-cols-3 gap-2.5">
                 {/* 1. مخزن البن */}
                 <button
-                  onClick={() => setActiveScreen('inventory')}
+                  onClick={() => setActiveScreen("inventory")}
                   className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
                 >
                   <span className="absolute top-2 left-2 text-[9px] font-black bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-1.5 py-0.5 rounded-md">
@@ -2056,7 +2156,7 @@ export default function App() {
 
                 {/* 2. المشتريات */}
                 <button
-                  onClick={() => setActiveScreen('purchase')}
+                  onClick={() => setActiveScreen("purchase")}
                   className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
                 >
                   <span className="absolute top-2 left-2 text-[9px] font-black bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-1.5 py-0.5 rounded-md">
@@ -2075,7 +2175,7 @@ export default function App() {
 
                 {/* 3. فواتير البيع */}
                 <button
-                  onClick={() => setActiveScreen('sales_invoices')}
+                  onClick={() => setActiveScreen("sales_invoices")}
                   className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
                 >
                   <span className="absolute top-2 left-2 text-[9px] font-black bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-1.5 py-0.5 rounded-md">
@@ -2094,7 +2194,7 @@ export default function App() {
 
                 {/* 4. الموردين */}
                 <button
-                  onClick={() => setActiveScreen('suppliers')}
+                  onClick={() => setActiveScreen("suppliers")}
                   className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
                 >
                   <span className="absolute top-2 left-2 text-[9px] font-black bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-1.5 py-0.5 rounded-md">
@@ -2113,7 +2213,7 @@ export default function App() {
 
                 {/* 5. عملاء الجملة */}
                 <button
-                  onClick={() => setActiveScreen('customers')}
+                  onClick={() => setActiveScreen("customers")}
                   className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
                 >
                   <span className="absolute top-2 left-2 text-[9px] font-black bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-1.5 py-0.5 rounded-md">
@@ -2132,7 +2232,7 @@ export default function App() {
 
                 {/* 6. العمال والرواتب */}
                 <button
-                  onClick={() => setActiveScreen('staff_payroll')}
+                  onClick={() => setActiveScreen("staff_payroll")}
                   className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
                 >
                   <span className="absolute top-2 left-2 text-[9px] font-black bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-1.5 py-0.5 rounded-md">
@@ -2151,7 +2251,7 @@ export default function App() {
 
                 {/* 7. التقارير والأرباح */}
                 <button
-                  onClick={() => setActiveScreen('reports')}
+                  onClick={() => setActiveScreen("reports")}
                   className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5"
                 >
                   <div className="w-11 h-11 rounded-xl bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] flex items-center justify-center shadow-sm">
@@ -2161,13 +2261,13 @@ export default function App() {
                     التقارير والأرباح
                   </div>
                   <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    أرباح الشركاء الـ 4
+                    أرباح الشركاء ({partners.length})
                   </div>
                 </button>
 
                 {/* 8. النواقص */}
                 <button
-                  onClick={() => setActiveScreen('shortages')}
+                  onClick={() => setActiveScreen("shortages")}
                   className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
                 >
                   {shortagesCount > 0 && (
@@ -2189,8 +2289,8 @@ export default function App() {
                 {/* 9. إدارة البيانات والنسخ الاحتياطي */}
                 <button
                   onClick={() => {
-                    setMoreInitialTab('data_control');
-                    setActiveScreen('more');
+                    setMoreInitialTab("data_control");
+                    setActiveScreen("more");
                   }}
                   className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5"
                 >
@@ -2210,7 +2310,7 @@ export default function App() {
         )}
 
         {/* ================= الشاشات الفرعية ================= */}
-        {activeScreen === 'purchase' && (
+        {activeScreen === "purchase" && (
           <PurchaseScreen
             items={items}
             suppliers={suppliers}
@@ -2230,9 +2330,9 @@ export default function App() {
                   ...next,
                   items: recalculateAllRecipeCosts(next.items),
                 });
-                addAuditLog('مرتجع', `إلغاء فاتورة مشتريات ${invId}`);
+                addAuditLog("مرتجع", `إلغاء فاتورة مشتريات ${invId}`);
                 showToast(
-                  'تم إلغاء الفاتورة وعكس المخزون والمديونية مع حفظ الأصل ومبلغ الاسترداد.',
+                  "تم إلغاء الفاتورة وعكس المخزون والمديونية مع حفظ الأصل ومبلغ الاسترداد.",
                 );
               });
             }}
@@ -2256,11 +2356,11 @@ export default function App() {
                 showToast(`✅ تمت إضافة الصنف (${created.name}) للمخزن!`);
               });
             }}
-            onBack={() => setActiveScreen('sections')}
+            onBack={() => setActiveScreen("sections")}
           />
         )}
 
-        {activeScreen === 'production' && (
+        {activeScreen === "production" && (
           <ProductionAndRecipesScreen
             items={items}
             productionBatches={productionBatches}
@@ -2279,31 +2379,35 @@ export default function App() {
               recipe: RecipeIngredient[],
               retail?: number,
               wholesale?: number,
-            ) => {
-              setItems((prev) => {
-                const updated = prev.map((item) =>
-                  item.id === targetId
-                    ? {
-                        ...item,
-                        hasRecipe: true,
-                        recipe,
-                        retailPrice: retail ?? item.retailPrice,
-                        wholesalePrice: wholesale ?? item.wholesalePrice,
-                      }
-                    : item,
-                );
-                return recalculateAllRecipeCosts(updated);
-              });
-              addAuditLog('تعديل وصفة/صنف', `تحديث وصفة صنف`);
-            }}
-            onCreateNewBlendOrDrink={(newItem) => {
-              const created: InventoryItem = {
-                ...newItem,
-                id: crypto.randomUUID(),
-              };
-              setItems((prev) => [created, ...prev]);
-              addAuditLog('تعديل وصفة/صنف', `إضافة صنف: ${created.name}`);
-            }}
+            ) =>
+              safeAction(() => {
+                setItems((prev) => {
+                  const updated = prev.map((item) =>
+                    item.id === targetId
+                      ? {
+                          ...item,
+                          hasRecipe: recipe.length > 0,
+                          recipe,
+                          retailPrice: retail ?? item.retailPrice,
+                          wholesalePrice: wholesale ?? item.wholesalePrice,
+                        }
+                      : item,
+                  );
+                  return recalculateAllRecipeCosts(updated);
+                });
+                addAuditLog("تعديل وصفة/صنف", `تحديث وصفة صنف`);
+              })
+            }
+            onCreateNewBlendOrDrink={(newItem) =>
+              safeAction(() => {
+                const created: InventoryItem = {
+                  ...newItem,
+                  id: crypto.randomUUID(),
+                };
+                setItems((prev) => [created, ...prev]);
+                addAuditLog("تعديل وصفة/صنف", `إضافة صنف: ${created.name}`);
+              })
+            }
             onDeleteItem={(id) => {
               safeAction(() => {
                 if (
@@ -2317,24 +2421,24 @@ export default function App() {
                     i.items.some((l) => l.itemId === id),
                   )
                 ) {
-                  showToast('لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.');
+                  showToast("لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.");
                   return;
                 }
                 setItems((prev) => prev.filter((i) => i.id !== id));
-                showToast('🗑️ تم حذف الصنف بنجاح');
+                showToast("🗑️ تم حذف الصنف بنجاح");
               });
             }}
             onDeleteBatch={(batchId) => {
               setProductionBatches((prev) =>
                 prev.filter((b) => b.id !== batchId),
               );
-              showToast('🗑️ تم حذف تشغيلة الإنتاج');
+              showToast("🗑️ تم حذف تشغيلة الإنتاج");
             }}
-            onBack={() => setActiveScreen('home')}
+            onBack={() => setActiveScreen("home")}
           />
         )}
 
-        {activeScreen === 'sales_pos' && (
+        {activeScreen === "sales_pos" && (
           <SalesPosScreen
             items={items}
             customers={customers}
@@ -2347,46 +2451,85 @@ export default function App() {
                 }) && saved
               );
             }}
-            onNavigateToCashierSync={() => setActiveScreen('cashier_sync')}
-            onBack={() => setActiveScreen('home')}
+            onNavigateToCashierSync={() => setActiveScreen("cashier_sync")}
+            onBack={() => setActiveScreen("home")}
           />
         )}
 
-        {activeScreen === 'cashier_sync' && (
+        {activeScreen === "cashier_sync" && (
           <CashierSyncScreen
             items={items}
             onImportCashierRows={handleImportCashierRows}
-            onBack={() => setActiveScreen('home')}
+            onBack={() => setActiveScreen("home")}
           />
         )}
 
-        {activeScreen === 'products' && (
+        {activeScreen === "products" && (
           <ProductsCatalogScreen
             items={items}
             onAddNewItem={(newItem) => {
               safeAction(() => {
+                if (
+                  hasInvalidNumbers([
+                    newItem.stock,
+                    newItem.minStock,
+                    newItem.costPrice,
+                    newItem.retailPrice,
+                    newItem.wholesalePrice,
+                  ]) ||
+                  !newItem.name.trim()
+                ) {
+                  showToast(
+                    "راجع البيانات: الاسم مطلوب والأرصدة والأسعار يجب أن تكون أرقامًا صحيحة غير سالبة.",
+                  );
+                  return;
+                }
                 setItems((prev) => [
                   { ...newItem, id: crypto.randomUUID() },
                   ...prev,
                 ]);
                 addAuditLog(
-                  'تعديل وصفة/صنف',
+                  "تعديل وصفة/صنف",
                   `تعريف منتج جديد: ${newItem.name}`,
                 );
                 showToast(`✅ تمت إضافة المنتج (${newItem.name}) في الكتالوج!`);
               });
             }}
             onUpdateItem={(id, patch) => {
-              safeAction(() => {
-                setItems((prev) => {
-                  const next = prev.map((i) =>
-                    i.id === id ? { ...i, ...patch } : i,
+              return safeAction(() => {
+                if (
+                  hasInvalidNumbers([
+                    patch.stock,
+                    patch.minStock,
+                    patch.costPrice,
+                    patch.lastPurchasePrice,
+                    patch.retailPrice,
+                    patch.wholesalePrice,
+                  ])
+                ) {
+                  showToast(
+                    "الأرصدة والأسعار يجب أن تكون أرقامًا صحيحة غير سالبة.",
                   );
+                  return;
+                }
+                setItems((prev) => {
+                  const next = prev.map((i) => {
+                    if (i.id !== id) return i;
+                    const merged = { ...i, ...patch };
+                    return {
+                      ...merged,
+                      stock: resetPhantomStock(
+                        i.category,
+                        merged.category,
+                        merged.stock,
+                      ),
+                    };
+                  });
                   return recalculateAllRecipeCosts(next);
                 });
-                addAuditLog('تعديل وصفة/صنف', `تحديث تسعير/بيانات منتج`);
+                addAuditLog("تعديل وصفة/صنف", `تحديث تسعير/بيانات منتج`);
                 showToast(
-                  '✅ تم تحديث المنتج وإعادة حساب تكلفة الوصفات المرتبطة!',
+                  "✅ تم تحديث المنتج وإعادة حساب تكلفة الوصفات المرتبطة!",
                 );
               });
             }}
@@ -2403,44 +2546,82 @@ export default function App() {
                     i.items.some((l) => l.itemId === id),
                   )
                 ) {
-                  showToast('لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.');
+                  showToast("لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.");
                   return;
                 }
                 setItems((prev) => prev.filter((i) => i.id !== id));
-                addAuditLog('تعديل وصفة/صنف', `حذف منتج من الكتالوج`);
-                showToast('🗑️ تم حذف المنتج بنجاح!');
+                addAuditLog("تعديل وصفة/صنف", `حذف منتج من الكتالوج`);
+                showToast("🗑️ تم حذف المنتج بنجاح!");
               });
             }}
-            onNavigateToProduction={() => setActiveScreen('production')}
-            onNavigateToInventory={() => setActiveScreen('inventory')}
-            onNavigateToPurchase={() => setActiveScreen('purchase')}
-            onBack={() => setActiveScreen('sections')}
+            onNavigateToProduction={() => setActiveScreen("production")}
+            onNavigateToInventory={() => setActiveScreen("inventory")}
+            onNavigateToPurchase={() => setActiveScreen("purchase")}
+            onBack={() => setActiveScreen("sections")}
           />
         )}
 
-        {activeScreen === 'inventory' && (
+        {activeScreen === "inventory" && (
           <InventoryScreen
             items={items}
             onAddNewItem={(newItem) => {
               safeAction(() => {
+                if (
+                  hasInvalidNumbers([
+                    newItem.stock,
+                    newItem.minStock,
+                    newItem.costPrice,
+                    newItem.retailPrice,
+                    newItem.wholesalePrice,
+                  ]) ||
+                  !newItem.name.trim()
+                ) {
+                  showToast(
+                    "راجع البيانات: الاسم مطلوب والأرصدة والأسعار يجب أن تكون أرقامًا صحيحة غير سالبة.",
+                  );
+                  return;
+                }
                 setItems((prev) => [
                   { ...newItem, id: crypto.randomUUID() },
                   ...prev,
                 ]);
-                addAuditLog('تعديل وصفة/صنف', `إضافة صنف: ${newItem.name}`);
+                addAuditLog("تعديل وصفة/صنف", `إضافة صنف: ${newItem.name}`);
                 showToast(`✅ تمت إضافة (${newItem.name}) للمخزن!`);
               });
             }}
             onUpdateItemPricesAndStock={(id, patch) => {
-              safeAction(() => {
-                setItems((prev) => {
-                  const next = prev.map((i) =>
-                    i.id === id ? { ...i, ...patch } : i,
+              return safeAction(() => {
+                if (
+                  hasInvalidNumbers([
+                    patch.stock,
+                    patch.minStock,
+                    patch.costPrice,
+                    patch.retailPrice,
+                    patch.wholesalePrice,
+                  ])
+                ) {
+                  showToast(
+                    "الأرصدة والأسعار يجب أن تكون أرقامًا صحيحة غير سالبة.",
                   );
+                  return;
+                }
+                setItems((prev) => {
+                  const next = prev.map((i) => {
+                    if (i.id !== id) return i;
+                    const merged = { ...i, ...patch };
+                    return {
+                      ...merged,
+                      stock: resetPhantomStock(
+                        i.category,
+                        merged.category,
+                        merged.stock,
+                      ),
+                    };
+                  });
                   return recalculateAllRecipeCosts(next);
                 });
-                addAuditLog('تعديل وصفة/صنف', `تعديل رصيد/سعر صنف`);
-                showToast('✅ تم تحديث الصنف وتكلفة الوصفات!');
+                addAuditLog("تعديل وصفة/صنف", `تعديل رصيد/سعر صنف`);
+                showToast("✅ تم تحديث الصنف وتكلفة الوصفات!");
               });
             }}
             onDeleteItem={(id) => {
@@ -2456,29 +2637,29 @@ export default function App() {
                     i.items.some((l) => l.itemId === id),
                   )
                 ) {
-                  showToast('لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.');
+                  showToast("لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.");
                   return;
                 }
                 setItems((prev) => prev.filter((i) => i.id !== id));
-                addAuditLog('تعديل وصفة/صنف', `حذف صنف من المخزن`);
-                showToast('🗑️ تم حذف الصنف من المخزن!');
+                addAuditLog("تعديل وصفة/صنف", `حذف صنف من المخزن`);
+                showToast("🗑️ تم حذف الصنف من المخزن!");
               });
             }}
-            onNavigateToProduction={() => setActiveScreen('production')}
-            onBack={() => setActiveScreen('home')}
+            onNavigateToProduction={() => setActiveScreen("production")}
+            onBack={() => setActiveScreen("home")}
           />
         )}
 
-        {activeScreen === 'shortages' && (
+        {activeScreen === "shortages" && (
           <ShortagesScreen
             items={items}
-            onNavigateToPurchase={() => setActiveScreen('purchase')}
-            onNavigateToProduction={() => setActiveScreen('production')}
-            onBack={() => setActiveScreen('home')}
+            onNavigateToPurchase={() => setActiveScreen("purchase")}
+            onNavigateToProduction={() => setActiveScreen("production")}
+            onBack={() => setActiveScreen("home")}
           />
         )}
 
-        {activeScreen === 'suppliers' && (
+        {activeScreen === "suppliers" && (
           <SuppliersAndCustomersScreen
             mode="suppliers"
             suppliers={suppliers}
@@ -2491,16 +2672,16 @@ export default function App() {
                 engine.replace(
                   recordPayment(
                     engine.snapshot.state,
-                    'supplier',
+                    "supplier",
                     supId,
                     amount,
                     currentPartner.name,
                     notes,
                   ),
                 );
-                addAuditLog('سداد/تحصيل', 'سداد للمورد', amount);
+                addAuditLog("سداد/تحصيل", "سداد للمورد", amount);
                 showToast(
-                  'تم تسجيل الدفعة وتوزيعها على الفواتير المستحقة؛ تابع تأكيد الحفظ.',
+                  "تم تسجيل الدفعة وتوزيعها على الفواتير المستحقة؛ تابع تأكيد الحفظ.",
                 );
               })
             }
@@ -2513,12 +2694,18 @@ export default function App() {
                     currentPartner.name,
                   ),
                 );
-                addAuditLog('سداد/تحصيل', 'إلغاء دفعة بحركة عكسية');
-                showToast('تم إلغاء الدفعة وإعادة الرصيد مع حفظ السجل.');
+                addAuditLog("سداد/تحصيل", "إلغاء دفعة بحركة عكسية");
+                showToast("تم إلغاء الدفعة وإعادة الرصيد مع حفظ السجل.");
               });
             }}
             onAddSupplier={(sup) => {
               safeAction(() => {
+                if (!sup.name.trim() || hasInvalidNumbers([sup.balance])) {
+                  showToast(
+                    "راجع البيانات: اسم المورد مطلوب والرصيد رقم غير سالب.",
+                  );
+                  return;
+                }
                 setSuppliers((prev) => [
                   { ...sup, id: crypto.randomUUID() },
                   ...prev,
@@ -2533,11 +2720,20 @@ export default function App() {
                   accountPayments.some((p) => p.targetId === id) ||
                   suppliers.find((s) => s.id === id)?.balance
                 ) {
-                  showToast('حساب المورد مرتبط بحركات أو رصيد؛ لا يمكن حذفه.');
+                  showToast("حساب المورد مرتبط بحركات أو رصيد؛ لا يمكن حذفه.");
                   return;
                 }
                 setSuppliers((prev) => prev.filter((s) => s.id !== id));
-                showToast('🗑️ تم حذف المورد!');
+                // تنظيف أسعار المورد المحذوف من كتالوج الأصناف
+                setItems((prev) =>
+                  prev.map((item) => ({
+                    ...item,
+                    supplierPrices: item.supplierPrices.filter(
+                      (sp) => sp.supplierId !== id,
+                    ),
+                  })),
+                );
+                showToast("🗑️ تم حذف المورد!");
               });
             }}
             onCollectCustomer={() => {
@@ -2549,11 +2745,11 @@ export default function App() {
             onDeleteCustomer={() => {
               safeAction(() => {});
             }}
-            onBack={() => setActiveScreen('home')}
+            onBack={() => setActiveScreen("home")}
           />
         )}
 
-        {activeScreen === 'customers' && (
+        {activeScreen === "customers" && (
           <SuppliersAndCustomersScreen
             mode="customers"
             suppliers={suppliers}
@@ -2575,16 +2771,16 @@ export default function App() {
                 engine.replace(
                   recordPayment(
                     engine.snapshot.state,
-                    'customer',
+                    "customer",
                     custId,
                     amount,
                     currentPartner.name,
                     notes,
                   ),
                 );
-                addAuditLog('سداد/تحصيل', 'تحصيل من العميل', amount);
+                addAuditLog("سداد/تحصيل", "تحصيل من العميل", amount);
                 showToast(
-                  'تم تسجيل الدفعة وتوزيعها على الفواتير المستحقة؛ تابع تأكيد الحفظ.',
+                  "تم تسجيل الدفعة وتوزيعها على الفواتير المستحقة؛ تابع تأكيد الحفظ.",
                 );
               })
             }
@@ -2597,12 +2793,18 @@ export default function App() {
                     currentPartner.name,
                   ),
                 );
-                addAuditLog('سداد/تحصيل', 'إلغاء دفعة بحركة عكسية');
-                showToast('تم إلغاء الدفعة وإعادة الرصيد مع حفظ السجل.');
+                addAuditLog("سداد/تحصيل", "إلغاء دفعة بحركة عكسية");
+                showToast("تم إلغاء الدفعة وإعادة الرصيد مع حفظ السجل.");
               });
             }}
             onAddCustomer={(cust) => {
               safeAction(() => {
+                if (!cust.name.trim() || hasInvalidNumbers([cust.balance])) {
+                  showToast(
+                    "راجع البيانات: اسم العميل مطلوب والرصيد رقم غير سالب.",
+                  );
+                  return;
+                }
                 setCustomers((prev) => [
                   { ...cust, id: crypto.randomUUID() },
                   ...prev,
@@ -2617,18 +2819,18 @@ export default function App() {
                   accountPayments.some((p) => p.targetId === id) ||
                   customers.find((c) => c.id === id)?.balance
                 ) {
-                  showToast('حساب العميل مرتبط بحركات أو رصيد؛ لا يمكن حذفه.');
+                  showToast("حساب العميل مرتبط بحركات أو رصيد؛ لا يمكن حذفه.");
                   return;
                 }
                 setCustomers((prev) => prev.filter((c) => c.id !== id));
-                showToast('🗑️ تم حذف العميل!');
+                showToast("🗑️ تم حذف العميل!");
               });
             }}
-            onBack={() => setActiveScreen('home')}
+            onBack={() => setActiveScreen("home")}
           />
         )}
 
-        {activeScreen === 'sales_invoices' && (
+        {activeScreen === "sales_invoices" && (
           <SalesInvoicesAndReturnsScreen
             salesInvoices={salesInvoices}
             customers={customers}
@@ -2640,42 +2842,42 @@ export default function App() {
                   currentPartner.name,
                 );
                 engine.replace(state);
-                addAuditLog('مرتجع', `مرتجع الفاتورة ${invId}`);
+                addAuditLog("مرتجع", `مرتجع الفاتورة ${invId}`);
                 showToast(
-                  'تم تسجيل المرتجع وعكس المستحق؛ مكونات المشروبات تظل مستهلكة.',
+                  "تم تسجيل المرتجع وعكس المستحق؛ مكونات المشروبات تظل مستهلكة.",
                 );
               });
             }}
             onDeleteInvoice={(invId) => {
               showToast(
-                'هذه فاتورة معتمدة؛ استخدم المرتجع لعكس أثرها مع الاحتفاظ بالأصل.',
+                "هذه فاتورة معتمدة؛ استخدم المرتجع لعكس أثرها مع الاحتفاظ بالأصل.",
               );
             }}
-            onBack={() => setActiveScreen('home')}
+            onBack={() => setActiveScreen("home")}
           />
         )}
 
-        {activeScreen === 'insights' && (
+        {activeScreen === "insights" && (
           <SmartInsightsScreen
             items={items}
             salesInvoices={salesInvoices}
             customers={customers}
             onNavigate={(sc) => setActiveScreen(sc)}
-            onBack={() => setActiveScreen('home')}
+            onBack={() => setActiveScreen("home")}
           />
         )}
 
-        {activeScreen === 'reports' && (
+        {activeScreen === "reports" && (
           <ProfitReportsScreen
             items={items}
             salesInvoices={salesInvoices}
             expenses={expenses}
             partners={partners}
-            onBack={() => setActiveScreen('home')}
+            onBack={() => setActiveScreen("home")}
           />
         )}
 
-        {activeScreen === 'stocktaking' && (
+        {activeScreen === "stocktaking" && (
           <StocktakingScreen
             items={items}
             auditRecords={stocktakingRecords}
@@ -2684,11 +2886,11 @@ export default function App() {
             onCommitStocktaking={(...args) =>
               safeAction(() => handleCommitStocktaking(...args))
             }
-            onBack={() => setActiveScreen('home')}
+            onBack={() => setActiveScreen("home")}
           />
         )}
 
-        {activeScreen === 'staff_payroll' && (
+        {activeScreen === "staff_payroll" && (
           <StaffAndPayrollScreen
             employees={employees}
             transactions={employeeTransactions}
@@ -2696,26 +2898,51 @@ export default function App() {
             onRecordEmployeeAction={(...args) =>
               safeAction(() => handleRecordEmployeeAction(...args))
             }
-            onAddNewEmployee={(newEmp) => {
-              const created: Employee = {
-                ...newEmp,
-                id: `emp-${Date.now()}`,
-              };
-              setEmployees((prev) => [created, ...prev]);
-              addAuditLog('شؤون عمال', `إضافة عامل: ${created.name}`);
-              showToast(`✅ تمت إضافة العامل (${created.name})!`);
-            }}
+            onAddNewEmployee={(newEmp) =>
+              safeAction(() => {
+                if (
+                  !newEmp.name.trim() ||
+                  hasInvalidNumbers([
+                    newEmp.baseMonthlySalary,
+                    newEmp.dailyRate,
+                    newEmp.workedDaysThisMonth,
+                    newEmp.totalAdvances,
+                    newEmp.totalDeductions,
+                    newEmp.totalBonuses,
+                    newEmp.totalPaidOut,
+                  ])
+                ) {
+                  showToast(
+                    "راجع بيانات العامل: الاسم مطلوب وقيم الرواتب والحركات أرقام غير سالبة.",
+                  );
+                  return;
+                }
+                const created: Employee = {
+                  ...newEmp,
+                  id: crypto.randomUUID(),
+                };
+                setEmployees((prev) => [created, ...prev]);
+                addAuditLog("شؤون عمال", `إضافة عامل: ${created.name}`);
+                showToast(`✅ تمت إضافة العامل (${created.name})!`);
+              })
+            }
             onDeleteEmployee={(empId) => {
               safeAction(() => {
+                if (employeeTransactions.some((t) => t.employeeId === empId)) {
+                  showToast(
+                    "للعامل حركات مسجلة (سلف/رواتب/خصومات)؛ لا يمكن حذفه للحفاظ على دقة السجلات.",
+                  );
+                  return;
+                }
                 setEmployees((prev) => prev.filter((e) => e.id !== empId));
-                showToast('🗑️ تم حذف العامل!');
+                showToast("🗑️ تم حذف العامل!");
               });
             }}
-            onBack={() => setActiveScreen('home')}
+            onBack={() => setActiveScreen("home")}
           />
         )}
 
-        {activeScreen === 'more' && (
+        {activeScreen === "more" && (
           <MoreMenuScreen
             expenses={expenses}
             partners={partners}
@@ -2728,9 +2955,9 @@ export default function App() {
                 engine.replace(
                   recordExpense(engine.snapshot.state, exp, currentPartner.id),
                 );
-                addAuditLog('مصروف', exp.title, exp.amount);
+                addAuditLog("مصروف", exp.title, exp.amount);
                 showToast(
-                  'تم تسجيل الحركة وتحديث حساب الشريك؛ تابع تأكيد الحفظ.',
+                  "تم تسجيل الحركة وتحديث حساب الشريك؛ تابع تأكيد الحفظ.",
                 );
               })
             }
@@ -2743,8 +2970,8 @@ export default function App() {
                     currentPartner.name,
                   ),
                 );
-                addAuditLog('مصروف', `إلغاء المصروف ${expId}`);
-                showToast('تم إلغاء المصروف وعكس رصيد الشريك مع حفظ الأصل.');
+                addAuditLog("مصروف", `إلغاء المصروف ${expId}`);
+                showToast("تم إلغاء المصروف وعكس رصيد الشريك مع حفظ الأصل.");
               })
             }
             onUpdatePartnerAccount={(id, patch) => {
@@ -2762,14 +2989,14 @@ export default function App() {
                       : p,
                   ),
                 );
-                showToast('✅ تم تحديث حساب المالك!');
+                showToast("✅ تم تحديث حساب المالك!");
               });
             }}
             onClearAllDemoData={() => {
               downloadFullBackupJson(createBackup(engine.snapshot.state));
               if (
                 window.confirm(
-                  'تم تنزيل نسخة احتياطية. هل تريد تصفير بيانات المحل بالكامل؟',
+                  "تم تنزيل نسخة احتياطية. هل تريد تصفير بيانات المحل بالكامل؟",
                 )
               )
                 safeAction(handleClearAllDemoData);
@@ -2778,7 +3005,7 @@ export default function App() {
               downloadFullBackupJson(createBackup(engine.snapshot.state));
               if (
                 window.confirm(
-                  'تم تنزيل نسخة احتياطية. هل تريد تصفير الفواتير والأرصدة؟',
+                  "تم تنزيل نسخة احتياطية. هل تريد تصفير الفواتير والأرصدة؟",
                 )
               )
                 safeAction(handleClearTransactionsKeepCatalog);
@@ -2786,7 +3013,7 @@ export default function App() {
             onRestoreDefaultDemoData={handleRestoreDefaultDemoData}
             onDownloadBackupJson={() => {
               downloadFullBackupJson(createBackup(engine.snapshot.state));
-              showToast('📥 تم تحميل النسخة الاحتياطية الكاملة بنجاح!');
+              showToast("📥 تم تحميل النسخة الاحتياطية الكاملة بنجاح!");
             }}
             onExportFullExcel={async () => {
               try {
@@ -2798,9 +3025,9 @@ export default function App() {
                   customers,
                   expenses,
                 );
-                showToast('📊 تم تصدير ملف الإكسيل الشامل للمحل بنجاح!');
+                showToast("📊 تم تصدير ملف الإكسيل الشامل للمحل بنجاح!");
               } catch {
-                showToast('تعذر تصدير Excel؛ حاول مجددًا.');
+                showToast("تعذر تصدير Excel؛ حاول مجددًا.");
               }
             }}
             onRestoreBackupJson={(data) => {
@@ -2808,15 +3035,15 @@ export default function App() {
                 const restored = parseBackup(data);
                 engine.replace(restored);
                 showToast(
-                  'تم التحقق من النسخة واسترجاعها؛ تابع تأكيد الحفظ أعلى الشاشة.',
+                  "تم التحقق من النسخة واسترجاعها؛ تابع تأكيد الحفظ أعلى الشاشة.",
                 );
               });
             }}
             onLogout={handleLogout}
             onNavigate={(sc) => setActiveScreen(sc)}
             onBack={() => {
-              setMoreInitialTab('menu');
-              setActiveScreen('home');
+              setMoreInitialTab("menu");
+              setActiveScreen("home");
             }}
           />
         )}
@@ -2830,7 +3057,7 @@ export default function App() {
                 (c) =>
                   c.id === receiptModalInvoice.customerId ||
                   c.name === receiptModalInvoice.customerName,
-              )?.phone || ''
+              )?.phone || ""
             }
             onClose={() => setReceiptModalInvoice(null)}
           />
@@ -2839,11 +3066,11 @@ export default function App() {
         {/* شريط القوائم السفلي المثبت دائماً في أسفل الشاشة مع قسم "الأقسام" بجانب "الرئيسية" */}
         <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#E6DEC8] py-1.5 px-2 grid grid-cols-5 z-40 max-w-[445px] mx-auto shadow-[0_-4px_20px_rgba(30,22,18,0.06)]">
           {[
-            { id: 'home', label: 'الرئيسية', icon: Home },
-            { id: 'sections', label: 'الأقسام', icon: LayoutGrid },
-            { id: 'production', label: 'الإنتاج', icon: Flame },
-            { id: 'inventory', label: 'المخزن', icon: Package },
-            { id: 'more', label: 'المزيد', icon: Settings },
+            { id: "home", label: "الرئيسية", icon: Home },
+            { id: "sections", label: "الأقسام", icon: LayoutGrid },
+            { id: "production", label: "الإنتاج", icon: Flame },
+            { id: "inventory", label: "المخزن", icon: Package },
+            { id: "more", label: "المزيد", icon: Settings },
           ].map((tab) => {
             const IconComp = tab.icon;
             const isActive = activeScreen === tab.id;
@@ -2851,7 +3078,7 @@ export default function App() {
               <button
                 key={tab.id}
                 onClick={() => {
-                  if (tab.id === 'more') setMoreInitialTab('menu');
+                  if (tab.id === "more") setMoreInitialTab("menu");
                   setActiveScreen(tab.id);
                 }}
                 className="flex flex-col items-center justify-center gap-0.5 py-0.5 transition"
@@ -2859,8 +3086,8 @@ export default function App() {
                 <div
                   className={`px-3.5 py-1 rounded-full transition-all ${
                     isActive
-                      ? 'bg-[#1E1612] text-[#D4AF37] shadow-sm border border-[#C59B27]/50'
-                      : 'text-[#8C7B6B] hover:text-[#1E1612]'
+                      ? "bg-[#1E1612] text-[#D4AF37] shadow-sm border border-[#C59B27]/50"
+                      : "text-[#8C7B6B] hover:text-[#1E1612]"
                   }`}
                 >
                   <IconComp className="w-4 h-4" />
@@ -2868,8 +3095,8 @@ export default function App() {
                 <span
                   className={`text-[10px] ${
                     isActive
-                      ? 'font-black text-[#1E1612]'
-                      : 'font-semibold text-[#8C7B6B]'
+                      ? "font-black text-[#1E1612]"
+                      : "font-semibold text-[#8C7B6B]"
                   }`}
                 >
                   {tab.label}

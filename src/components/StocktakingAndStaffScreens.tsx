@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo } from "react";
 import {
   ChevronRight,
   Scale,
@@ -14,14 +14,14 @@ import {
   Check,
   UserPlus,
   Trash2,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   InventoryItem,
   StocktakingAuditRecord,
   StocktakingItemVariance,
   Employee,
   EmployeeTransaction,
-} from '../types/erp';
+} from "../types/erp";
 
 // ============================================================================
 // 1. شاشة الجرد الفعلي على الميزان وكشف العجز والزيادة (StocktakingScreen)
@@ -34,8 +34,8 @@ interface StocktakingScreenProps {
   onCommitStocktaking: (
     variances: StocktakingItemVariance[],
     notes: string,
-    chargeShortageToEmployeeId?: string
-  ) => void;
+    chargeShortageToEmployeeId?: string,
+  ) => void | boolean;
   onBack: () => void;
 }
 
@@ -47,42 +47,32 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
   onCommitStocktaking,
   onBack,
 }) => {
-  const [activeTab, setActiveTab] = useState<'new_audit' | 'history'>(
-    'new_audit'
+  const [activeTab, setActiveTab] = useState<"new_audit" | "history">(
+    "new_audit",
   );
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [search, setSearch] = useState<string>('');
-  const [inputMode, setInputMode] = useState<'kg' | 'gram'>('kg');
-  const [auditNotes, setAuditNotes] = useState<string>('');
-  const [chargeEmployeeId, setChargeEmployeeId] = useState<string>('');
-  const [savedBanner, setSavedBanner] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [search, setSearch] = useState<string>("");
+  const [inputMode, setInputMode] = useState<"kg" | "gram">("kg");
+  const [auditNotes, setAuditNotes] = useState<string>("");
+  const [chargeEmployeeId, setChargeEmployeeId] = useState<string>("");
+  const [savedBanner, setSavedBanner] = useState<string>("");
+  const [auditError, setAuditError] = useState("");
 
   // الأصناف القابلة للجرد الفعلي (كل الأصناف ما عدا وصفات المشروبات اللحظية)
   const auditableItems = useMemo(
-    () => items.filter((i) => i.category !== 'drink_recipe'),
-    [items]
+    () => items.filter((i) => i.category !== "drink_recipe"),
+    [items],
   );
 
-  // حالة الأوزان/الأعداد الفعلية المدخلة على الميزان (بالوحدة الأساسية kg أو piece أو liter)
-  const [actualCounts, setActualCounts] = useState<Record<string, number>>(() => {
-    const map: Record<string, number> = {};
-    for (const item of items) {
-      if (item.category !== 'drink_recipe') {
-        map[item.id] = item.stock;
-      }
-    }
-    // وضع فرق تجريبي بسيط في صنف واحد لتوضيح كشف العجز بالجرام والجنيه فوراً
-    if (map['blend-mahoug-special'] !== undefined) {
-      map['blend-mahoug-special'] = Number(
-        Math.max(0, map['blend-mahoug-special'] - 0.35).toFixed(3)
-      );
-    }
-    return map;
-  });
+  // القيم الفعلية المُدخلة على الميزان: نعتمد فقط ما أدخله المستخدم بنفسه (أرقام صالحة)
+  // والأصناف التي لم تُدخل لها قيمة تتبع رصيد الكتالوج الحيّ (مع تغير المخزن لحظيًا)
+  const [typedActuals, setTypedActuals] = useState<Record<string, number>>({});
+  // النص الخام داخل خانة الإدخال لكل صنف (حتى لا تُؤثر أثناء الكتابة على الملخص)
+  const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
 
   const filteredItems = useMemo(() => {
     return auditableItems.filter((i) => {
-      if (categoryFilter !== 'all' && i.category !== categoryFilter)
+      if (categoryFilter !== "all" && i.category !== categoryFilter)
         return false;
       if (
         search.trim() &&
@@ -97,8 +87,9 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
 
   const allVariances: StocktakingItemVariance[] = useMemo(() => {
     return auditableItems.map((item) => {
+      const typed = typedActuals[item.id];
       const actual =
-        actualCounts[item.id] !== undefined ? actualCounts[item.id] : item.stock;
+        typed !== undefined && Number.isFinite(typed) ? typed : item.stock;
       const diff = Number((actual - item.stock).toFixed(3));
       const finDiff = Number((diff * item.costPrice).toFixed(2));
       return {
@@ -112,11 +103,11 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
         financialDifference: finDiff,
       };
     });
-  }, [auditableItems, actualCounts]);
+  }, [auditableItems, typedActuals]);
 
   const changedVariances = useMemo(
     () => allVariances.filter((v) => Math.abs(v.difference) > 0.0001),
-    [allVariances]
+    [allVariances],
   );
 
   const summary = useMemo(() => {
@@ -141,35 +132,65 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       netVariance: Number((totalSurplus - totalShortage).toFixed(2)),
       shortageCount,
       surplusCount,
-      matchingCount:
-        auditableItems.length - shortageCount - surplusCount,
+      matchingCount: auditableItems.length - shortageCount - surplusCount,
     };
   }, [allVariances, auditableItems.length]);
 
   const handleUpdateActual = (item: InventoryItem, rawVal: string) => {
+    // نحفظ النص الخام للعرض، ونُحدّث الرصيد الفعلي فقط بقيمة صالحة
+    // (إدخال فارغ أو غير صحيح لا يصفّر الرصيد؛ يبقى آخر قيمة سليمة)
+    setRawInputs((prev) => ({ ...prev, [item.id]: rawVal }));
     const num = parseFloat(rawVal);
-    if (isNaN(num) || num < 0) {
-      setActualCounts((prev) => ({ ...prev, [item.id]: 0 }));
-      return;
-    }
+    if (!Number.isFinite(num) || num < 0) return;
     const inBase =
-      item.baseUnit === 'kg' && inputMode === 'gram'
+      item.baseUnit === "kg" && inputMode === "gram"
         ? Number((num / 1000).toFixed(3))
         : Number(num.toFixed(3));
-    setActualCounts((prev) => ({ ...prev, [item.id]: inBase }));
+    setTypedActuals((prev) => ({ ...prev, [item.id]: inBase }));
+  };
+
+  const changeInputMode = (mode: "kg" | "gram") => {
+    setInputMode(mode);
+    // إعادة عرض القيم بوحدة الإدخال الجديدة (الأرصدة محفوظة بالوحدة الأساسية)
+    setRawInputs({});
   };
 
   const handleSaveAudit = () => {
-    onCommitStocktaking(
+    setAuditError("");
+    if (
+      Object.values(rawInputs).some(
+        (value) =>
+          !value.trim() || !Number.isFinite(Number(value)) || Number(value) < 0,
+      )
+    ) {
+      setAuditError(
+        "أكمل كميات الجرد بأرقام صحيحة غير سالبة؛ الإدخال الفارغ لا يعني صفرًا.",
+      );
+      return;
+    }
+    if (
+      changedVariances.length > 0 &&
+      !window.confirm(
+        `عدد الفروقات: ${changedVariances.length} صنف — عجز ${summary.totalShortage} ج.م وزيادة ${summary.totalSurplus} ج.م.\nسيتم اعتماد محضر الجرد وتعديل أرصدة المخزن نهائيًا. متابعة؟`,
+      )
+    )
+      return;
+    const accepted = onCommitStocktaking(
       allVariances,
-      auditNotes || 'جرد فعلي للمخزن والفرع على الميزان',
-      chargeEmployeeId || undefined
+      auditNotes || "جرد فعلي للمخزن والفرع على الميزان",
+      chargeEmployeeId || undefined,
     );
+    if (accepted === false) {
+      setAuditError("لم يُعتمد الجرد؛ راجع التنبيه وأعد المحاولة.");
+      return;
+    }
     setSavedBanner(
-      `✓ تم اعتماد محضر الجرد وتحديث الأرصدة الفعلية في المخزن بنجاح (بواسطة: ${currentPartnerName})`
+      `✓ تم اعتماد محضر الجرد وتحديث الأرصدة الفعلية في المخزن بنجاح (بواسطة: ${currentPartnerName})`,
     );
-    setAuditNotes('');
-    setChargeEmployeeId('');
+    setAuditNotes("");
+    setChargeEmployeeId("");
+    setTypedActuals({});
+    setRawInputs({});
   };
 
   return (
@@ -197,22 +218,22 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       {/* تبويبات الجرد */}
       <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 sticky top-[64px] z-20">
         <button
-          onClick={() => setActiveTab('new_audit')}
+          onClick={() => setActiveTab("new_audit")}
           className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === 'new_audit'
-              ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]'
-              : 'bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]'
+            activeTab === "new_audit"
+              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
+              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
           }`}
         >
           <Scale className="w-4 h-4 text-[#D4AF37]" />
           إجراء جرد فعلي الآن
         </button>
         <button
-          onClick={() => setActiveTab('history')}
+          onClick={() => setActiveTab("history")}
           className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === 'history'
-              ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]'
-              : 'bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]'
+            activeTab === "history"
+              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
+              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
           }`}
         >
           <History className="w-4 h-4 text-[#D4AF37]" />
@@ -221,6 +242,11 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       </div>
 
       <div className="p-3.5 space-y-4">
+        {auditError && (
+          <p role="alert" className="text-red-700 font-bold">
+            {auditError}
+          </p>
+        )}
         {savedBanner && (
           <div className="bg-emerald-50 border-2 border-emerald-400 text-emerald-900 rounded-2xl p-3.5 flex items-center gap-2.5 text-xs font-extrabold">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -228,7 +254,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
           </div>
         )}
 
-        {activeTab === 'new_audit' && (
+        {activeTab === "new_audit" && (
           <>
             {/* كارت ملخص فروقات الجرد اللحظي */}
             <div className="rounded-3xl bg-gradient-to-br from-[#1E1612] via-[#2B201A] to-[#1A130F] text-white p-4 shadow-lg border-2 border-[#C59B27] space-y-3">
@@ -238,21 +264,21 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                 </span>
                 <div className="flex items-center gap-1 bg-white/10 rounded-xl p-1">
                   <button
-                    onClick={() => setInputMode('kg')}
+                    onClick={() => changeInputMode("kg")}
                     className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition ${
-                      inputMode === 'kg'
-                        ? 'bg-[#C59B27] text-[#1E1612]'
-                        : 'text-stone-300'
+                      inputMode === "kg"
+                        ? "bg-[#C59B27] text-[#1E1612]"
+                        : "text-stone-300"
                     }`}
                   >
                     إدخال بالكيلو (كجم)
                   </button>
                   <button
-                    onClick={() => setInputMode('gram')}
+                    onClick={() => changeInputMode("gram")}
                     className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition ${
-                      inputMode === 'gram'
-                        ? 'bg-[#C59B27] text-[#1E1612]'
-                        : 'text-stone-300'
+                      inputMode === "gram"
+                        ? "bg-[#C59B27] text-[#1E1612]"
+                        : "text-stone-300"
                     }`}
                   >
                     إدخال بالجرام (جم)
@@ -262,7 +288,9 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
 
               <div className="grid grid-cols-3 gap-2.5 text-center">
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-2.5">
-                  <div className="text-[10px] text-emerald-300">أصناف مطابقة</div>
+                  <div className="text-[10px] text-emerald-300">
+                    أصناف مطابقة
+                  </div>
                   <div className="text-base font-black text-white mt-0.5">
                     {summary.matchingCount} صنف
                   </div>
@@ -291,19 +319,19 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
             {/* فلاتر الأقسام والبحث */}
             <div className="flex gap-2 overflow-x-auto pb-1">
               {[
-                { id: 'all', label: 'كل المخزن' },
-                { id: 'manufactured_blend', label: '☕ التوليفات الجاهزة' },
-                { id: 'raw_bean', label: '🫘 حبوب البن الخام' },
-                { id: 'raw_spice', label: '🌿 التحويجة واللبن والأكواب' },
-                { id: 'direct_product', label: '💧 المياه والمعلبات' },
+                { id: "all", label: "كل المخزن" },
+                { id: "manufactured_blend", label: "☕ التوليفات الجاهزة" },
+                { id: "raw_bean", label: "🫘 حبوب البن الخام" },
+                { id: "raw_spice", label: "🌿 التحويجة واللبن والأكواب" },
+                { id: "direct_product", label: "💧 المياه والمعلبات" },
               ].map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => setCategoryFilter(cat.id)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-extrabold shrink-0 border transition ${
                     categoryFilter === cat.id
-                      ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]'
-                      : 'bg-white text-[#5C4B3E] border-[#E6DEC8]'
+                      ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
+                      : "bg-white text-[#5C4B3E] border-[#E6DEC8]"
                   }`}
                 >
                   {cat.label}
@@ -325,33 +353,37 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
             {/* قائمة الأصناف وإدخال الوزن الفعلي */}
             <div className="space-y-2.5">
               {filteredItems.map((item) => {
+                const typed = typedActuals[item.id];
                 const actualInBase =
-                  actualCounts[item.id] !== undefined
-                    ? actualCounts[item.id]
+                  typed !== undefined && Number.isFinite(typed)
+                    ? typed
                     : item.stock;
                 const diffInBase = Number(
-                  (actualInBase - item.stock).toFixed(3)
+                  (actualInBase - item.stock).toFixed(3),
                 );
                 const diffInGrams = Math.round(diffInBase * 1000);
                 const finDiff = Number(
-                  (diffInBase * item.costPrice).toFixed(2)
+                  (diffInBase * item.costPrice).toFixed(2),
                 );
-                const isKg = item.baseUnit === 'kg';
+                const isKg = item.baseUnit === "kg";
 
+                const rawInput = rawInputs[item.id];
                 const displayInputValue =
-                  isKg && inputMode === 'gram'
-                    ? Math.round(actualInBase * 1000)
-                    : actualInBase;
+                  rawInput !== undefined
+                    ? rawInput
+                    : isKg && inputMode === "gram"
+                      ? Math.round(actualInBase * 1000)
+                      : actualInBase;
 
                 return (
                   <div
                     key={item.id}
                     className={`bg-white rounded-2xl p-3.5 border shadow-sm space-y-2.5 ${
                       diffInBase < -0.0001
-                        ? 'border-red-400 bg-red-50/20'
+                        ? "border-red-400 bg-red-50/20"
                         : diffInBase > 0.0001
-                        ? 'border-emerald-400 bg-emerald-50/20'
-                        : 'border-[#E6DEC8]'
+                          ? "border-emerald-400 bg-emerald-50/20"
+                          : "border-[#E6DEC8]"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -371,21 +403,19 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                         </span>
                       ) : diffInBase < 0 ? (
                         <span className="text-[11px] font-black bg-red-100 text-red-700 px-2.5 py-1 rounded-xl shrink-0">
-                          ⚠️ عجز{' '}
+                          ⚠️ عجز{" "}
                           {isKg
                             ? `${Math.abs(diffInGrams)} جم (${Math.abs(
-                                diffInBase
+                                diffInBase,
                               )} كجم)`
-                            : `${Math.abs(diffInBase)} وحدة`}{' '}
+                            : `${Math.abs(diffInBase)} وحدة`}{" "}
                           ({finDiff} ج.م)
                         </span>
                       ) : (
                         <span className="text-[11px] font-black bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-xl shrink-0">
-                          + زيادة{' '}
-                          {isKg
-                            ? `${diffInGrams} جم`
-                            : `${diffInBase} وحدة`}{' '}
-                          (+{finDiff} ج.م)
+                          + زيادة{" "}
+                          {isKg ? `${diffInGrams} جم` : `${diffInBase} وحدة`} (+
+                          {finDiff} ج.م)
                         </span>
                       )}
                     </div>
@@ -396,12 +426,12 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                           الرصيد المفترض بالسيستم:
                         </div>
                         <div className="text-xs font-black text-[#1E1612]">
-                          {item.stock}{' '}
+                          {item.stock}{" "}
                           {isKg
                             ? `كجم (${Math.round(item.stock * 1000)} جم)`
-                            : item.baseUnit === 'liter'
-                            ? 'لتر'
-                            : 'قطعة'}
+                            : item.baseUnit === "liter"
+                              ? "لتر"
+                              : "قطعة"}
                         </div>
                       </div>
 
@@ -409,17 +439,18 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                         <label className="text-[10px] font-extrabold text-[#9E7918] block mb-1">
                           الوزن/العدد الفعلي على الميزان (
                           {isKg
-                            ? inputMode === 'gram'
-                              ? 'بالجرام'
-                              : 'بالكيلو'
-                            : item.baseUnit === 'liter'
-                            ? 'باللتر'
-                            : 'بالعدد'}
+                            ? inputMode === "gram"
+                              ? "بالجرام"
+                              : "بالكيلو"
+                            : item.baseUnit === "liter"
+                              ? "باللتر"
+                              : "بالعدد"}
                           ):
                         </label>
                         <input
                           type="number"
-                          step={isKg && inputMode === 'kg' ? '0.05' : '1'}
+                          step={isKg && inputMode === "kg" ? "0.05" : "1"}
+                          aria-label={`الرصيد الفعلي: ${item.name}`}
                           value={displayInputValue}
                           onChange={(e) =>
                             handleUpdateActual(item, e.target.value)
@@ -442,8 +473,8 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
               {summary.totalShortage > 0 && (
                 <div className="bg-red-50/70 border border-red-200 rounded-xl p-3 space-y-2">
                   <label className="text-xs font-extrabold text-red-800 block">
-                    هل تريد تحميل قيمة العجز ({summary.totalShortage} ج.م) كخصم على
-                    أحد العمال؟ (اختياري)
+                    هل تريد تحميل قيمة العجز ({summary.totalShortage} ج.م) كخصم
+                    على أحد العمال؟ (اختياري)
                   </label>
                   <select
                     value={chargeEmployeeId}
@@ -474,7 +505,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
         )}
 
         {/* سجل محاضر الجرد السابقة */}
-        {activeTab === 'history' && (
+        {activeTab === "history" && (
           <div className="space-y-3">
             {auditRecords.map((rec) => (
               <div
@@ -488,8 +519,8 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                   <span
                     className={`text-xs font-black ${
                       rec.netVarianceValue < 0
-                        ? 'text-red-600'
-                        : 'text-emerald-700'
+                        ? "text-red-600"
+                        : "text-emerald-700"
                     }`}
                   >
                     صافي الفروقات: {rec.netVarianceValue} ج.م
@@ -505,12 +536,12 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                       <span
                         className={
                           v.difference < 0
-                            ? 'text-red-600 font-bold'
-                            : 'text-emerald-700 font-bold'
+                            ? "text-red-600 font-bold"
+                            : "text-emerald-700 font-bold"
                         }
                       >
                         السيستم: {v.systemStock} | الفعلي: {v.actualStock} (
-                        {v.difference} {v.baseUnit === 'kg' ? 'كجم' : 'وحدة'})
+                        {v.difference} {v.baseUnit === "kg" ? "كجم" : "وحدة"})
                       </span>
                     </div>
                   ))}
@@ -522,7 +553,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       </div>
 
       {/* شريط الاعتماد السفلي فوق شريط القوائم المثبت */}
-      {activeTab === 'new_audit' && (
+      {activeTab === "new_audit" && (
         <div className="fixed bottom-[58px] left-0 right-0 bg-white border-t border-[#E6DEC8] p-3 flex items-center gap-2.5 z-30 max-w-[445px] mx-auto shadow-md">
           <button
             onClick={handleSaveAudit}
@@ -548,11 +579,11 @@ interface StaffAndPayrollScreenProps {
   currentPartnerName: string;
   onRecordEmployeeAction: (
     employeeId: string,
-    type: EmployeeTransaction['type'],
+    type: EmployeeTransaction["type"],
     amount: number,
-    notes: string
-  ) => void;
-  onAddNewEmployee: (emp: Omit<Employee, 'id'>) => void;
+    notes: string,
+  ) => void | boolean;
+  onAddNewEmployee: (emp: Omit<Employee, "id">) => void | boolean;
   onDeleteEmployee: (empId: string) => void;
   onBack: () => void;
 }
@@ -565,28 +596,30 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
   onDeleteEmployee,
   onBack,
 }) => {
-  const [activeTab, setActiveTab] = useState<'staff' | 'ledger'>('staff');
+  const [activeTab, setActiveTab] = useState<"staff" | "ledger">("staff");
   const [actionModal, setActionModal] = useState<{
     employee: Employee;
-    type: EmployeeTransaction['type'];
+    type: EmployeeTransaction["type"];
   } | null>(null);
-  const [actionAmount, setActionAmount] = useState<string>('');
-  const [actionNotes, setActionNotes] = useState<string>('');
+  const [actionAmount, setActionAmount] = useState<string>("");
+  const [actionNotes, setActionNotes] = useState<string>("");
+  const [actionError, setActionError] = useState<string>("");
 
   // نافذة إضافة عامل جديد
   const [showAddEmpModal, setShowAddEmpModal] = useState(false);
-  const [newEmpName, setNewEmpName] = useState('');
-  const [newEmpRole, setNewEmpRole] = useState<Employee['role']>('باريستا');
-  const [newEmpPhone, setNewEmpPhone] = useState('');
+  const [newEmployeeError, setNewEmployeeError] = useState("");
+  const [newEmpName, setNewEmpName] = useState("");
+  const [newEmpRole, setNewEmpRole] = useState<Employee["role"]>("باريستا");
+  const [newEmpPhone, setNewEmpPhone] = useState("");
   const [newEmpSalaryType, setNewEmpSalaryType] =
-    useState<Employee['salaryType']>('شهري');
-  const [newEmpMonthly, setNewEmpMonthly] = useState('5500');
-  const [newEmpDaily, setNewEmpDaily] = useState('185');
+    useState<Employee["salaryType"]>("شهري");
+  const [newEmpMonthly, setNewEmpMonthly] = useState("5500");
+  const [newEmpDaily, setNewEmpDaily] = useState("185");
 
   // حساب مستحقات العامل الصافية
   const calculateNetPayable = (emp: Employee) => {
     const earned =
-      emp.salaryType === 'يومية'
+      emp.salaryType === "يومية"
         ? emp.workedDaysThisMonth * emp.dailyRate
         : emp.baseMonthlySalary;
     return Math.max(
@@ -595,7 +628,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
         emp.totalBonuses -
         emp.totalAdvances -
         emp.totalDeductions -
-        emp.totalPaidOut
+        emp.totalPaidOut,
     );
   };
 
@@ -603,67 +636,121 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
     const totalAdvances = employees.reduce((s, e) => s + e.totalAdvances, 0);
     const totalDeductions = employees.reduce(
       (s, e) => s + e.totalDeductions,
-      0
+      0,
     );
     const totalNetRemaining = employees.reduce(
       (s, e) => s + calculateNetPayable(e),
-      0
+      0,
     );
     return { totalAdvances, totalDeductions, totalNetRemaining };
   }, [employees]);
 
   const openActionModal = (
     emp: Employee,
-    type: EmployeeTransaction['type']
+    type: EmployeeTransaction["type"],
   ) => {
     setActionModal({ employee: emp, type });
-    if (type === 'حضور يومية') {
+    setActionError("");
+    if (type === "حضور يومية") {
       setActionAmount(String(emp.dailyRate));
-      setActionNotes('تسجيل حضور يومية عمل');
-    } else if (type === 'صرف راتب') {
+      setActionNotes("تسجيل حضور يومية عمل");
+    } else if (type === "صرف راتب") {
       setActionAmount(String(calculateNetPayable(emp)));
-      setActionNotes('تصفية وصرف مستحقات الراتب');
-    } else if (type === 'سلفة') {
-      setActionAmount('300');
-      setActionNotes('سلفة نقدية للعامل');
-    } else if (type === 'خصم/عجز') {
-      setActionAmount('100');
-      setActionNotes('خصم إداري / عجز');
+      setActionNotes("تصفية وصرف مستحقات الراتب");
+    } else if (type === "سلفة") {
+      setActionAmount("300");
+      setActionNotes("سلفة نقدية للعامل");
+    } else if (type === "خصم/عجز") {
+      setActionAmount("100");
+      setActionNotes("خصم إداري / عجز");
     } else {
-      setActionAmount('200');
-      setActionNotes('مكافأة التزام وتميز');
+      setActionAmount("200");
+      setActionNotes("مكافأة التزام وتميز");
     }
   };
 
   const handleConfirmAction = () => {
     if (!actionModal) return;
-    const amt = parseFloat(actionAmount) || 0;
-    if (amt <= 0) return;
-    onRecordEmployeeAction(
-      actionModal.employee.id,
-      actionModal.type,
-      amt,
-      actionNotes
-    );
+    // الحساب من بيانات العامل الحيّة حتى لا نصرف على أساس عدد أبطأ
+    const liveEmp = employees.find((e) => e.id === actionModal.employee.id);
+    if (!liveEmp) {
+      setActionError("لم يُعثر على بيانات العامل؛ أعد فتح النافذة");
+      return;
+    }
+    if (actionModal.type === "حضور يومية") {
+      setActionError("");
+      const accepted = onRecordEmployeeAction(
+        liveEmp.id,
+        "حضور يومية",
+        liveEmp.dailyRate,
+        actionNotes,
+      );
+      if (accepted === false) {
+        setActionError("لم تُسجل الحركة؛ راجع التنبيه وحاول مرة أخرى");
+        return;
+      }
+      setActionModal(null);
+      return;
+    }
+    const amt = parseFloat(actionAmount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setActionError("أدخل مبلغًا صحيحًا أكبر من صفر");
+      return;
+    }
+    if (actionModal.type === "صرف راتب") {
+      const net = calculateNetPayable(liveEmp);
+      if (amt > net + 0.011) {
+        setActionError(
+          `المبلغ أكبر من صافي مستحقات العامل (${net.toFixed(2)} ج.م)؛ عدّل القيمة`,
+        );
+        return;
+      }
+    }
+    setActionError("");
+    if (
+      onRecordEmployeeAction(liveEmp.id, actionModal.type, amt, actionNotes) ===
+      false
+    ) {
+      setActionError("لم تُسجل الحركة؛ راجع التنبيه وحاول مرة أخرى");
+      return;
+    }
     setActionModal(null);
   };
 
   const handleCreateEmployee = () => {
-    if (!newEmpName.trim()) return;
-    onAddNewEmployee({
+    const monthly = Number(newEmpMonthly);
+    const daily = Number(newEmpDaily);
+    if (
+      !newEmpName.trim() ||
+      !newEmpMonthly.trim() ||
+      !newEmpDaily.trim() ||
+      !Number.isFinite(monthly) ||
+      monthly < 0 ||
+      !Number.isFinite(daily) ||
+      daily < 0
+    ) {
+      setNewEmployeeError("أدخل اسم العامل وقيم رواتب صحيحة غير سالبة");
+      return;
+    }
+    const accepted = onAddNewEmployee({
       name: newEmpName.trim(),
       role: newEmpRole,
-      phone: newEmpPhone || '-',
+      phone: newEmpPhone || "-",
       salaryType: newEmpSalaryType,
-      baseMonthlySalary: parseFloat(newEmpMonthly) || 5000,
-      dailyRate: parseFloat(newEmpDaily) || 180,
+      baseMonthlySalary: monthly,
+      dailyRate: daily,
       workedDaysThisMonth: 0,
       totalAdvances: 0,
       totalDeductions: 0,
       totalBonuses: 0,
       totalPaidOut: 0,
     });
-    setNewEmpName('');
+    if (accepted === false) {
+      setNewEmployeeError("لم يُحفظ العامل؛ راجع التنبيه والبيانات");
+      return;
+    }
+    setNewEmployeeError("");
+    setNewEmpName("");
     setShowAddEmpModal(false);
   };
 
@@ -698,22 +785,22 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
       {/* التبويبات */}
       <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 sticky top-[64px] z-20">
         <button
-          onClick={() => setActiveTab('staff')}
+          onClick={() => setActiveTab("staff")}
           className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === 'staff'
-              ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]'
-              : 'bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]'
+            activeTab === "staff"
+              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
+              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
           }`}
         >
           <Users className="w-4 h-4 text-[#D4AF37]" />
           بطاقات العمال ({employees.length})
         </button>
         <button
-          onClick={() => setActiveTab('ledger')}
+          onClick={() => setActiveTab("ledger")}
           className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === 'ledger'
-              ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]'
-              : 'bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]'
+            activeTab === "ledger"
+              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
+              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
           }`}
         >
           <History className="w-4 h-4 text-[#D4AF37]" />
@@ -727,29 +814,29 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
           <div className="bg-white/5 border border-white/10 rounded-2xl p-2.5">
             <div className="text-[10px] text-[#D4AF37]">إجمالي السلف</div>
             <div className="text-sm font-black text-amber-300 mt-0.5">
-              {totals.totalAdvances.toLocaleString('ar-EG')} ج.م
+              {totals.totalAdvances.toLocaleString("ar-EG")} ج.م
             </div>
           </div>
           <div className="bg-white/5 border border-white/10 rounded-2xl p-2.5">
             <div className="text-[10px] text-[#D4AF37]">الخصومات والعجز</div>
             <div className="text-sm font-black text-red-400 mt-0.5">
-              {totals.totalDeductions.toLocaleString('ar-EG')} ج.م
+              {totals.totalDeductions.toLocaleString("ar-EG")} ج.م
             </div>
           </div>
           <div className="bg-white/5 border border-white/10 rounded-2xl p-2.5">
             <div className="text-[10px] text-[#D4AF37]">المتبقي للصرف</div>
             <div className="text-sm font-black text-emerald-400 mt-0.5">
-              {totals.totalNetRemaining.toLocaleString('ar-EG')} ج.م
+              {totals.totalNetRemaining.toLocaleString("ar-EG")} ج.م
             </div>
           </div>
         </div>
 
-        {activeTab === 'staff' && (
+        {activeTab === "staff" && (
           <div className="space-y-3.5">
             {employees.map((emp) => {
               const netPayable = calculateNetPayable(emp);
               const earned =
-                emp.salaryType === 'يومية'
+                emp.salaryType === "يومية"
                   ? emp.workedDaysThisMonth * emp.dailyRate
                   : emp.baseMonthlySalary;
 
@@ -769,8 +856,8 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                         </span>
                       </div>
                       <div className="text-[11px] text-[#7A6855] mt-0.5">
-                        نظام الحساب: <b>{emp.salaryType}</b> (اليومية:{' '}
-                        {emp.dailyRate} ج.م • حضور: {emp.workedDaysThisMonth}{' '}
+                        نظام الحساب: <b>{emp.salaryType}</b> (اليومية:{" "}
+                        {emp.dailyRate} ج.م • حضور: {emp.workedDaysThisMonth}{" "}
                         يوم)
                       </div>
                     </div>
@@ -781,7 +868,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                           الصافي المتبقي
                         </div>
                         <div className="text-sm font-black text-emerald-700">
-                          {netPayable.toLocaleString('ar-EG')} ج.م
+                          {netPayable.toLocaleString("ar-EG")} ج.م
                         </div>
                       </div>
                       <button
@@ -815,7 +902,9 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                       </div>
                     </div>
                     <div>
-                      <div className="text-[10px] text-[#7A6855]">ما تم صرفه</div>
+                      <div className="text-[10px] text-[#7A6855]">
+                        ما تم صرفه
+                      </div>
                       <div className="font-black text-blue-700">
                         {emp.totalPaidOut}
                       </div>
@@ -825,7 +914,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                   {/* أزرار العمليات السريعة للعامل */}
                   <div className="grid grid-cols-5 gap-1.5 pt-1">
                     <button
-                      onClick={() => openActionModal(emp, 'سلفة')}
+                      onClick={() => openActionModal(emp, "سلفة")}
                       className="bg-[#FDF8EB] hover:bg-[#F5E8C7] text-[#9E7918] border border-[#E8D8A8] rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-[10px] font-extrabold"
                     >
                       <Wallet className="w-3.5 h-3.5" />
@@ -833,7 +922,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                     </button>
 
                     <button
-                      onClick={() => openActionModal(emp, 'حضور يومية')}
+                      onClick={() => openActionModal(emp, "حضور يومية")}
                       className="bg-[#FAF8F4] hover:bg-stone-200/70 text-[#1E1612] border border-[#DFD7C6] rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-[10px] font-extrabold"
                     >
                       <CalendarCheck className="w-3.5 h-3.5 text-emerald-700" />
@@ -841,7 +930,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                     </button>
 
                     <button
-                      onClick={() => openActionModal(emp, 'خصم/عجز')}
+                      onClick={() => openActionModal(emp, "خصم/عجز")}
                       className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-[10px] font-extrabold"
                     >
                       <AlertOctagon className="w-3.5 h-3.5" />
@@ -849,7 +938,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                     </button>
 
                     <button
-                      onClick={() => openActionModal(emp, 'مكافأة')}
+                      onClick={() => openActionModal(emp, "مكافأة")}
                       className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-[10px] font-extrabold"
                     >
                       <Award className="w-3.5 h-3.5" />
@@ -857,7 +946,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                     </button>
 
                     <button
-                      onClick={() => openActionModal(emp, 'صرف راتب')}
+                      onClick={() => openActionModal(emp, "صرف راتب")}
                       className="bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-[10px] font-extrabold"
                     >
                       <Banknote className="w-3.5 h-3.5 text-[#D4AF37]" />
@@ -871,7 +960,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
         )}
 
         {/* سجل حركات العمال (السلف واليوميات والخصومات) */}
-        {activeTab === 'ledger' && (
+        {activeTab === "ledger" && (
           <div className="space-y-2.5">
             {transactions.map((tr) => (
               <div
@@ -885,13 +974,13 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                     </span>
                     <span
                       className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                        tr.type === 'سلفة'
-                          ? 'bg-amber-100 text-amber-800'
-                          : tr.type === 'خصم/عجز'
-                          ? 'bg-red-100 text-red-700'
-                          : tr.type === 'صرف راتب'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-emerald-100 text-emerald-800'
+                        tr.type === "سلفة"
+                          ? "bg-amber-100 text-amber-800"
+                          : tr.type === "خصم/عجز"
+                            ? "bg-red-100 text-red-700"
+                            : tr.type === "صرف راتب"
+                              ? "bg-blue-100 text-blue-800"
+                              : "bg-emerald-100 text-emerald-800"
                       }`}
                     >
                       {tr.type}
@@ -903,7 +992,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                   </div>
                 </div>
                 <div className="text-sm font-black text-[#1E1612]">
-                  {tr.amount.toLocaleString('ar-EG')} ج.م
+                  {tr.amount.toLocaleString("ar-EG")} ج.م
                 </div>
               </div>
             ))}
@@ -918,14 +1007,23 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
             <h3 className="text-sm font-extrabold text-[#1E1612]">
               تسجيل ({actionModal.type}) — {actionModal.employee.name}
             </h3>
+            {actionError && (
+              <p className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                {actionError}
+              </p>
+            )}
             <div>
               <label className="text-xs font-bold text-[#7A6855] block mb-1">
                 المبلغ (ج.م)
               </label>
               <input
                 type="number"
+                aria-label="مبلغ حركة العامل"
                 value={actionAmount}
-                onChange={(e) => setActionAmount(e.target.value)}
+                onChange={(e) => {
+                  setActionAmount(e.target.value);
+                  if (actionError) setActionError("");
+                }}
                 className="w-full border border-[#DFD7C6] rounded-xl px-3.5 py-2.5 text-base font-black text-center"
               />
             </div>
@@ -965,6 +1063,11 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
             <h3 className="text-base font-extrabold text-[#1E1612]">
               إضافة عامل أو باريستا جديد
             </h3>
+            {newEmployeeError && (
+              <p role="alert" className="text-red-700">
+                {newEmployeeError}
+              </p>
+            )}
             <input
               type="text"
               value={newEmpName}
@@ -980,7 +1083,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                 <select
                   value={newEmpRole}
                   onChange={(e) =>
-                    setNewEmpRole(e.target.value as Employee['role'])
+                    setNewEmpRole(e.target.value as Employee["role"])
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-white"
                 >
@@ -998,7 +1101,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                   value={newEmpSalaryType}
                   onChange={(e) =>
                     setNewEmpSalaryType(
-                      e.target.value as Employee['salaryType']
+                      e.target.value as Employee["salaryType"],
                     )
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-white"

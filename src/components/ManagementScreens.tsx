@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo } from "react";
 import {
   ChevronRight,
   ChevronLeft,
@@ -26,7 +26,7 @@ import {
   FileText,
   Upload,
   FileSpreadsheet,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   InventoryItem,
   Supplier,
@@ -39,23 +39,44 @@ import {
   AuditLogEntry,
   ShiftRecord,
   ItemCategory,
-} from '../types/erp';
+} from "../types/erp";
 import {
   getSupabaseCredentials,
   saveSupabaseCredentials,
-} from '../lib/supabaseSync';
+} from "../lib/supabaseSync";
 import {
   InvoiceReceiptModal,
   AccountStatementModal,
-} from './ReceiptAndStatementModals';
+} from "./ReceiptAndStatementModals";
+import { businessDate } from "../lib/dates";
+import { nextItemCode, itemEditPatch } from "../lib/operationChecks";
+
+// توليد كود فريد غير متنازع مع الأكواد الحالية (كان الرقم العشوائي يتكرر أحياناً)
+function uniqueCode(existingCodes: string[], make: () => string): string {
+  const sample = make();
+  const prefix = sample.split("-")[0];
+  return nextItemCode(
+    existingCodes.map((code) => ({ code })),
+    prefix,
+    110,
+  );
+}
+
+// التحقق أن كل القيم أرقام صحيحة غير سالبة (لحقول النص في النوافذ)
+function allValidNumbers(values: string[]): boolean {
+  return values.every((v) => {
+    const n = Number(v);
+    return typeof v === "string" && !!v.trim() && Number.isFinite(n) && n >= 0;
+  });
+}
 
 // ============================================================================
 // 0. شاشة المنتجات والتسعير (ProductsCatalogScreen) - الأساس الذي تعتمد عليه الدورة التشغيلية كلها
 // ============================================================================
 interface ProductsCatalogScreenProps {
   items: InventoryItem[];
-  onAddNewItem: (item: Omit<InventoryItem, 'id'>) => void;
-  onUpdateItem: (id: string, patch: Partial<InventoryItem>) => void;
+  onAddNewItem: (item: Omit<InventoryItem, "id">) => void;
+  onUpdateItem: (id: string, patch: Partial<InventoryItem>) => void | boolean;
   onDeleteItem: (id: string) => void;
   onNavigateToProduction: () => void;
   onNavigateToInventory: () => void;
@@ -73,32 +94,39 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
   onNavigateToPurchase,
   onBack,
 }) => {
-  const [filterCat, setFilterCat] = useState<string>('all');
-  const [search, setSearch] = useState('');
+  const [filterCat, setFilterCat] = useState<string>("all");
+  const [search, setSearch] = useState("");
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [editingOriginal, setEditingOriginal] = useState<InventoryItem | null>(
+    null,
+  );
   const [showAddModal, setShowAddModal] = useState(false);
+  // قيم نصية مؤقتة لحقول الأرقام حتى لا يفقد المستخدم ما يكتبه عند الإدخال الوسيط
+  const [editDraft, setEditDraft] = useState<Record<string, string>>({});
+  const [editError, setEditError] = useState("");
+  const [addError, setAddError] = useState("");
 
   // حقول تعريف منتج جديد
-  const [newName, setNewName] = useState('');
-  const [newCode, setNewCode] = useState('');
-  const [newCat, setNewCat] = useState<ItemCategory>('raw_bean');
+  const [newName, setNewName] = useState("");
+  const [newCode, setNewCode] = useState("");
+  const [newCat, setNewCat] = useState<ItemCategory>("raw_bean");
   const [newRoast, setNewRoast] = useState<
-    'فاتح' | 'وسط' | 'غامق' | 'إسبريسو' | 'بدون'
-  >('وسط');
-  const [newUnit, setNewUnit] = useState<'kg' | 'piece' | 'liter'>('kg');
-  const [newStock, setNewStock] = useState('0');
-  const [newMinStock, setNewMinStock] = useState('5');
-  const [newCost, setNewCost] = useState('360');
-  const [newRetail, setNewRetail] = useState('480');
-  const [newWholesale, setNewWholesale] = useState('425');
+    "فاتح" | "وسط" | "غامق" | "إسبريسو" | "بدون"
+  >("وسط");
+  const [newUnit, setNewUnit] = useState<"kg" | "piece" | "liter">("kg");
+  const [newStock, setNewStock] = useState("0");
+  const [newMinStock, setNewMinStock] = useState("5");
+  const [newCost, setNewCost] = useState("360");
+  const [newRetail, setNewRetail] = useState("480");
+  const [newWholesale, setNewWholesale] = useState("425");
 
   const catalogStats = useMemo(() => {
     const rawAndSpices = items.filter(
-      (i) => i.category === 'raw_bean' || i.category === 'raw_spice',
+      (i) => i.category === "raw_bean" || i.category === "raw_spice",
     ).length;
     const blendsAndDrinks = items.filter(
       (i) =>
-        i.category === 'manufactured_blend' || i.category === 'drink_recipe',
+        i.category === "manufactured_blend" || i.category === "drink_recipe",
     ).length;
     const sellable = items.filter((i) => i.retailPrice > 0);
     const avgMargin =
@@ -122,7 +150,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 
   const filtered = useMemo(() => {
     return items.filter((i) => {
-      if (filterCat !== 'all' && i.category !== filterCat) return false;
+      if (filterCat !== "all" && i.category !== filterCat) return false;
       if (
         search.trim() &&
         !i.name.toLowerCase().includes(search.toLowerCase()) &&
@@ -136,75 +164,179 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 
   const getCategoryBadge = (cat: ItemCategory) => {
     switch (cat) {
-      case 'raw_bean':
+      case "raw_bean":
         return {
-          label: 'حبوب بن خام',
-          cls: 'bg-[#FDF8EB] text-[#9E7918] border-[#E8D8A8]',
+          label: "حبوب بن خام",
+          cls: "bg-[#FDF8EB] text-[#9E7918] border-[#E8D8A8]",
         };
-      case 'manufactured_blend':
+      case "manufactured_blend":
         return {
-          label: 'توليفة مصنعة',
-          cls: 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]',
+          label: "توليفة مصنعة",
+          cls: "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]",
         };
-      case 'raw_spice':
+      case "raw_spice":
         return {
-          label: 'تحويجة وخامات',
-          cls: 'bg-amber-50 text-amber-800 border-amber-200',
+          label: "تحويجة وخامات",
+          cls: "bg-amber-50 text-amber-800 border-amber-200",
         };
-      case 'drink_recipe':
+      case "drink_recipe":
         return {
-          label: 'مشروب كاشير',
-          cls: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+          label: "مشروب كاشير",
+          cls: "bg-emerald-50 text-emerald-800 border-emerald-200",
         };
       default:
         return {
-          label: 'بيع مباشر',
-          cls: 'bg-slate-100 text-slate-700 border-slate-200',
+          label: "بيع مباشر",
+          cls: "bg-slate-100 text-slate-700 border-slate-200",
         };
     }
   };
 
   const handleOpenAddModal = () => {
-    setNewName('');
-    setNewCode(`BN-${Math.floor(110 + Math.random() * 880)}`);
-    setNewCat('raw_bean');
-    setNewRoast('وسط');
-    setNewUnit('kg');
-    setNewStock('0');
-    setNewMinStock('5');
-    setNewCost('360');
-    setNewRetail('480');
-    setNewWholesale('425');
+    setNewName("");
+    setNewCode(
+      uniqueCode(
+        items.map((i) => i.code),
+        () => `BN-${Math.floor(110 + Math.random() * 880)}`,
+      ),
+    );
+    setNewCat("raw_bean");
+    setNewRoast("وسط");
+    setNewUnit("kg");
+    setNewStock("0");
+    setNewMinStock("5");
+    setNewCost("360");
+    setNewRetail("480");
+    setNewWholesale("425");
+    setAddError("");
     setShowAddModal(true);
   };
 
+  // فتح نافذة التعديل: نسخة حيّة من الصنف + مسودة نصية لكل حقل رقمي
+  const openEditItem = (item: InventoryItem) => {
+    setEditingItem({ ...item });
+    setEditingOriginal(item);
+    setEditDraft({
+      costPrice: String(item.costPrice),
+      retailPrice: String(item.retailPrice),
+      wholesalePrice: String(item.wholesalePrice),
+      stock: String(item.stock),
+      minStock: String(item.minStock),
+    });
+    setEditError("");
+  };
+
+  const handleSaveItemEdits = () => {
+    if (!editingItem) return;
+    if (
+      !allValidNumbers([
+        editDraft.costPrice,
+        editDraft.retailPrice,
+        editDraft.wholesalePrice,
+        editDraft.stock,
+        editDraft.minStock,
+      ])
+    ) {
+      setEditError("أدخل أرقامًا صحيحة غير سالبة؛ لا تعتمد القيمة حتى تكتمل");
+      return;
+    }
+    // نأخذ الاسم من النافذة (التعديل النصي)، مع الرجوع لاسم الكتالوج لو تُرك فارغًا
+    const live = items.find((i) => i.id === editingItem.id);
+    try {
+      const patch = itemEditPatch(editingOriginal!, live, {
+        name: editingItem.name.trim() || (live ? live.name : "صنف"),
+        category: editingItem.category,
+        costPrice: parseFloat(editDraft.costPrice),
+        retailPrice: parseFloat(editDraft.retailPrice),
+        wholesalePrice: parseFloat(editDraft.wholesalePrice),
+        stock: parseFloat(editDraft.stock),
+        minStock: parseFloat(editDraft.minStock),
+      });
+      if (onUpdateItem(editingItem.id, patch) === false) {
+        setEditError("لم تُحفظ التعديلات؛ راجع التنبيه");
+        return;
+      }
+    } catch (error) {
+      setEditError((error as Error).message);
+      return;
+    }
+    setEditingItem(null);
+  };
+
   const handleCreateProduct = () => {
-    if (!newName.trim()) return;
-    const cost = parseFloat(newCost) || 0;
-    const isDrink = newCat === 'drink_recipe';
-    const isDirect = newCat === 'direct_product';
-    const effectiveUnit = isDrink || isDirect ? 'piece' : newUnit;
+    if (!newName.trim()) {
+      setAddError("أدخل اسم المنتج أولاً");
+      return;
+    }
+    const cost = parseFloat(newCost);
+    const retail = parseFloat(newRetail);
+    const wholesale = parseFloat(newWholesale);
+    if (
+      !Number.isFinite(cost) ||
+      cost < 0 ||
+      !Number.isFinite(retail) ||
+      retail < 0 ||
+      !Number.isFinite(wholesale) ||
+      wholesale < 0
+    ) {
+      setAddError("أدخل أرقامًا صحيحة غير سالبة في التكلفة والأسعار");
+      return;
+    }
+    const isDrink = newCat === "drink_recipe";
+    const isDirect = newCat === "direct_product";
+    const effectiveUnit =
+      isDrink || isDirect
+        ? "piece"
+        : newCat === "manufactured_blend"
+          ? "kg"
+          : newUnit;
+    const stockNum = parseFloat(newStock);
+    const minNum = parseFloat(newMinStock);
+    if (
+      !Number.isFinite(stockNum) ||
+      stockNum < 0 ||
+      !Number.isFinite(minNum) ||
+      minNum < 0
+    ) {
+      setAddError("الرصيد وحد النواقص يجب أن يكونا أرقامًا غير سالبة");
+      return;
+    }
+
+    // منع تكرار الكود مع كتالوج الأصناف الحالي
+    const finalCode =
+      newCode.trim() ||
+      uniqueCode(
+        items.map((i) => i.code),
+        () => `BN-${Math.floor(110 + Math.random() * 880)}`,
+      );
+    if (items.some((i) => i.code === finalCode)) {
+      setAddError(
+        `الكود (${finalCode}) مستخدم بالفعل لعنصر آخر؛ غيّره أو اتركه فارغاً`,
+      );
+      return;
+    }
 
     onAddNewItem({
-      code: newCode.trim() || `BN-${Math.floor(110 + Math.random() * 880)}`,
+      code: finalCode,
       name: newName.trim(),
       category: newCat,
       roastLevel:
-        newCat === 'raw_bean' || newCat === 'manufactured_blend'
+        newCat === "raw_bean" || newCat === "manufactured_blend"
           ? newRoast
-          : 'بدون',
+          : "بدون",
       baseUnit: effectiveUnit,
-      stock: isDrink ? 999 : parseFloat(newStock) || 0,
-      minStock: isDrink ? 0 : parseFloat(newMinStock) || 0,
+      stock: isDrink ? 999 : stockNum,
+      minStock: isDrink ? 0 : minNum,
       costPrice: cost,
       lastPurchasePrice: cost,
-      retailPrice: parseFloat(newRetail) || 0,
-      wholesalePrice: parseFloat(newWholesale) || 0,
+      retailPrice: retail,
+      wholesalePrice: wholesale,
       canSellDirectly: true,
-      hasRecipe: newCat === 'manufactured_blend' || newCat === 'drink_recipe',
+      hasRecipe: false,
       recipe: [],
       supplierPrices: [],
     });
+    setAddError("");
     setShowAddModal(false);
   };
 
@@ -257,14 +389,14 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
             <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-2.5">
               <div className="text-[10px] text-[#D8CBB8]">بن خام وتحويجة</div>
               <div className="text-sm font-black text-white mt-0.5">
-                {catalogStats.rawAndSpices}{' '}
+                {catalogStats.rawAndSpices}{" "}
                 <span className="text-[10px] text-[#D4AF37]">صنف</span>
               </div>
             </div>
             <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-2.5">
               <div className="text-[10px] text-[#D8CBB8]">توليفات ومشروبات</div>
               <div className="text-sm font-black text-[#FBF5B7] mt-0.5">
-                {catalogStats.blendsAndDrinks}{' '}
+                {catalogStats.blendsAndDrinks}{" "}
                 <span className="text-[10px] text-[#D4AF37]">صنف</span>
               </div>
             </div>
@@ -309,20 +441,20 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
         {/* فلاتر تصنيف المنتجات */}
         <div className="flex gap-1.5 overflow-x-auto pb-1">
           {[
-            { id: 'all', label: `كل المنتجات (${items.length})` },
-            { id: 'raw_bean', label: 'حبوب بن خام' },
-            { id: 'manufactured_blend', label: 'توليفات البن' },
-            { id: 'raw_spice', label: 'تحويجة وخامات' },
-            { id: 'drink_recipe', label: 'مشروبات الكاشير' },
-            { id: 'direct_product', label: 'بيع مباشر' },
+            { id: "all", label: `كل المنتجات (${items.length})` },
+            { id: "raw_bean", label: "حبوب بن خام" },
+            { id: "manufactured_blend", label: "توليفات البن" },
+            { id: "raw_spice", label: "تحويجة وخامات" },
+            { id: "drink_recipe", label: "مشروبات الكاشير" },
+            { id: "direct_product", label: "بيع مباشر" },
           ].map((t) => (
             <button
               key={t.id}
               onClick={() => setFilterCat(t.id)}
               className={`px-3 py-1.5 rounded-xl text-xs font-extrabold shrink-0 border transition ${
                 filterCat === t.id
-                  ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]'
-                  : 'bg-white text-[#5C4B3E] border-[#E6DEC8]'
+                  ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
+                  : "bg-white text-[#5C4B3E] border-[#E6DEC8]"
               }`}
             >
               {t.label}
@@ -353,11 +485,11 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
             {filtered.map((item) => {
               const catInfo = getCategoryBadge(item.category);
               const unitLabel =
-                item.baseUnit === 'kg'
-                  ? 'كجم'
-                  : item.baseUnit === 'liter'
-                    ? 'لتر'
-                    : 'كوب/قطعة';
+                item.baseUnit === "kg"
+                  ? "كجم"
+                  : item.baseUnit === "liter"
+                    ? "لتر"
+                    : "كوب/قطعة";
               const profitPerUnit = Number(
                 (item.retailPrice - item.costPrice).toFixed(1),
               );
@@ -366,11 +498,11 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                   ? Math.round((profitPerUnit / item.retailPrice) * 100)
                   : 0;
               const price100g =
-                item.baseUnit === 'kg'
+                item.baseUnit === "kg"
                   ? Math.round(item.retailPrice / 10)
                   : null;
               const price250g =
-                item.baseUnit === 'kg'
+                item.baseUnit === "kg"
                   ? Math.round(item.retailPrice / 4)
                   : null;
 
@@ -391,7 +523,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                         >
                           {catInfo.label}
                         </span>
-                        {item.roastLevel && item.roastLevel !== 'بدون' && (
+                        {item.roastLevel && item.roastLevel !== "بدون" && (
                           <span className="text-[10px] font-bold bg-[#FAF8F4] text-[#6E5D4F] px-2 py-0.5 rounded border border-[#E6DEC8]">
                             تحميص {item.roastLevel}
                           </span>
@@ -404,7 +536,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
-                        onClick={() => setEditingItem(item)}
+                        onClick={() => openEditItem(item)}
                         className="text-xs font-extrabold text-[#1E1612] bg-[#FDF8EB] border border-[#C59B27] px-2.5 py-1 rounded-xl hover:bg-[#F5EBD0] transition"
                       >
                         تعديل السعر/البيانات
@@ -481,8 +613,8 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                       </span>
                     )}
 
-                    {(item.category === 'manufactured_blend' ||
-                      item.category === 'drink_recipe') && (
+                    {(item.category === "manufactured_blend" ||
+                      item.category === "drink_recipe") && (
                       <button
                         onClick={onNavigateToProduction}
                         className="text-[10px] font-black text-[#1E1612] bg-[#FAF8F4] border border-[#C59B27] px-2.5 py-1 rounded-lg flex items-center gap-1"
@@ -491,7 +623,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                         <span>
                           {item.recipe && item.recipe.length > 0
                             ? `مكونات الوصفة (${item.recipe.length})`
-                            : 'ضبط مقادير الوصفة'}
+                            : "ضبط مقادير الوصفة"}
                         </span>
                       </button>
                     )}
@@ -548,10 +680,10 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                     onChange={(e) => {
                       const c = e.target.value as ItemCategory;
                       setNewCat(c);
-                      if (c === 'drink_recipe' || c === 'direct_product') {
-                        setNewUnit('piece');
+                      if (c === "drink_recipe" || c === "direct_product") {
+                        setNewUnit("piece");
                       } else {
-                        setNewUnit('kg');
+                        setNewUnit("kg");
                       }
                     }}
                     className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-[#FAF8F4]"
@@ -581,7 +713,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                   <select
                     value={newUnit}
                     onChange={(e) =>
-                      setNewUnit(e.target.value as 'kg' | 'piece' | 'liter')
+                      setNewUnit(e.target.value as "kg" | "piece" | "liter")
                     }
                     className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-[#FAF8F4]"
                   >
@@ -594,7 +726,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 </div>
               </div>
 
-              {(newCat === 'raw_bean' || newCat === 'manufactured_blend') && (
+              {(newCat === "raw_bean" || newCat === "manufactured_blend") && (
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
                     <label className="text-xs font-bold text-[#7A6855] block mb-1">
@@ -605,11 +737,11 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                       onChange={(e) =>
                         setNewRoast(
                           e.target.value as
-                            | 'فاتح'
-                            | 'وسط'
-                            | 'غامق'
-                            | 'إسبريسو'
-                            | 'بدون',
+                            | "فاتح"
+                            | "وسط"
+                            | "غامق"
+                            | "إسبريسو"
+                            | "بدون",
                         )
                       }
                       className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-[#FAF8F4]"
@@ -670,7 +802,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 </div>
               </div>
 
-              {newCat !== 'drink_recipe' && (
+              {newCat !== "drink_recipe" && (
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
                     <label className="text-[11px] font-bold text-[#7A6855] block mb-1">
@@ -712,6 +844,11 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 إلغاء
               </button>
             </div>
+            {addError && (
+              <p className="text-[11px] font-bold text-red-600 text-center">
+                {addError}
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -764,12 +901,9 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 </label>
                 <input
                   type="number"
-                  value={editingItem.costPrice}
+                  value={editDraft.costPrice ?? ""}
                   onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      costPrice: parseFloat(e.target.value) || 0,
-                    })
+                    setEditDraft({ ...editDraft, costPrice: e.target.value })
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-black"
                 />
@@ -780,12 +914,9 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 </label>
                 <input
                   type="number"
-                  value={editingItem.retailPrice}
+                  value={editDraft.retailPrice ?? ""}
                   onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      retailPrice: parseFloat(e.target.value) || 0,
-                    })
+                    setEditDraft({ ...editDraft, retailPrice: e.target.value })
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-black text-emerald-700"
                 />
@@ -796,11 +927,11 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 </label>
                 <input
                   type="number"
-                  value={editingItem.wholesalePrice}
+                  value={editDraft.wholesalePrice ?? ""}
                   onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      wholesalePrice: parseFloat(e.target.value) || 0,
+                    setEditDraft({
+                      ...editDraft,
+                      wholesalePrice: e.target.value,
                     })
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-black"
@@ -813,12 +944,9 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 <input
                   type="number"
                   step="0.25"
-                  value={editingItem.stock}
+                  value={editDraft.stock ?? ""}
                   onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      stock: parseFloat(e.target.value) || 0,
-                    })
+                    setEditDraft({ ...editDraft, stock: e.target.value })
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold"
                 />
@@ -829,31 +957,20 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 </label>
                 <input
                   type="number"
-                  value={editingItem.minStock}
+                  value={editDraft.minStock ?? ""}
                   onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      minStock: parseFloat(e.target.value) || 0,
-                    })
+                    setEditDraft({ ...editDraft, minStock: e.target.value })
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold"
                 />
               </div>
             </div>
+            {editError && (
+              <p className="text-[11px] font-bold text-red-600">{editError}</p>
+            )}
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => {
-                  onUpdateItem(editingItem.id, {
-                    name: editingItem.name,
-                    category: editingItem.category,
-                    costPrice: editingItem.costPrice,
-                    retailPrice: editingItem.retailPrice,
-                    wholesalePrice: editingItem.wholesalePrice,
-                    stock: editingItem.stock,
-                    minStock: editingItem.minStock,
-                  });
-                  setEditingItem(null);
-                }}
+                onClick={handleSaveItemEdits}
                 className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-black py-2.5 rounded-xl text-xs"
               >
                 حفظ التعديلات
@@ -877,22 +994,22 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 // ============================================================================
 interface InventoryScreenProps {
   items: InventoryItem[];
-  onAddNewItem: (item: Omit<InventoryItem, 'id'>) => void;
+  onAddNewItem: (item: Omit<InventoryItem, "id">) => void;
   onUpdateItemPricesAndStock: (
     id: string,
     patch: Partial<
       Pick<
         InventoryItem,
-        | 'name'
-        | 'category'
-        | 'stock'
-        | 'minStock'
-        | 'costPrice'
-        | 'retailPrice'
-        | 'wholesalePrice'
+        | "name"
+        | "category"
+        | "stock"
+        | "minStock"
+        | "costPrice"
+        | "retailPrice"
+        | "wholesalePrice"
       >
     >,
-  ) => void;
+  ) => void | boolean;
   onDeleteItem: (id: string) => void;
   onNavigateToProduction: () => void;
   onBack: () => void;
@@ -906,23 +1023,30 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   onNavigateToProduction,
   onBack,
 }) => {
-  const [filterCat, setFilterCat] = useState<string>('all');
-  const [search, setSearch] = useState('');
+  const [filterCat, setFilterCat] = useState<string>("all");
+  const [search, setSearch] = useState("");
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [editingOriginal, setEditingOriginal] = useState<InventoryItem | null>(
+    null,
+  );
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const [newName, setNewName] = useState('');
-  const [newCat, setNewCat] = useState<ItemCategory>('raw_bean');
-  const [newUnit, setNewUnit] = useState<'kg' | 'piece' | 'liter'>('kg');
-  const [newStock, setNewStock] = useState('10');
-  const [newMinStock, setNewMinStock] = useState('5');
-  const [newCost, setNewCost] = useState('350');
-  const [newRetail, setNewRetail] = useState('480');
-  const [newWholesale, setNewWholesale] = useState('420');
+  const [newName, setNewName] = useState("");
+  const [newCat, setNewCat] = useState<ItemCategory>("raw_bean");
+  const [newUnit, setNewUnit] = useState<"kg" | "piece" | "liter">("kg");
+  const [newStock, setNewStock] = useState("10");
+  const [newMinStock, setNewMinStock] = useState("5");
+  const [newCost, setNewCost] = useState("350");
+  const [newRetail, setNewRetail] = useState("480");
+  const [newWholesale, setNewWholesale] = useState("420");
+  // مسودة نصية لحقول التعديل الرقمية + رسالة خطأ داخلية
+  const [editDraft, setEditDraft] = useState<Record<string, string>>({});
+  const [editError, setEditError] = useState("");
+  const [addError, setAddError] = useState("");
 
   const filtered = useMemo(() => {
     return items.filter((i) => {
-      if (filterCat !== 'all' && i.category !== filterCat) return false;
+      if (filterCat !== "all" && i.category !== filterCat) return false;
       if (
         search.trim() &&
         !i.name.toLowerCase().includes(search.toLowerCase()) &&
@@ -937,32 +1061,108 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   const totalInventoryCapital = useMemo(
     () =>
       items
-        .filter((i) => i.category !== 'drink_recipe')
+        .filter((i) => i.category !== "drink_recipe")
         .reduce((s, i) => s + i.stock * i.costPrice, 0),
     [items],
   );
 
   const handleCreateItem = () => {
-    if (!newName.trim()) return;
-    const cost = parseFloat(newCost) || 0;
+    if (!newName.trim()) {
+      setAddError("أدخل اسم الصنف أولاً");
+      return;
+    }
+    const cost = parseFloat(newCost);
+    const retail = parseFloat(newRetail);
+    const wholesale = parseFloat(newWholesale);
+    const stock = parseFloat(newStock);
+    const minStock = parseFloat(newMinStock);
+    if (
+      !Number.isFinite(cost) ||
+      cost < 0 ||
+      !Number.isFinite(retail) ||
+      retail < 0 ||
+      !Number.isFinite(wholesale) ||
+      wholesale < 0 ||
+      !Number.isFinite(stock) ||
+      stock < 0 ||
+      !Number.isFinite(minStock) ||
+      minStock < 0
+    ) {
+      setAddError("أدخل أرقامًا صحيحة غير سالبة في الرصيد والأسعار");
+      return;
+    }
     onAddNewItem({
-      code: `BN-${Math.floor(110 + Math.random() * 880)}`,
+      code: uniqueCode(
+        items.map((i) => i.code),
+        () => `BN-${Math.floor(110 + Math.random() * 880)}`,
+      ),
       name: newName.trim(),
       category: newCat,
-      roastLevel: 'وسط',
+      roastLevel: "وسط",
       baseUnit: newUnit,
-      stock: parseFloat(newStock) || 0,
-      minStock: parseFloat(newMinStock) || 0,
+      stock,
+      minStock,
       costPrice: cost,
       lastPurchasePrice: cost,
-      retailPrice: parseFloat(newRetail) || 0,
-      wholesalePrice: parseFloat(newWholesale) || 0,
+      retailPrice: retail,
+      wholesalePrice: wholesale,
       canSellDirectly: true,
       hasRecipe: false,
       supplierPrices: [],
     });
-    setNewName('');
+    setAddError("");
+    setNewName("");
     setShowAddModal(false);
+  };
+
+  // فتح نافذة التعديل للصنف: نسخة حيّة + مسودة نصية للأرقام
+  const openEditItem = (item: InventoryItem) => {
+    setEditingItem({ ...item });
+    setEditingOriginal(item);
+    setEditDraft({
+      stock: String(item.stock),
+      minStock: String(item.minStock),
+      costPrice: String(item.costPrice),
+      retailPrice: String(item.retailPrice),
+      wholesalePrice: String(item.wholesalePrice),
+    });
+    setEditError("");
+  };
+
+  const handleSaveItemEdits = () => {
+    if (!editingItem) return;
+    if (
+      !allValidNumbers([
+        editDraft.stock,
+        editDraft.minStock,
+        editDraft.costPrice,
+        editDraft.retailPrice,
+        editDraft.wholesalePrice,
+      ])
+    ) {
+      setEditError("أدخل أرقامًا صحيحة غير سالبة؛ لا تعتمد القيمة حتى تكتمل");
+      return;
+    }
+    const live = items.find((i) => i.id === editingItem.id);
+    try {
+      const patch = itemEditPatch(editingOriginal!, live, {
+        name: editingItem.name.trim() || (live ? live.name : "صنف"),
+        category: editingItem.category,
+        stock: parseFloat(editDraft.stock),
+        minStock: parseFloat(editDraft.minStock),
+        costPrice: parseFloat(editDraft.costPrice),
+        retailPrice: parseFloat(editDraft.retailPrice),
+        wholesalePrice: parseFloat(editDraft.wholesalePrice),
+      });
+      if (onUpdateItemPricesAndStock(editingItem.id, patch) === false) {
+        setEditError("لم تُحفظ التعديلات؛ راجع التنبيه");
+        return;
+      }
+    } catch (error) {
+      setEditError((error as Error).message);
+      return;
+    }
+    setEditingItem(null);
   };
 
   return (
@@ -977,7 +1177,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
         <div className="text-center">
           <h1 className="text-base font-extrabold">المخزن والأصناف</h1>
           <p className="text-[11px] text-[#D4AF37]">
-            القيمة: {Math.round(totalInventoryCapital).toLocaleString('ar-EG')}{' '}
+            القيمة: {Math.round(totalInventoryCapital).toLocaleString("ar-EG")}{" "}
             ج.م
           </p>
         </div>
@@ -994,20 +1194,20 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
         {/* فلاتر الأقسام المختصرة */}
         <div className="flex gap-1.5 overflow-x-auto pb-1">
           {[
-            { id: 'all', label: `الكل (${items.length})` },
-            { id: 'raw_bean', label: 'بن خام' },
-            { id: 'manufactured_blend', label: 'توليفات' },
-            { id: 'raw_spice', label: 'خامات وتحويجة' },
-            { id: 'drink_recipe', label: 'مشروبات' },
-            { id: 'direct_product', label: 'مباشر' },
+            { id: "all", label: `الكل (${items.length})` },
+            { id: "raw_bean", label: "بن خام" },
+            { id: "manufactured_blend", label: "توليفات" },
+            { id: "raw_spice", label: "خامات وتحويجة" },
+            { id: "drink_recipe", label: "مشروبات" },
+            { id: "direct_product", label: "مباشر" },
           ].map((t) => (
             <button
               key={t.id}
               onClick={() => setFilterCat(t.id)}
               className={`px-3 py-1.5 rounded-xl text-xs font-extrabold shrink-0 border transition ${
                 filterCat === t.id
-                  ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]'
-                  : 'bg-white text-[#5C4B3E] border-[#E6DEC8]'
+                  ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
+                  : "bg-white text-[#5C4B3E] border-[#E6DEC8]"
               }`}
             >
               {t.label}
@@ -1043,21 +1243,21 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
           <div className="space-y-2">
             {filtered.map((item) => {
               const isLow =
-                item.category !== 'drink_recipe' && item.stock <= item.minStock;
+                item.category !== "drink_recipe" && item.stock <= item.minStock;
               const unitLabel =
-                item.baseUnit === 'kg'
-                  ? 'كجم'
-                  : item.baseUnit === 'liter'
-                    ? 'لتر'
-                    : 'قطعة';
+                item.baseUnit === "kg"
+                  ? "كجم"
+                  : item.baseUnit === "liter"
+                    ? "لتر"
+                    : "قطعة";
 
               return (
                 <div
                   key={item.id}
                   className={`bg-white rounded-2xl p-3 border shadow-sm space-y-2 ${
                     isLow
-                      ? 'border-amber-500 bg-amber-50/20'
-                      : 'border-[#E6DEC8]'
+                      ? "border-amber-500 bg-amber-50/20"
+                      : "border-[#E6DEC8]"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -1077,13 +1277,21 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 
                     <div className="flex items-center gap-1.5">
                       <button
-                        onClick={() => setEditingItem(item)}
+                        onClick={() => openEditItem(item)}
                         className="text-xs font-extrabold text-[#9E7918] bg-[#FDF8EB] border border-[#E8D8A8] px-2.5 py-1 rounded-lg"
                       >
                         تعديل
                       </button>
                       <button
-                        onClick={() => onDeleteItem(item.id)}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `هل تريد حذف الصنف (${item.name}) نهائيًا؟`,
+                            )
+                          ) {
+                            onDeleteItem(item.id);
+                          }
+                        }}
                         className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg border border-red-100"
                         title="حذف الصنف"
                       >
@@ -1097,11 +1305,11 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                       <div className="text-[10px] text-[#7A6855]">الرصيد</div>
                       <div
                         className={`text-xs font-black ${
-                          isLow ? 'text-red-600' : 'text-[#1E1612]'
+                          isLow ? "text-red-600" : "text-[#1E1612]"
                         }`}
                       >
-                        {item.category === 'drink_recipe'
-                          ? 'وصفة'
+                        {item.category === "drink_recipe"
+                          ? "وصفة"
                           : `${item.stock} ${unitLabel}`}
                       </div>
                     </div>
@@ -1175,17 +1383,14 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               </div>
               <div>
                 <label className="text-xs font-bold text-[#7A6855] block mb-1">
-                  الرصيد ({editingItem.baseUnit === 'kg' ? 'كجم' : 'عدد'})
+                  الرصيد ({editingItem.baseUnit === "kg" ? "كجم" : "عدد"})
                 </label>
                 <input
                   type="number"
                   step="0.25"
-                  value={editingItem.stock}
+                  value={editDraft.stock ?? ""}
                   onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      stock: parseFloat(e.target.value) || 0,
-                    })
+                    setEditDraft({ ...editDraft, stock: e.target.value })
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
                 />
@@ -1196,12 +1401,9 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                 </label>
                 <input
                   type="number"
-                  value={editingItem.costPrice}
+                  value={editDraft.costPrice ?? ""}
                   onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      costPrice: parseFloat(e.target.value) || 0,
-                    })
+                    setEditDraft({ ...editDraft, costPrice: e.target.value })
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
                 />
@@ -1212,12 +1414,9 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                 </label>
                 <input
                   type="number"
-                  value={editingItem.minStock}
+                  value={editDraft.minStock ?? ""}
                   onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      minStock: parseFloat(e.target.value) || 0,
-                    })
+                    setEditDraft({ ...editDraft, minStock: e.target.value })
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
                 />
@@ -1228,12 +1427,9 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                 </label>
                 <input
                   type="number"
-                  value={editingItem.retailPrice}
+                  value={editDraft.retailPrice ?? ""}
                   onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      retailPrice: parseFloat(e.target.value) || 0,
-                    })
+                    setEditDraft({ ...editDraft, retailPrice: e.target.value })
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
                 />
@@ -1244,31 +1440,23 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                 </label>
                 <input
                   type="number"
-                  value={editingItem.wholesalePrice}
+                  value={editDraft.wholesalePrice ?? ""}
                   onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      wholesalePrice: parseFloat(e.target.value) || 0,
+                    setEditDraft({
+                      ...editDraft,
+                      wholesalePrice: e.target.value,
                     })
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
                 />
               </div>
             </div>
+            {editError && (
+              <p className="text-[11px] font-bold text-red-600">{editError}</p>
+            )}
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => {
-                  onUpdateItemPricesAndStock(editingItem.id, {
-                    name: editingItem.name,
-                    category: editingItem.category,
-                    stock: editingItem.stock,
-                    minStock: editingItem.minStock,
-                    costPrice: editingItem.costPrice,
-                    retailPrice: editingItem.retailPrice,
-                    wholesalePrice: editingItem.wholesalePrice,
-                  });
-                  setEditingItem(null);
-                }}
+                onClick={handleSaveItemEdits}
                 className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl"
               >
                 حفظ
@@ -1322,7 +1510,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                 <select
                   value={newUnit}
                   onChange={(e) =>
-                    setNewUnit(e.target.value as 'kg' | 'piece' | 'liter')
+                    setNewUnit(e.target.value as "kg" | "piece" | "liter")
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-white"
                 >
@@ -1407,7 +1595,7 @@ export const ShortagesScreen: React.FC<{
   onBack: () => void;
 }> = ({ items, onNavigateToPurchase, onNavigateToProduction, onBack }) => {
   const lowItems = items.filter(
-    (i) => i.category !== 'drink_recipe' && i.stock <= i.minStock,
+    (i) => i.category !== "drink_recipe" && i.stock <= i.minStock,
   );
 
   return (
@@ -1450,8 +1638,8 @@ export const ShortagesScreen: React.FC<{
                     {item.name}
                   </span>
                   <span className="text-xs font-black bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                    المتبقي: {item.stock}{' '}
-                    {item.baseUnit === 'kg' ? 'كجم' : 'وحدة'}
+                    المتبقي: {item.stock}{" "}
+                    {item.baseUnit === "kg" ? "كجم" : "وحدة"}
                   </span>
                 </div>
                 <div className="text-xs text-[#7A6855]">
@@ -1461,15 +1649,15 @@ export const ShortagesScreen: React.FC<{
                 </div>
                 <button
                   onClick={
-                    item.category === 'manufactured_blend'
+                    item.category === "manufactured_blend"
                       ? onNavigateToProduction
                       : onNavigateToPurchase
                   }
                   className="w-full bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] text-xs font-extrabold py-2 rounded-xl"
                 >
-                  {item.category === 'manufactured_blend'
-                    ? 'تصنيع في الإنتاج'
-                    : 'شراء من المورد'}
+                  {item.category === "manufactured_blend"
+                    ? "تصنيع في الإنتاج"
+                    : "شراء من المورد"}
                 </button>
               </div>
             );
@@ -1484,7 +1672,7 @@ export const ShortagesScreen: React.FC<{
 // 3. شاشة الموردين والعملاء (مع كشف حساب تفصيلي + واتساب + طباعة + إضافة وحذف)
 // ============================================================================
 export const SuppliersAndCustomersScreen: React.FC<{
-  mode: 'suppliers' | 'customers';
+  mode: "suppliers" | "customers";
   suppliers: Supplier[];
   customers: Customer[];
   purchaseInvoices: PurchaseInvoice[];
@@ -1501,9 +1689,9 @@ export const SuppliersAndCustomersScreen: React.FC<{
     notes?: string,
   ) => boolean;
   onDeletePayment?: (paymentId: string) => void;
-  onAddSupplier: (sup: Omit<Supplier, 'id'>) => void;
+  onAddSupplier: (sup: Omit<Supplier, "id">) => void;
   onDeleteSupplier: (id: string) => void;
-  onAddCustomer: (cust: Omit<Customer, 'id'>) => void;
+  onAddCustomer: (cust: Omit<Customer, "id">) => void;
   onDeleteCustomer: (id: string) => void;
   onBack: () => void;
 }> = ({
@@ -1530,45 +1718,56 @@ export const SuppliersAndCustomersScreen: React.FC<{
   const [statementTargetId, setStatementTargetId] = useState<string | null>(
     null,
   );
-  const [amountInput, setAmountInput] = useState('');
+  const [amountInput, setAmountInput] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newPhone, setNewPhone] = useState('');
-  const [newCatOrType, setNewCatOrType] = useState('');
-  const [newBalance, setNewBalance] = useState('0');
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newCatOrType, setNewCatOrType] = useState("");
+  const [newBalance, setNewBalance] = useState("0");
+  const [addModalError, setAddModalError] = useState("");
+  const [payModalError, setPayModalError] = useState("");
 
   const activeStatementEntity = useMemo(() => {
     if (!statementTargetId) return null;
-    if (mode === 'suppliers') {
+    if (mode === "suppliers") {
       return suppliers.find((s) => s.id === statementTargetId) || null;
     }
     return customers.find((c) => c.id === statementTargetId) || null;
   }, [statementTargetId, mode, suppliers, customers]);
 
   const handleCreate = () => {
-    if (!newName.trim()) return;
-    if (mode === 'suppliers') {
+    if (!newName.trim()) {
+      setAddModalError("أدخل الاسم أولاً");
+      return;
+    }
+    const balance = parseFloat(newBalance);
+    if (!Number.isFinite(balance) || balance < 0) {
+      setAddModalError("الرصيد الافتتاحي يجب أن يكون رقمًا غير سالب");
+      return;
+    }
+    if (mode === "suppliers") {
       onAddSupplier({
         name: newName.trim(),
-        phone: newPhone || '-',
-        category: newCatOrType || 'مورد بن وخامات',
-        balance: parseFloat(newBalance) || 0,
+        phone: newPhone || "-",
+        category: newCatOrType || "مورد بن وخامات",
+        balance,
         totalPurchases: 0,
         invoicesCount: 0,
       });
     } else {
       onAddCustomer({
         name: newName.trim(),
-        phone: newPhone || '-',
-        type: 'جملة - كافيه',
-        balance: parseFloat(newBalance) || 0,
+        phone: newPhone || "-",
+        type: "جملة - كافيه",
+        balance,
         totalSales: 0,
         invoicesCount: 0,
       });
     }
-    setNewName('');
-    setNewPhone('');
-    setNewBalance('0');
+    setAddModalError("");
+    setNewName("");
+    setNewPhone("");
+    setNewBalance("0");
     setShowAddModal(false);
   };
 
@@ -1582,7 +1781,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
           <ChevronRight className="w-6 h-6" />
         </button>
         <h1 className="text-base font-extrabold">
-          {mode === 'suppliers'
+          {mode === "suppliers"
             ? `الموردين (${suppliers.length})`
             : `العملاء (${customers.length})`}
         </h1>
@@ -1596,7 +1795,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
       </div>
 
       <div className="p-3.5 space-y-2.5">
-        {mode === 'suppliers'
+        {mode === "suppliers"
           ? suppliers.map((sup) => (
               <div
                 key={sup.id}
@@ -1616,10 +1815,10 @@ export const SuppliersAndCustomersScreen: React.FC<{
                       <div className="text-[10px] text-[#7A6855]">له</div>
                       <div
                         className={`text-sm font-black ${
-                          sup.balance > 0 ? 'text-red-600' : 'text-emerald-700'
+                          sup.balance > 0 ? "text-red-600" : "text-emerald-700"
                         }`}
                       >
-                        {sup.balance.toLocaleString('ar-EG')} ج.م
+                        {sup.balance.toLocaleString("ar-EG")} ج.م
                       </div>
                     </div>
                     <button
@@ -1677,11 +1876,11 @@ export const SuppliersAndCustomersScreen: React.FC<{
                       <div
                         className={`text-sm font-black ${
                           cust.balance > 0
-                            ? 'text-[#B38728]'
-                            : 'text-emerald-700'
+                            ? "text-[#B38728]"
+                            : "text-emerald-700"
                         }`}
                       >
-                        {cust.balance.toLocaleString('ar-EG')} ج.م
+                        {cust.balance.toLocaleString("ar-EG")} ج.م
                       </div>
                     </div>
                     <button
@@ -1724,13 +1923,13 @@ export const SuppliersAndCustomersScreen: React.FC<{
       {/* نافذة كشف الحساب التفصيلي للمورد أو العميل */}
       {activeStatementEntity && (
         <AccountStatementModal
-          mode={mode === 'suppliers' ? 'supplier' : 'customer'}
+          mode={mode === "suppliers" ? "supplier" : "customer"}
           target={activeStatementEntity}
           purchaseInvoices={purchaseInvoices}
           salesInvoices={salesInvoices}
           accountPayments={accountPayments}
           onRecordPayment={(amt, notes) => {
-            if (mode === 'suppliers') {
+            if (mode === "suppliers") {
               return onPaySupplier(activeStatementEntity.id, amt, notes);
             } else {
               return onCollectCustomer(activeStatementEntity.id, amt, notes);
@@ -1745,26 +1944,53 @@ export const SuppliersAndCustomersScreen: React.FC<{
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-4 shadow-2xl border border-[#C59B27]">
             <h3 className="text-sm font-extrabold text-[#1E1612]">
-              {mode === 'suppliers' ? 'سداد للمورد:' : 'تحصيل من العميل:'}{' '}
+              {mode === "suppliers" ? "سداد للمورد:" : "تحصيل من العميل:"}{" "}
               {payModalTarget.name}
             </h3>
+            {/* الرصيد الحيّ من البيانات الفعلية (وليس لقطة اللحظة التي فُتحت فيها النافذة) */}
+            <div className="text-[11px] font-bold text-[#7A6855]">
+              {mode === "suppliers" ? "له حاليًا" : "عليه حاليًا"}:{" "}
+              <b>
+                {(mode === "suppliers"
+                  ? suppliers.find((s) => s.id === payModalTarget.id)?.balance
+                  : customers.find((c) => c.id === payModalTarget.id)
+                      ?.balance) ?? payModalTarget.balance}
+                {" ج.م"}
+              </b>
+            </div>
             <input
               type="number"
               value={amountInput}
-              onChange={(e) => setAmountInput(e.target.value)}
+              onChange={(e) => {
+                setAmountInput(e.target.value);
+                if (payModalError) setPayModalError("");
+              }}
               className="w-full border border-[#DFD7C6] rounded-xl px-3.5 py-2.5 text-base font-black text-center"
             />
+            {payModalError && (
+              <p className="text-[11px] font-bold text-red-600 text-center">
+                {payModalError}
+              </p>
+            )}
             <div className="flex gap-2">
               <button
                 onClick={() => {
-                  const val = parseFloat(amountInput) || 0;
-                  if (val > 0) {
-                    if (mode === 'suppliers') {
-                      if (!onPaySupplier(payModalTarget.id, val)) return;
-                    } else {
-                      if (!onCollectCustomer(payModalTarget.id, val)) return;
-                    }
+                  const val = parseFloat(amountInput);
+                  if (!Number.isFinite(val) || val <= 0) {
+                    setPayModalError("أدخل مبلغًا صحيحًا أكبر من صفر");
+                    return;
                   }
+                  const ok =
+                    mode === "suppliers"
+                      ? onPaySupplier(payModalTarget.id, val)
+                      : onCollectCustomer(payModalTarget.id, val);
+                  if (!ok) {
+                    setPayModalError(
+                      "رفض النظام الحركة (راجع المبلغ والرصيد)؛ جرّب قيمة أخرى",
+                    );
+                    return;
+                  }
+                  setPayModalError("");
                   setPayModalTarget(null);
                 }}
                 className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl"
@@ -1786,7 +2012,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3 shadow-2xl border border-[#C59B27]">
             <h3 className="text-sm font-extrabold text-[#1E1612]">
-              {mode === 'suppliers' ? 'إضافة مورد جديد' : 'إضافة عميل جديد'}
+              {mode === "suppliers" ? "إضافة مورد جديد" : "إضافة عميل جديد"}
             </h3>
             <input
               type="text"
@@ -1880,8 +2106,8 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
               key={inv.id}
               className={`bg-white rounded-2xl p-3.5 border shadow-sm space-y-2.5 ${
                 inv.isReturned
-                  ? 'border-red-300 bg-red-50/30 opacity-75'
-                  : 'border-[#E6DEC8]'
+                  ? "border-red-300 bg-red-50/30 opacity-75"
+                  : "border-[#E6DEC8]"
               }`}
             >
               <div className="flex items-center justify-between">
@@ -1896,12 +2122,12 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8]">
                     {inv.isReturned
-                      ? 'مرتجع'
-                      : inv.saleType === 'wholesale'
-                        ? 'جملة'
-                        : inv.saleType === 'cashier_sync'
-                          ? 'كاشير'
-                          : 'محل'}
+                      ? "مرتجع"
+                      : inv.saleType === "wholesale"
+                        ? "جملة"
+                        : inv.saleType === "cashier_sync"
+                          ? "كاشير"
+                          : "محل"}
                   </span>
                   <button
                     onClick={() => onDeleteInvoice(inv.id)}
@@ -1927,7 +2153,7 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
 
               <div className="flex items-center justify-between text-xs pt-1">
                 <div>
-                  الإجمالي: <b>{inv.totalAmount} ج.م</b> • الربح:{' '}
+                  الإجمالي: <b>{inv.totalAmount} ج.م</b> • الربح:{" "}
                   <b className="text-emerald-700">
                     +{inv.netProfit.toFixed(1)} ج.م
                   </b>
@@ -1942,8 +2168,8 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
                   </button>
                   {inv.isReturned && inv.returnRefundAmount !== undefined && (
                     <p className="text-xs text-amber-800">
-                      مبلغ الاسترداد المسجل:{' '}
-                      {inv.returnRefundAmount.toLocaleString('ar-EG')} ج.م
+                      مبلغ الاسترداد المسجل:{" "}
+                      {inv.returnRefundAmount.toLocaleString("ar-EG")} ج.م
                     </p>
                   )}
                   {!inv.isReturned && (
@@ -1970,7 +2196,7 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
               (c) =>
                 c.id === selectedReceiptInv.customerId ||
                 c.name === selectedReceiptInv.customerName,
-            )?.phone || ''
+            )?.phone || ""
           }
           onClose={() => setSelectedReceiptInv(null)}
         />
@@ -1989,17 +2215,17 @@ interface MoreMenuProps {
   shifts: ShiftRecord[];
   currentPartner: Partner;
   initialSubPage?:
-    | 'menu'
-    | 'data_control'
-    | 'expenses'
-    | 'partners'
-    | 'shifts'
-    | 'cloud';
-  onAddExpense: (exp: Omit<Expense, 'id'>) => void;
+    | "menu"
+    | "data_control"
+    | "expenses"
+    | "partners"
+    | "shifts"
+    | "cloud";
+  onAddExpense: (exp: Omit<Expense, "id">) => void;
   onDeleteExpense: (id: string) => void;
   onUpdatePartnerAccount: (
     id: string,
-    patch: Partial<Pick<Partner, 'name' | 'username' | 'phone'>>,
+    patch: Partial<Pick<Partner, "name" | "username" | "phone">>,
   ) => void;
   onClearAllDemoData: () => void;
   onClearTransactionsKeepCatalog: () => void;
@@ -2018,7 +2244,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   auditLogs,
   shifts,
   currentPartner,
-  initialSubPage = 'menu',
+  initialSubPage = "menu",
   onAddExpense,
   onDeleteExpense,
   onUpdatePartnerAccount,
@@ -2033,15 +2259,15 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   onBack,
 }) => {
   const [subPage, setSubPage] = useState<
-    'menu' | 'data_control' | 'expenses' | 'partners' | 'shifts' | 'cloud'
+    "menu" | "data_control" | "expenses" | "partners" | "shifts" | "cloud"
   >(initialSubPage);
 
-  const [expTitle, setExpTitle] = useState('');
-  const [expAmount, setExpAmount] = useState('');
+  const [expTitle, setExpTitle] = useState("");
+  const [expAmount, setExpAmount] = useState("");
   const [expCategory, setExpCategory] =
-    useState<Expense['category']>('أكياس وتغليف');
+    useState<Expense["category"]>("أكياس وتغليف");
   const [expPaidFrom, setExpPaidFrom] =
-    useState<Expense['paidFrom']>('درج المحل');
+    useState<Expense["paidFrom"]>("درج المحل");
 
   const creds = getSupabaseCredentials();
   const [sbUrl, setSbUrl] = useState(creds.url);
@@ -2049,12 +2275,12 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   const [savedCloudMsg, setSavedCloudMsg] = useState(false);
 
   // صفحة التحكم في البيانات وحذف الداتا التجريبية
-  if (subPage === 'data_control') {
+  if (subPage === "data_control") {
     return (
       <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
         <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
           <button
-            onClick={() => setSubPage('menu')}
+            onClick={() => setSubPage("menu")}
             className="p-1.5 text-[#D4AF37]"
           >
             <ChevronRight className="w-6 h-6" />
@@ -2104,7 +2330,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                   if (!file) return;
                   if (file.size > 10 * 1024 * 1024) {
                     alert(
-                      'حجم النسخة أكبر من 10 ميجابايت؛ يلزم استرجاعها من أداة الإدارة.',
+                      "حجم النسخة أكبر من 10 ميجابايت؛ يلزم استرجاعها من أداة الإدارة.",
                     );
                     return;
                   }
@@ -2112,14 +2338,14 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                   reader.onload = (ev) => {
                     try {
                       const parsed = JSON.parse(
-                        String(ev.target?.result || '{}'),
+                        String(ev.target?.result || "{}"),
                       );
-                      if (parsed && typeof parsed === 'object') {
+                      if (parsed && typeof parsed === "object") {
                         onRestoreBackupJson(parsed);
                       }
                     } catch {
                       alert(
-                        'الملف غير صالح، يرجى اختيار ملف النسخة الاحتياطية الصحيح.',
+                        "الملف غير صالح، يرجى اختيار ملف النسخة الاحتياطية الصحيح.",
                       );
                     }
                   };
@@ -2137,7 +2363,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
             </div>
             <p className="text-xs text-[#5C4B3E] leading-relaxed">
               يحذف فواتير البيع والشراء والمصروفات والسجل التجريبي ويصفّر
-              الأرصدة، مع{' '}
+              الأرصدة، مع{" "}
               <b>الإبقاء على أسماء أصناف البن والتوليفات والوصفات</b> لتعديلها
               كما تريد.
             </p>
@@ -2188,12 +2414,12 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
     );
   }
 
-  if (subPage === 'expenses') {
+  if (subPage === "expenses") {
     return (
       <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
         <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
           <button
-            onClick={() => setSubPage('menu')}
+            onClick={() => setSubPage("menu")}
             className="p-1.5 text-[#D4AF37]"
           >
             <ChevronRight className="w-6 h-6" />
@@ -2224,7 +2450,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
               <select
                 value={expCategory}
                 onChange={(e) =>
-                  setExpCategory(e.target.value as Expense['category'])
+                  setExpCategory(e.target.value as Expense["category"])
                 }
                 className="bg-[#FAF8F4] border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold"
               >
@@ -2238,15 +2464,15 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
               </select>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              {(['درج المحل', 'خزنة الشركة', 'من جيب الشريك'] as const).map(
+              {(["درج المحل", "خزنة الشركة", "من جيب الشريك"] as const).map(
                 (src) => (
                   <button
                     key={src}
                     onClick={() => setExpPaidFrom(src)}
                     className={`py-2 rounded-xl text-xs font-extrabold border ${
                       expPaidFrom === src
-                        ? 'bg-[#1E1612] border-[#C59B27] text-[#FBF5B7]'
-                        : 'bg-[#FAF8F4] border-[#DFD7C6] text-[#5C4B3E]'
+                        ? "bg-[#1E1612] border-[#C59B27] text-[#FBF5B7]"
+                        : "bg-[#FAF8F4] border-[#DFD7C6] text-[#5C4B3E]"
                     }`}
                   >
                     {src}
@@ -2266,8 +2492,8 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                   partnerName: currentPartner.name,
                   paidFrom: expPaidFrom,
                 });
-                setExpTitle('');
-                setExpAmount('');
+                setExpTitle("");
+                setExpAmount("");
               }}
               className="w-full bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl text-xs"
             >
@@ -2284,7 +2510,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                 <div>
                   <div className="text-sm font-extrabold text-[#1E1612]">
                     {e.title}
-                    {e.isCancelled ? ' — ملغى' : ''}
+                    {e.isCancelled ? " — ملغى" : ""}
                   </div>
                   <div className="text-xs text-[#7A6855]">
                     {e.category} • {e.paidFrom} • {e.partnerName}
@@ -2311,12 +2537,12 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
     );
   }
 
-  if (subPage === 'partners') {
+  if (subPage === "partners") {
     return (
       <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
         <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
           <button
-            onClick={() => setSubPage('menu')}
+            onClick={() => setSubPage("menu")}
             className="p-1.5 text-[#D4AF37]"
           >
             <ChevronRight className="w-6 h-6" />
@@ -2375,12 +2601,12 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
     );
   }
 
-  if (subPage === 'shifts') {
+  if (subPage === "shifts") {
     return (
       <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
         <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
           <button
-            onClick={() => setSubPage('menu')}
+            onClick={() => setSubPage("menu")}
             className="p-1.5 text-[#D4AF37]"
           >
             <ChevronRight className="w-6 h-6" />
@@ -2410,12 +2636,12 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
     );
   }
 
-  if (subPage === 'cloud') {
+  if (subPage === "cloud") {
     return (
       <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
         <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
           <button
-            onClick={() => setSubPage('menu')}
+            onClick={() => setSubPage("menu")}
             className="p-1.5 text-[#D4AF37]"
           >
             <ChevronRight className="w-6 h-6" />
@@ -2471,76 +2697,76 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
 
   const menuItems = [
     {
-      id: 'data_control',
-      title: 'النسخ الاحتياطي وحذف التجريبي',
-      subtitle: 'حفظ/استرجاع نسخة احتياطية • تصفير أو حذف التجريبي',
+      id: "data_control",
+      title: "النسخ الاحتياطي وحذف التجريبي",
+      subtitle: "حفظ/استرجاع نسخة احتياطية • تصفير أو حذف التجريبي",
       icon: Database,
-      iconBg: 'bg-red-50 text-red-600 border border-red-200',
-      action: () => setSubPage('data_control'),
+      iconBg: "bg-red-50 text-red-600 border border-red-200",
+      action: () => setSubPage("data_control"),
     },
     {
-      id: 'partners',
-      title: 'حسابات الملاك والشركاء',
-      subtitle: 'تعديل الأسماء وكلمات السر',
+      id: "partners",
+      title: "حسابات الملاك والشركاء",
+      subtitle: "تعديل الأسماء وكلمات السر",
       icon: Shield,
-      iconBg: 'bg-[#1E1612] text-[#FBF5B7]',
-      action: () => setSubPage('partners'),
+      iconBg: "bg-[#1E1612] text-[#FBF5B7]",
+      action: () => setSubPage("partners"),
     },
     {
-      id: 'stocktaking',
-      title: 'الجرد الفعلي بالميزان',
-      subtitle: 'مطابقة الرصيد بالجرام والكيلو',
+      id: "stocktaking",
+      title: "الجرد الفعلي بالميزان",
+      subtitle: "مطابقة الرصيد بالجرام والكيلو",
       icon: ScanLine,
-      iconBg: 'bg-[#FDF8EB] text-[#B38728] border border-[#E8D8A8]',
-      action: () => onNavigate('stocktaking'),
+      iconBg: "bg-[#FDF8EB] text-[#B38728] border border-[#E8D8A8]",
+      action: () => onNavigate("stocktaking"),
     },
     {
-      id: 'staff_payroll',
-      title: 'شؤون العمال والباريستا',
-      subtitle: 'اليوميات والسلف والرواتب',
+      id: "staff_payroll",
+      title: "شؤون العمال والباريستا",
+      subtitle: "اليوميات والسلف والرواتب",
       icon: UserCheck,
-      iconBg: 'bg-[#1E1612] text-[#FBF5B7]',
-      action: () => onNavigate('staff_payroll'),
+      iconBg: "bg-[#1E1612] text-[#FBF5B7]",
+      action: () => onNavigate("staff_payroll"),
     },
     {
-      id: 'production',
-      title: 'قسم الإنتاج والوصفات',
-      subtitle: 'تصنيع التوليفات ووصفات المشروبات',
+      id: "production",
+      title: "قسم الإنتاج والوصفات",
+      subtitle: "تصنيع التوليفات ووصفات المشروبات",
       icon: Flame,
-      iconBg: 'bg-[#FDF8EB] text-[#B38728] border border-[#E8D8A8]',
-      action: () => onNavigate('production'),
+      iconBg: "bg-[#FDF8EB] text-[#B38728] border border-[#E8D8A8]",
+      action: () => onNavigate("production"),
     },
     {
-      id: 'cashier_sync',
-      title: 'مزامنة شيت الكاشير',
-      subtitle: 'سحب مبيعات الكاشير أوتوماتيك',
+      id: "cashier_sync",
+      title: "مزامنة شيت الكاشير",
+      subtitle: "سحب مبيعات الكاشير أوتوماتيك",
       icon: FolderSync,
-      iconBg: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-      action: () => onNavigate('cashier_sync'),
+      iconBg: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+      action: () => onNavigate("cashier_sync"),
     },
     {
-      id: 'expenses',
-      title: 'المصروفات',
-      subtitle: 'تسجيل وحذف مصروفات المحل',
+      id: "expenses",
+      title: "المصروفات",
+      subtitle: "تسجيل وحذف مصروفات المحل",
       icon: Wallet,
-      iconBg: 'bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8]',
-      action: () => setSubPage('expenses'),
+      iconBg: "bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8]",
+      action: () => setSubPage("expenses"),
     },
     {
-      id: 'reports',
-      title: 'الأرباح وحصص الشركاء',
-      subtitle: 'صافي الربح وتوزيع النسب',
+      id: "reports",
+      title: "الأرباح وحصص الشركاء",
+      subtitle: "صافي الربح وتوزيع النسب",
       icon: Receipt,
-      iconBg: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-      action: () => onNavigate('reports'),
+      iconBg: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+      action: () => onNavigate("reports"),
     },
     {
-      id: 'cloud',
-      title: 'ربط Supabase السحابي',
-      subtitle: 'مزامنة موبايلات الشركاء',
+      id: "cloud",
+      title: "ربط Supabase السحابي",
+      subtitle: "مزامنة موبايلات الشركاء",
       icon: Cloud,
-      iconBg: 'bg-[#FAF8F4] text-[#5C4B3E] border border-[#DFD7C6]',
-      action: () => setSubPage('cloud'),
+      iconBg: "bg-[#FAF8F4] text-[#5C4B3E] border border-[#DFD7C6]",
+      action: () => setSubPage("cloud"),
     },
   ];
 

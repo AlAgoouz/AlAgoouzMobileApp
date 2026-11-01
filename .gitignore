@@ -17,3 +17,4 @@ coverage/
 supabase/.temp/
 *.local.sql
 *.local.json
+audit/*.local.jpg
