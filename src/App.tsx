@@ -2303,7 +2303,7 @@ export default function App() {
                     إدارة البيانات
                   </div>
                   <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    نسخ وحذف التجريبي
+                    نسخ واسترجاع البيانات
                   </div>
                 </button>
               </div>
@@ -2952,6 +2952,7 @@ export default function App() {
             shifts={shifts}
             currentPartner={currentPartner}
             initialSubPage={moreInitialTab}
+            showDemoTools={getSupabaseCredentials().url.startsWith("http://127.0.0.1:")}
             onAddExpense={(exp) =>
               safeAction(() => {
                 engine.replace(

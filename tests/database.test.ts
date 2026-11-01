@@ -60,6 +60,12 @@ beforeAll(async () => {
       "utf8",
     ),
   );
+  await db.exec(
+    readFileSync(
+      "supabase/migrations/20261101040743_harden_role_helpers.sql",
+      "utf8",
+    ),
+  );
   await db.query(
     `insert into public.erp_members(user_id,username,partner_id,role) values($1,'owner','p1','partner'),($2,'cashier',null,'cashier')`,
     [partner, cashier],
@@ -256,4 +262,27 @@ it("preserves independent server audit evidence through history edits and deleti
   expect(
     (await db.query("select * from public.bon_erp_audit_events")).rows,
   ).toHaveLength(0);
+});
+
+it("uses caller permissions for role helpers without privileged execution", async () => {
+  await asUser(partner);
+  const helpers = (
+    await db.query<{ proname: string; prosecdef: boolean }>(
+      "select proname, prosecdef from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and proname in ('erp_role','bon_erp_role')",
+    )
+  ).rows;
+  expect(helpers).toHaveLength(2);
+  expect(helpers.every((fn) => fn.prosecdef === false)).toBe(true);
+  expect(
+    (await db.query<{ role: string }>("select public.bon_erp_role() as role"))
+      .rows[0].role,
+  ).toBe("partner");
+  await asUser(outsider);
+  expect(
+    (
+      await db.query<{ role: string | null }>(
+        "select public.bon_erp_role() as role",
+      )
+    ).rows[0].role,
+  ).toBeNull();
 });

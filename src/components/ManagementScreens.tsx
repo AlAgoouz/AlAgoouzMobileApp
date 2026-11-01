@@ -2221,7 +2221,8 @@ interface MoreMenuProps {
     | "partners"
     | "shifts"
     | "cloud";
-  onAddExpense: (exp: Omit<Expense, "id">) => void;
+  onAddExpense: (exp: Omit<Expense, "id">) => void | boolean;
+  showDemoTools?: boolean;
   onDeleteExpense: (id: string) => void;
   onUpdatePartnerAccount: (
     id: string,
@@ -2245,6 +2246,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   shifts,
   currentPartner,
   initialSubPage = "menu",
+  showDemoTools = false,
   onAddExpense,
   onDeleteExpense,
   onUpdatePartnerAccount,
@@ -2264,6 +2266,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
 
   const [expTitle, setExpTitle] = useState("");
   const [expAmount, setExpAmount] = useState("");
+  const [expenseError, setExpenseError] = useState("");
   const [expCategory, setExpCategory] =
     useState<Expense["category"]>("أكياس وتغليف");
   const [expPaidFrom, setExpPaidFrom] =
@@ -2286,7 +2289,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
             <ChevronRight className="w-6 h-6" />
           </button>
           <h1 className="text-base font-extrabold">
-            التحكم في البيانات وحذف التجريبي
+            النسخ الاحتياطي واسترجاع البيانات
           </h1>
           <div className="w-8" />
         </div>
@@ -2355,60 +2358,68 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
             </label>
           </div>
 
-          {/* الخيار 1: تصفير الفواتير والحركات فقط مع بقاء الأصناف والوصفات */}
-          <div className="bg-white rounded-3xl p-4 border-2 border-[#C59B27] shadow-sm space-y-2.5">
-            <div className="flex items-center gap-2 text-sm font-black text-[#1E1612]">
-              <RotateCcw className="w-5 h-5 text-[#B38728]" />
-              <span>حذف الفواتير والحركات التجريبية فقط</span>
-            </div>
-            <p className="text-xs text-[#5C4B3E] leading-relaxed">
-              يحذف فواتير البيع والشراء والمصروفات والسجل التجريبي ويصفّر
-              الأرصدة، مع{" "}
-              <b>الإبقاء على أسماء أصناف البن والتوليفات والوصفات</b> لتعديلها
-              كما تريد.
-            </p>
-            <button
-              onClick={onClearTransactionsKeepCatalog}
-              className="w-full bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl text-xs"
-            >
-              تصفير الفواتير والأرصدة مع بقاء الأصناف
-            </button>
-          </div>
+          {showDemoTools && (
+            <>
+              {/* الخيار 1: تصفير الفواتير والحركات فقط مع بقاء الأصناف والوصفات */}
+              <div className="bg-white rounded-3xl p-4 border-2 border-[#C59B27] shadow-sm space-y-2.5">
+                <div className="flex items-center gap-2 text-sm font-black text-[#1E1612]">
+                  <RotateCcw className="w-5 h-5 text-[#B38728]" />
+                  <span>حذف الفواتير والحركات التجريبية فقط</span>
+                </div>
+                <p className="text-xs text-[#5C4B3E] leading-relaxed">
+                  يحذف فواتير البيع والشراء والمصروفات والسجل التجريبي ويصفّر
+                  الأرصدة، مع{" "}
+                  <b>الإبقاء على أسماء أصناف البن والتوليفات والوصفات</b>{" "}
+                  لتعديلها كما تريد.
+                </p>
+                <button
+                  onClick={onClearTransactionsKeepCatalog}
+                  className="w-full bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl text-xs"
+                >
+                  تصفير الفواتير والأرصدة مع بقاء الأصناف
+                </button>
+              </div>
 
-          {/* الخيار 2: حذف كل البيانات التجريبية بالكامل والبدء من الصفر */}
-          <div className="bg-white rounded-3xl p-4 border-2 border-red-300 shadow-sm space-y-2.5">
-            <div className="flex items-center gap-2 text-sm font-black text-red-700">
-              <Trash2 className="w-5 h-5 text-red-600" />
-              <span>حذف كل البيانات التجريبية بالكامل (البدء من الصفر)</span>
-            </div>
-            <p className="text-xs text-[#5C4B3E] leading-relaxed">
-              يمسح كل الأصناف، التوليفات، الفواتير، الموردين، العملاء، والعمال
-              التجريبيين بالكامل لتبدأ بإدخال بيانات محلك الحقيقية من الصفر.
-            </p>
-            <button
-              onClick={onClearAllDemoData}
-              className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-2.5 rounded-xl text-xs"
-            >
-              حذف جميع البيانات التجريبية نهائياً
-            </button>
-          </div>
+              {/* الخيار 2: حذف كل البيانات التجريبية بالكامل والبدء من الصفر */}
+              <div className="bg-white rounded-3xl p-4 border-2 border-red-300 shadow-sm space-y-2.5">
+                <div className="flex items-center gap-2 text-sm font-black text-red-700">
+                  <Trash2 className="w-5 h-5 text-red-600" />
+                  <span>
+                    حذف كل البيانات التجريبية بالكامل (البدء من الصفر)
+                  </span>
+                </div>
+                <p className="text-xs text-[#5C4B3E] leading-relaxed">
+                  يمسح كل الأصناف، التوليفات، الفواتير، الموردين، العملاء،
+                  والعمال التجريبيين بالكامل لتبدأ بإدخال بيانات محلك الحقيقية
+                  من الصفر.
+                </p>
+                <button
+                  onClick={onClearAllDemoData}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-2.5 rounded-xl text-xs"
+                >
+                  حذف جميع البيانات التجريبية نهائياً
+                </button>
+              </div>
 
-          {/* الخيار 3: استعادة البيانات التجريبية */}
-          <div className="bg-white rounded-3xl p-4 border border-[#E6DEC8] shadow-sm space-y-2.5">
-            <div className="flex items-center gap-2 text-sm font-black text-[#1E1612]">
-              <RefreshCw className="w-5 h-5 text-emerald-700" />
-              <span>استعادة البيانات التجريبية الافتراضية</span>
-            </div>
-            <p className="text-xs text-[#5C4B3E]">
-              إرجاع أصناف البن والتوليفات والفواتير التجريبية لمعاينة النظام.
-            </p>
-            <button
-              onClick={onRestoreDefaultDemoData}
-              className="w-full bg-emerald-700 text-white font-extrabold py-2.5 rounded-xl text-xs"
-            >
-              استعادة الداتا التجريبية
-            </button>
-          </div>
+              {/* الخيار 3: استعادة البيانات التجريبية */}
+              <div className="bg-white rounded-3xl p-4 border border-[#E6DEC8] shadow-sm space-y-2.5">
+                <div className="flex items-center gap-2 text-sm font-black text-[#1E1612]">
+                  <RefreshCw className="w-5 h-5 text-emerald-700" />
+                  <span>استعادة البيانات التجريبية الافتراضية</span>
+                </div>
+                <p className="text-xs text-[#5C4B3E]">
+                  إرجاع أصناف البن والتوليفات والفواتير التجريبية لمعاينة
+                  النظام.
+                </p>
+                <button
+                  onClick={onRestoreDefaultDemoData}
+                  className="w-full bg-emerald-700 text-white font-extrabold py-2.5 rounded-xl text-xs"
+                >
+                  استعادة الداتا التجريبية
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -2482,16 +2493,28 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
             </div>
             <button
               onClick={() => {
-                const amt = parseFloat(expAmount);
-                if (!expTitle.trim() || !amt) return;
-                onAddExpense({
-                  date: new Date().toISOString().slice(0, 10),
+                const amt = Number(expAmount);
+                if (!expTitle.trim() || !Number.isFinite(amt) || amt <= 0) {
+                  setExpenseError(
+                    "أدخل بيان المصروف ومبلغًا صحيحًا أكبر من صفر",
+                  );
+                  return;
+                }
+                const accepted = onAddExpense({
+                  date: businessDate(),
                   category: expCategory,
                   title: expTitle.trim(),
                   amount: amt,
                   partnerName: currentPartner.name,
                   paidFrom: expPaidFrom,
                 });
+                if (accepted === false) {
+                  setExpenseError(
+                    "لم يُحفظ المصروف؛ راجع التنبيه وصحّح البيانات",
+                  );
+                  return;
+                }
+                setExpenseError("");
                 setExpTitle("");
                 setExpAmount("");
               }}
@@ -2499,6 +2522,11 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
             >
               حفظ المصروف
             </button>
+            {expenseError && (
+              <p role="alert" className="text-red-700 font-bold">
+                {expenseError}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
