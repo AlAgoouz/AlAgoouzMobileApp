@@ -1,0 +1,32 @@
+{
+  "projectRef": "srinizbfqozvdqsuvvbc",
+  "checks": [
+    {
+      "table": "bon_elagouz_store",
+      "status": 401,
+      "denied": true
+    },
+    {
+      "table": "cashier_sync_queue",
+      "status": 401,
+      "denied": true
+    },
+    {
+      "table": "erp_members",
+      "status": 401,
+      "denied": true
+    },
+    {
+      "table": "bon_erp_store_receipts",
+      "status": 401,
+      "denied": true
+    }
+  ],
+  "serverTransactionProbe": "bootstrap owner + idempotent save + stale-version rejection passed; all probe writes rolled back",
+  "cleanup": {
+    "storeRows": 0,
+    "members": 0,
+    "receipts": 0,
+    "testUsers": 0
+  }
+}

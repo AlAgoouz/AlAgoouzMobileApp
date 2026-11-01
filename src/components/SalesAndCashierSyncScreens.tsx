@@ -1,3 +1,4 @@
+import {businessDate} from '../lib/dates';
 import React, { useState, useMemo } from 'react';
 import {
   ChevronRight,
@@ -214,7 +215,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
         : Math.min(totalAmount, parseFloat(paidAmountInput) || 0);
 
     onSaveSale({
-      date: new Date().toISOString().slice(0, 10),
+      date: businessDate(),
       saleType: saleMode,
       customerId: customer?.id,
       customerName:
@@ -605,8 +606,9 @@ interface CashierSyncScreenProps {
   items: InventoryItem[];
   onImportCashierRows: (
     rows: ParsedCashierRow[],
-    sourceFileName: string
-  ) => void;
+    sourceFileName: string,
+    saleDate?: string
+  ) => Promise<boolean>;
   onBack: () => void;
 }
 
@@ -617,88 +619,26 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
 }) => {
   const [parsedRows, setParsedRows] = useState<ParsedCashierRow[]>([]);
   const [fileName, setFileName] = useState<string>('');
+  const [saleDate,setSaleDate] = useState(businessDate());
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string>('');
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
-    const buffer = await file.arrayBuffer();
-    const rows = parseCashierExcelBuffer(buffer, items);
-    setParsedRows(rows);
-    setSyncSuccessMsg('');
-  };
-
-  // محاكاة سريعة لشيت خارج من كاشير المحل ليوم كامل بضغطة زر
-  const handleSimulateCashierSheet = () => {
-    setFileName(`cashier_auto_sync_${new Date().toISOString().slice(0, 10)}.xlsx`);
-    const mahoug = items.find((i) => i.id === 'blend-mahoug-special');
-    const sada = items.find((i) => i.id === 'blend-sada-light');
-    const turkishDbl = items.find((i) => i.id === 'drink-turkish-double');
-    const french = items.find((i) => i.id === 'drink-french-coffee');
-    const espresso = items.find((i) => i.id === 'drink-espresso-double');
-    const water = items.find((i) => i.id === 'direct-water-small');
-
-    setParsedRows([
-      {
-        rawName: 'توليفة بُن العجوز تركي محوج مخصوص (أوزان كاشير)',
-        rawCode: 'BL-302',
-        quantity: 4.25,
-        unitHint: 'kg',
-        totalPrice: 2550,
-        matchedItem: mahoug,
-      },
-      {
-        rawName: 'ربع بن تركي سادة فاتح (12 عبوة × 250 جم)',
-        rawCode: 'BL-301',
-        quantity: 3000,
-        unitHint: 'gram',
-        totalPrice: 1620,
-        matchedItem: sada,
-      },
-      {
-        rawName: 'فنجان قهوة تركي دبل',
-        rawCode: 'DR-402',
-        quantity: 28,
-        unitHint: 'piece',
-        totalPrice: 980,
-        matchedItem: turkishDbl,
-      },
-      {
-        rawName: 'قهوة فرنساوي بالحليب',
-        rawCode: 'DR-403',
-        quantity: 15,
-        unitHint: 'piece',
-        totalPrice: 675,
-        matchedItem: french,
-      },
-      {
-        rawName: 'إسبريسو دبل شوت إيطالي',
-        rawCode: 'DR-404',
-        quantity: 12,
-        unitHint: 'piece',
-        totalPrice: 480,
-        matchedItem: espresso,
-      },
-      {
-        rawName: 'زجاجة مياه معدنية صغيرة',
-        rawCode: 'PR-501',
-        quantity: 20,
-        unitHint: 'piece',
-        totalPrice: 160,
-        matchedItem: water,
-      },
-    ]);
-    setSyncSuccessMsg('');
-  };
-
-  const handleConfirmImport = () => {
-    if (parsedRows.length === 0) return;
-    onImportCashierRows(parsedRows, fileName || 'cashier_sheet.xlsx');
-    setSyncSuccessMsg(
-      'تم استيراد مبيعات الكاشير وخصم التوليفات (بالكيلو والجرام) وفك وصفات المشروبات وخصم خاماتها بنجاح!'
-    );
     setParsedRows([]);
+    try {const buffer=await file.arrayBuffer();const rows=await parseCashierExcelBuffer(buffer,items);setParsedRows(rows);setSyncSuccessMsg('');}
+    catch(error){setSyncSuccessMsg((error as Error).message);}
+    e.target.value='';
+  };
+
+  const [importing,setImporting]=useState(false);
+  const handleConfirmImport = async () => {
+    if (!parsedRows.length || importing) return;
+    setImporting(true);
+    try {if(await onImportCashierRows(parsedRows,fileName||'cashier_sheet.xlsx',saleDate)){setSyncSuccessMsg('تم حفظ المبيعات على السحابة وخصم المخزون.');setParsedRows([]);}}
+    catch(error){setSyncSuccessMsg((error as Error).message);}
+    finally{setImporting(false);}
   };
 
   return (
@@ -730,6 +670,7 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
       </div>
 
       <div className="p-3.5 space-y-4">
+        <label className="block text-sm font-bold">تاريخ مبيعات الملف<input aria-label="تاريخ مبيعات الملف" type="date" required value={saleDate} onChange={e=>setSaleDate(e.target.value)} className="block border p-2 rounded-lg mt-1"/></label>
         {/* كارت حالة الربط الأوتوماتيكي للفولدر */}
         <div className="bg-slate-900 text-white rounded-3xl p-4 shadow-lg space-y-2.5">
           <div className="flex items-center justify-between">
@@ -761,7 +702,7 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
         {/* رفع ملف إكسيل أو تجربة فورية */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
           <div className="text-sm font-extrabold text-slate-800">
-            رفع شيت مبيعات الكاشير يدوياً أو محاكاة فورية:
+            رفع شيت مبيعات الكاشير:
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <label className="border-2 border-dashed border-emerald-500 bg-emerald-50/50 hover:bg-emerald-50 rounded-2xl p-4 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition">
@@ -777,18 +718,7 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
               />
             </label>
 
-            <button
-              onClick={handleSimulateCashierSheet}
-              className="border-2 border-amber-400 bg-amber-50/70 hover:bg-amber-100/70 rounded-2xl p-4 flex flex-col items-center justify-center gap-1.5 transition"
-            >
-              <Sparkles className="w-6 h-6 text-amber-800" />
-              <span className="text-xs font-extrabold text-amber-950">
-                محاكاة وصول شيت كاشير اليوم أوتوماتيك
-              </span>
-              <span className="text-[10px] text-amber-800">
-                (توليفات بالكيلو/الربع + مشروبات بوصفة + مياه)
-              </span>
-            </button>
+
           </div>
         </div>
 
@@ -816,7 +746,7 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
                 const matched = row.matchedItem;
                 const isDrink = matched?.category === 'drink_recipe';
                 const qtyInBase =
-                  row.unitHint === 'gram' ? row.quantity / 1000 : row.quantity;
+                  ['gram','ml'].includes(row.unitHint) ? row.quantity / 1000 : row.quantity;
 
                 return (
                   <div
@@ -837,7 +767,8 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
                       </span>
                     </div>
 
-                    {matched ? (
+                    {row.error && <div role="alert" className="text-xs text-red-700 font-bold">{row.error}</div>}
+                    {matched && !row.error ? (
                       <div className="text-[11px] bg-white p-2 rounded-lg border border-slate-200/80 space-y-1">
                         <div className="text-emerald-700 font-bold">
                           ✓ مطابق لـ: {matched.name}
@@ -877,6 +808,7 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
 
             <button
               onClick={handleConfirmImport}
+                  disabled={!saleDate || importing || parsedRows.some(r=>Boolean(r.error)||!r.matchedItem)}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2"
             >
               <Check className="w-5 h-5" />

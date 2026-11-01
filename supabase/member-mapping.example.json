@@ -1,0 +1,9 @@
+{
+  "partners": [
+    { "id": "p1", "email": "", "name": "الشريك الأول", "sharePercent": 25 },
+    { "id": "p2", "email": "", "name": "الشريك الثاني", "sharePercent": 25 },
+    { "id": "p3", "email": "", "name": "الشريك الثالث", "sharePercent": 25 },
+    { "id": "p4", "email": "", "name": "الشريك الرابع", "sharePercent": 25 }
+  ],
+  "cashierEmail": ""
+}

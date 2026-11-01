@@ -1,0 +1,21 @@
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const {spawn} = require('node:child_process');
+const folder = fs.mkdtempSync(path.join(os.tmpdir(),'mobile-erp-watcher-audit-'));
+fs.writeFileSync(path.join(folder,'audit-sale.csv'),'Name,Quantity,Total\nCoffee,1,200\n');
+const env = {...process.env,CASHIER_WATCH_FOLDER:folder,SUPABASE_URL:'',SUPABASE_ANON_KEY:'',VITE_SUPABASE_URL:'',VITE_SUPABASE_ANON_KEY:''};
+const child = spawn(process.execPath,[path.resolve(__dirname,'../cashier-watcher/watcher.mjs')],{cwd:path.resolve(__dirname,'..'),env,windowsHide:true,stdio:'pipe'});
+let output='';
+child.stdout.on('data',chunk=>output+=chunk);
+child.stderr.on('data',chunk=>output+=chunk);
+const timer=setTimeout(()=>{child.kill();console.error('Watcher diagnostic timed out');process.exitCode=1;},8000);
+const poll=setInterval(()=>{
+  const archive=path.join(folder,'Archive');
+  if(!fs.existsSync(archive)||!fs.readdirSync(archive).length)return;
+  clearTimeout(timer);clearInterval(poll);child.kill();
+  const result={date:'2026-11-01',reproduced:true,credentialsConfigured:false,networkUploadAttempted:false,sourceFileRemaining:fs.existsSync(path.join(folder,'audit-sale.csv')),archivedFiles:fs.readdirSync(archive),folder,output};
+  fs.writeFileSync(path.join(__dirname,'watcher-result.json'),JSON.stringify(result,null,2));
+  console.log(JSON.stringify(result,null,2));
+},100);
+child.on('exit',()=>{clearTimeout(timer);clearInterval(poll);});

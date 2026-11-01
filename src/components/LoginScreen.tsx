@@ -10,17 +10,24 @@ import {
   Sparkles,
   Loader2,
 } from 'lucide-react';
-import { Partner } from '../types/erp';
 
 interface LoginScreenProps {
-  partners: Partner[];
-  onLoginSuccess: (partner: Partner, rememberMe: boolean) => void;
+  onSignIn: (
+    email: string,
+    password: string,
+    remember: boolean,
+  ) => Promise<void>;
+  authError?: string;
+  onSignUp?: (email: string, password: string) => Promise<void>;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
-  partners,
-  onLoginSuccess,
+  onSignIn,
+  authError,
+  onSignUp,
 }) => {
+  const [register, setRegister] = useState(false);
+  const [notice, setNotice] = useState('');
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -29,7 +36,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [shakeCard, setShakeCard] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [focusedField, setFocusedField] = useState<'user' | 'pass' | null>(
-    null
+    null,
   );
 
   const triggerError = (msg: string) => {
@@ -38,40 +45,26 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     setTimeout(() => setShakeCard(false), 500);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setErrorMsg('');
-
-    const cleanInput = username.trim().toLowerCase();
-    const matched = partners.find((p, idx) => {
-      const u = (p.username || `owner${idx + 1}`).toLowerCase();
-      const n = p.name.trim().toLowerCase();
-      const num = String(idx + 1);
-      return (
-        u === cleanInput ||
-        n === cleanInput ||
-        n.replace('أ', 'ا').replace('إ', 'ا') ===
-          cleanInput.replace('أ', 'ا').replace('إ', 'ا') ||
-        cleanInput === num ||
-        (idx === 0 && cleanInput === 'admin')
-      );
-    });
-
-    if (!matched) {
-      triggerError('اسم المستخدم غير صحيح، يرجى التأكد من الاسم.');
-      return;
-    }
-
-    const expectedPass = matched.password || '123';
-    if (password.trim() !== expectedPass) {
-      triggerError('كلمة المرور غير صحيحة.');
-      return;
-    }
-
     setIsSubmitting(true);
-    setTimeout(() => {
-      onLoginSuccess(matched, rememberMe);
-    }, 550);
+    try {
+      if (register && onSignUp) {
+        await onSignUp(username, password);
+        setNotice(
+          'راجع بريد المالك لتأكيد الحساب، ثم سجل الدخول. التسجيل ببريد آخر لا يمنح صلاحية إدارة المحل.',
+        );
+        setRegister(false);
+      } else await onSignIn(username, password, rememberMe);
+    } catch (error) {
+      triggerError(
+        error instanceof Error ? error.message : 'تعذر تسجيل الدخول',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -145,23 +138,50 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
             {/* نموذج الدخول بالاسم وكلمة المرور فقط مع مؤثرات التركيز التفاعلية */}
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {errorMsg && (
+              {notice && (
+                <p role="status" className="text-sm text-green-800">
+                  {notice}
+                </p>
+              )}
+              {onSignUp && (
+                <button
+                  type="button"
+                  className="text-xs underline"
+                  onClick={() => {
+                    setRegister(!register);
+                    setErrorMsg('');
+                  }}
+                >
+                  {register
+                    ? 'العودة لتسجيل الدخول'
+                    : 'إنشاء حساب المالك لأول مرة'}
+                </button>
+              )}
+              {register && (
+                <p className="text-xs">
+                  أدخل بريد المالك المعتمد واختر كلمة مرور من 12 حرفًا على
+                  الأقل.
+                </p>
+              )}
+
+              {(errorMsg || authError) && (
                 <div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-3 flex items-center gap-2 text-xs font-extrabold shadow-sm animate-card-enter">
                   <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                  <span>{errorMsg}</span>
+                  <span>{errorMsg || authError}</span>
                 </div>
               )}
 
-              {/* حقل اسم المستخدم */}
+              {/* حقل البريد الإلكتروني */}
               <div className="space-y-1.5">
                 <label
+                  htmlFor="login-email"
                   className={`text-xs font-black block px-1 transition-colors duration-300 ${
                     focusedField === 'user'
                       ? 'text-[#9E7918]'
                       : 'text-[#2C201A]'
                   }`}
                 >
-                  اسم المستخدم
+                  البريد الإلكتروني
                 </label>
                 <div
                   className={`relative flex items-center gap-3 bg-white border rounded-2xl px-3.5 py-3 transition-all duration-300 ${
@@ -180,13 +200,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                     <User className="w-4 h-4" />
                   </div>
                   <input
-                    type="text"
+                    type="email"
+                    id="login-email"
                     value={username}
                     onFocus={() => setFocusedField('user')}
                     onBlur={() => setFocusedField(null)}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="أدخل اسم المستخدم"
-                    autoComplete="username"
+                    placeholder="أدخل البريد الإلكتروني للحساب"
+                    autoComplete="email"
                     className="w-full text-sm font-extrabold bg-transparent focus:outline-none text-[#1E1612] placeholder:text-[#A39686] placeholder:font-semibold"
                     required
                   />
@@ -202,6 +223,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               {/* حقل كلمة المرور */}
               <div className="space-y-1.5">
                 <label
+                  htmlFor="login-password"
                   className={`text-xs font-black block px-1 transition-colors duration-300 ${
                     focusedField === 'pass'
                       ? 'text-[#9E7918]'
@@ -228,12 +250,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   </div>
                   <input
                     type={showPassword ? 'text' : 'password'}
+                    id="login-password"
                     value={password}
                     onFocus={() => setFocusedField('pass')}
                     onBlur={() => setFocusedField(null)}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    autoComplete="current-password"
+                    autoComplete={
+                      register ? 'new-password' : 'current-password'
+                    }
+                    minLength={register ? 12 : undefined}
                     className="w-full text-sm font-extrabold bg-transparent focus:outline-none text-[#1E1612] placeholder:text-[#A39686]"
                     required
                   />
@@ -291,7 +317,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   </>
                 ) : (
                   <>
-                    <span>تسجيل الدخول</span>
+                    <span>
+                      {register ? 'إنشاء حساب المالك' : 'تسجيل الدخول'}
+                    </span>
                     <ArrowLeft className="w-4 h-4 text-[#D4AF37] transition-transform duration-300 group-hover:-translate-x-1" />
                   </>
                 )}

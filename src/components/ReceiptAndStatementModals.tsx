@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import * as XLSX from 'xlsx';
+import { escapePrintData } from '../lib/safeHtml';
+import { businessDate } from '../lib/dates';
 import {
   X,
   Printer,
@@ -55,8 +56,8 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
         invoice.saleType === 'wholesale'
           ? 'مبيعات جملة'
           : invoice.saleType === 'retail'
-          ? 'بيع محل'
-          : 'كاشير'
+            ? 'بيع محل'
+            : 'كاشير'
       }*`,
       `رقم الفاتورة: *#${invoice.invoiceNumber}*`,
       `التاريخ: ${invoice.date}`,
@@ -67,19 +68,27 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
 
     invoice.items.forEach((it, idx) => {
       lines.push(
-        `${idx + 1}. *${it.itemName}* (${it.quantity} ${it.unitLabel}) = *${it.totalPrice.toLocaleString('ar-EG')} ج.م*`
+        `${idx + 1}. *${it.itemName}* (${it.quantity} ${it.unitLabel}) = *${it.totalPrice.toLocaleString('ar-EG')} ج.م*`,
       );
     });
 
     lines.push(`────────────────`);
     if (invoice.discount > 0) {
-      lines.push(`الإجمالي قبل الخصم: ${invoice.subtotal.toLocaleString('ar-EG')} ج.م`);
+      lines.push(
+        `الإجمالي قبل الخصم: ${invoice.subtotal.toLocaleString('ar-EG')} ج.م`,
+      );
       lines.push(`الخصم: -${invoice.discount.toLocaleString('ar-EG')} ج.م`);
     }
-    lines.push(`💰 *الإجمالي المطلوب: ${invoice.totalAmount.toLocaleString('ar-EG')} ج.م*`);
-    lines.push(`✅ المدفوع (${invoice.paymentMethod}): ${invoice.paidAmount.toLocaleString('ar-EG')} ج.م`);
+    lines.push(
+      `💰 *الإجمالي المطلوب: ${invoice.totalAmount.toLocaleString('ar-EG')} ج.م*`,
+    );
+    lines.push(
+      `✅ المدفوع (${invoice.paymentMethod}): ${invoice.paidAmount.toLocaleString('ar-EG')} ج.م`,
+    );
     if (invoice.remainingAmount > 0) {
-      lines.push(`⚠️ *المتبقي آجل: ${invoice.remainingAmount.toLocaleString('ar-EG')} ج.م*`);
+      lines.push(
+        `⚠️ *المتبقي آجل: ${invoice.remainingAmount.toLocaleString('ar-EG')} ج.م*`,
+      );
     } else {
       lines.push(`✨ الفاتورة خالصة بالكامل`);
     }
@@ -99,20 +108,21 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
   };
 
   const handlePrintReceipt = () => {
+    const printInvoice = escapePrintData(invoice);
     const printWin = window.open('', '_blank', 'width=420,height=700');
     if (!printWin) {
       window.print();
       return;
     }
 
-    const rowsHtml = invoice.items
+    const rowsHtml = printInvoice.items
       .map(
         (it) => `
         <tr>
           <td style="padding:6px 4px;border-bottom:1px dashed #ccc;font-weight:bold;">${it.itemName}</td>
           <td style="padding:6px 4px;border-bottom:1px dashed #ccc;text-align:center;">${it.quantity} ${it.unitLabel}</td>
           <td style="padding:6px 4px;border-bottom:1px dashed #ccc;text-align:left;font-weight:bold;">${it.totalPrice.toLocaleString('ar-EG')} ج.م</td>
-        </tr>`
+        </tr>`,
       )
       .join('');
 
@@ -121,7 +131,7 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
       <html lang="ar" dir="rtl">
       <head>
         <meta charset="UTF-8" />
-        <title>فاتورة #${invoice.invoiceNumber} - بُن العجوز</title>
+        <title>فاتورة #${printInvoice.invoiceNumber} - بُن العجوز</title>
         <style>
           body { font-family: 'Cairo', 'Tahoma', sans-serif; width: 320px; margin: 0 auto; padding: 12px; color: #1E1612; }
           .header { text-align: center; border-bottom: 2px solid #1E1612; padding-bottom: 8px; margin-bottom: 10px; }
@@ -138,14 +148,16 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
         <div class="header">
           <div class="title">☕ بُن العجوز — أصل المزاج</div>
           <div class="sub">فاتورة ${
-            invoice.saleType === 'wholesale' ? 'مبيعات جملة' : 'مبيعات المحل'
+            printInvoice.saleType === 'wholesale'
+              ? 'مبيعات جملة'
+              : 'مبيعات المحل'
           }</div>
         </div>
         <div class="meta">
-          <div><b>رقم الفاتورة:</b> #${invoice.invoiceNumber}</div>
-          <div><b>التاريخ:</b> ${invoice.date}</div>
-          <div><b>العميل:</b> ${invoice.customerName}</div>
-          <div><b>المسؤول:</b> ${invoice.partnerName}</div>
+          <div><b>رقم الفاتورة:</b> #${printInvoice.invoiceNumber}</div>
+          <div><b>التاريخ:</b> ${printInvoice.date}</div>
+          <div><b>العميل:</b> ${printInvoice.customerName}</div>
+          <div><b>المسؤول:</b> ${printInvoice.partnerName}</div>
         </div>
         <table>
           <thead>
@@ -161,15 +173,15 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
         </table>
         <div class="totals">
           ${
-            invoice.discount > 0
-              ? `<div>الإجمالي الفرعي: ${invoice.subtotal} ج.م | الخصم: ${invoice.discount} ج.م</div>`
+            printInvoice.discount > 0
+              ? `<div>الإجمالي الفرعي: ${printInvoice.subtotal} ج.م | الخصم: ${printInvoice.discount} ج.م</div>`
               : ''
           }
-          <div style="font-size:15px;font-weight:900;">الإجمالي المطلوب: ${invoice.totalAmount.toLocaleString('ar-EG')} ج.م</div>
-          <div>المدفوع (${invoice.paymentMethod}): <b>${invoice.paidAmount.toLocaleString('ar-EG')} ج.م</b></div>
+          <div style="font-size:15px;font-weight:900;">الإجمالي المطلوب: ${printInvoice.totalAmount.toLocaleString('ar-EG')} ج.م</div>
+          <div>المدفوع (${printInvoice.paymentMethod}): <b>${printInvoice.paidAmount.toLocaleString('ar-EG')} ج.م</b></div>
           ${
-            invoice.remainingAmount > 0
-              ? `<div style="color:#b91c1c;font-weight:900;">المتبقي آجل: ${invoice.remainingAmount.toLocaleString('ar-EG')} ج.م</div>`
+            printInvoice.remainingAmount > 0
+              ? `<div style="color:#b91c1c;font-weight:900;">المتبقي آجل: ${printInvoice.remainingAmount.toLocaleString('ar-EG')} ج.م</div>`
               : `<div>حالة الفاتورة: خالصة بالكامل ✓</div>`
           }
         </div>
@@ -214,7 +226,9 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
           <div className="bg-white rounded-2xl p-3 border border-[#E6DEC8] flex items-center justify-between text-xs">
             <div>
               <div className="text-[10px] text-[#7A6855]">العميل</div>
-              <div className="font-black text-[#1E1612]">{invoice.customerName}</div>
+              <div className="font-black text-[#1E1612]">
+                {invoice.customerName}
+              </div>
             </div>
             <div className="text-left">
               <div className="text-[10px] text-[#7A6855]">الدفع</div>
@@ -270,7 +284,9 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
             {invoice.remainingAmount > 0 && (
               <div className="flex justify-between text-red-600 font-black pt-1 border-t border-[#F0EAE0]">
                 <span>المتبقي آجل:</span>
-                <span>{invoice.remainingAmount.toLocaleString('ar-EG')} ج.م</span>
+                <span>
+                  {invoice.remainingAmount.toLocaleString('ar-EG')} ج.م
+                </span>
               </div>
             )}
           </div>
@@ -322,7 +338,7 @@ interface AccountStatementModalProps {
   purchaseInvoices: PurchaseInvoice[];
   salesInvoices: SalesInvoice[];
   accountPayments: AccountPaymentRecord[];
-  onRecordPayment: (amount: number, notes: string) => void;
+  onRecordPayment: (amount: number, notes: string) => boolean;
   onDeletePayment?: (paymentId: string) => void;
   onClose: () => void;
 }
@@ -346,13 +362,14 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
     if (mode === 'supplier') {
       return purchaseInvoices.filter(
         (inv) =>
-          inv.supplierId === target.id || inv.supplierName === target.name
+          !inv.isCancelled &&
+          (inv.supplierId === target.id || inv.supplierName === target.name),
       );
     }
     return salesInvoices.filter(
       (inv) =>
         !inv.isReturned &&
-        (inv.customerId === target.id || inv.customerName === target.name)
+        (inv.customerId === target.id || inv.customerName === target.name),
     );
   }, [mode, target, purchaseInvoices, salesInvoices]);
 
@@ -360,19 +377,21 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
   const relatedPayments = useMemo(() => {
     return accountPayments.filter(
       (p) =>
+        !p.reversedAt &&
         p.targetType === mode &&
-        (p.targetId === target.id || p.targetName === target.name)
+        (p.targetId === target.id || p.targetName === target.name),
     );
   }, [mode, target, accountPayments]);
 
   const handleQuickPay = () => {
     const amt = parseFloat(newPayAmount) || 0;
     if (amt <= 0) return;
-    onRecordPayment(
+    const accepted = onRecordPayment(
       amt,
       newPayNotes.trim() ||
-        (mode === 'supplier' ? 'سداد دفعة للمورد' : 'تحصيل دفعة من العميل')
+        (mode === 'supplier' ? 'سداد دفعة للمورد' : 'تحصيل دفعة من العميل'),
     );
+    if (!accepted) return;
     setNewPayAmount('');
     setNewPayNotes('');
     setSavedNotice(true);
@@ -384,7 +403,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
     const lines: string[] = [
       `☕ *بُن العجوز — أصل المزاج*`,
       `📊 *كشف حساب ${isSup ? 'مورد' : 'عميل جملة'}: ${target.name}*`,
-      `تاريخ الكشف: ${new Date().toISOString().slice(0, 10)}`,
+      `تاريخ الكشف: ${businessDate()}`,
       `────────────────`,
     ];
 
@@ -392,7 +411,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
       lines.push(`*🧾 الفواتير (${relatedInvoices.length}):*`);
       relatedInvoices.slice(0, 8).forEach((inv) => {
         lines.push(
-          `• #${inv.invoiceNumber} (${inv.date}): إجمالي *${inv.totalAmount.toLocaleString('ar-EG')} ج.م* | مدفوع: ${inv.paidAmount.toLocaleString('ar-EG')} | متبقي: *${inv.remainingAmount.toLocaleString('ar-EG')} ج.م*`
+          `• #${inv.invoiceNumber} (${inv.date}): إجمالي *${inv.totalAmount.toLocaleString('ar-EG')} ج.م* | مدفوع: ${inv.paidAmount.toLocaleString('ar-EG')} | متبقي: *${inv.remainingAmount.toLocaleString('ar-EG')} ج.م*`,
         );
       });
     }
@@ -402,14 +421,14 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
       lines.push(`*💵 الدفعات المسددة (${relatedPayments.length}):*`);
       relatedPayments.slice(0, 8).forEach((p) => {
         lines.push(
-          `• ${p.date}: *${p.amount.toLocaleString('ar-EG')} ج.م* (${p.notes || 'دفعة'})`
+          `• ${p.date}: *${p.amount.toLocaleString('ar-EG')} ج.م* (${p.notes || 'دفعة'})`,
         );
       });
     }
 
     lines.push(`────────────────`);
     lines.push(
-      `📌 *الرصيد المتبقي الحالي ${isSup ? 'لكم' : 'عليكم'}: ${target.balance.toLocaleString('ar-EG')} ج.م*`
+      `📌 *الرصيد المتبقي الحالي ${isSup ? 'لكم' : 'عليكم'}: ${target.balance.toLocaleString('ar-EG')} ج.م*`,
     );
     lines.push(`شكراً لتعاملكم مع *بُن العجوز* ☕`);
 
@@ -426,13 +445,16 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
   };
 
   const handlePrintStatement = () => {
+    const printInvoices = escapePrintData(relatedInvoices);
+    const printPayments = escapePrintData(relatedPayments);
+    const printTarget = escapePrintData(target);
     const printWin = window.open('', '_blank', 'width=650,height=800');
     if (!printWin) {
       window.print();
       return;
     }
 
-    const invRows = relatedInvoices
+    const invRows = printInvoices
       .map(
         (inv) => `
         <tr>
@@ -442,11 +464,11 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
           <td>${inv.totalAmount.toLocaleString('ar-EG')} ج.م</td>
           <td>${inv.paidAmount.toLocaleString('ar-EG')} ج.م</td>
           <td style="font-weight:bold;color:#b91c1c;">${inv.remainingAmount.toLocaleString('ar-EG')} ج.م</td>
-        </tr>`
+        </tr>`,
       )
       .join('');
 
-    const payRows = relatedPayments
+    const payRows = printPayments
       .map(
         (p) => `
         <tr>
@@ -454,7 +476,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
           <td>${p.notes || 'دفعة حساب'}</td>
           <td style="font-weight:bold;color:#047857;">${p.amount.toLocaleString('ar-EG')} ج.م</td>
           <td>${p.partnerName}</td>
-        </tr>`
+        </tr>`,
       )
       .join('');
 
@@ -463,7 +485,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
       <html lang="ar" dir="rtl">
       <head>
         <meta charset="UTF-8" />
-        <title>كشف حساب - ${target.name}</title>
+        <title>كشف حساب - ${printTarget.name}</title>
         <style>
           body { font-family: 'Cairo', 'Tahoma', sans-serif; padding: 20px; color: #1E1612; }
           .header { text-align: center; border-bottom: 2px solid #1E1612; padding-bottom: 12px; margin-bottom: 16px; }
@@ -477,20 +499,20 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
       <body>
         <div class="header">
           <h2>☕ بُن العجوز — أصل المزاج</h2>
-          <div>كشف حساب تفصيلي (${mode === 'supplier' ? 'مورد' : 'عميل'}): <b>${target.name}</b></div>
+          <div>كشف حساب تفصيلي (${mode === 'supplier' ? 'مورد' : 'عميل'}): <b>${printTarget.name}</b></div>
         </div>
         <div class="summary">
-          <div><b>الاسم:</b> ${target.name} (${target.phone})</div>
-          <div><b>الرصيد المتبقي الحالي:</b> <span style="color:#b91c1c;font-weight:900;">${target.balance.toLocaleString('ar-EG')} ج.م</span></div>
+          <div><b>الاسم:</b> ${printTarget.name} (${printTarget.phone})</div>
+          <div><b>الرصيد المتبقي الحالي:</b> <span style="color:#b91c1c;font-weight:900;">${printTarget.balance.toLocaleString('ar-EG')} ج.م</span></div>
         </div>
-        <h4>1. سجل الفواتير (${relatedInvoices.length})</h4>
+        <h4>1. سجل الفواتير (${printInvoices.length})</h4>
         <table>
           <thead>
             <tr><th>رقم الفاتورة</th><th>التاريخ</th><th>البيان</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th></tr>
           </thead>
           <tbody>${invRows || '<tr><td colspan="6">لا توجد فواتير مسجلة</td></tr>'}</tbody>
         </table>
-        <h4>2. سجل الدفعات النقدية (${relatedPayments.length})</h4>
+        <h4>2. سجل الدفعات النقدية (${printPayments.length})</h4>
         <table>
           <thead>
             <tr><th>التاريخ</th><th>البيان</th><th>المبلغ المسدد</th><th>بواسطة</th></tr>
@@ -515,7 +537,10 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
               كشف حساب: {target.name}
             </h3>
             <p className="text-[11px] text-[#D4AF37]">
-              {mode === 'supplier' ? 'سجل فواتير التوريد والدفعات' : 'سجل مسحوبات العميل والتحصيل'} • {target.phone}
+              {mode === 'supplier'
+                ? 'سجل فواتير التوريد والدفعات'
+                : 'سجل مسحوبات العميل والتحصيل'}{' '}
+              • {target.phone}
             </p>
           </div>
           <button
@@ -568,7 +593,11 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
           {target.balance > 0 && (
             <div className="bg-white rounded-2xl p-3 border border-[#E6DEC8] space-y-2">
               <div className="text-xs font-extrabold text-[#1E1612]">
-                + تسجيل {mode === 'supplier' ? 'سداد دفعة للمورد' : 'تحصيل دفعة من العميل'}:
+                + تسجيل{' '}
+                {mode === 'supplier'
+                  ? 'سداد دفعة للمورد'
+                  : 'تحصيل دفعة من العميل'}
+                :
               </div>
               <div className="flex gap-2">
                 <input
@@ -600,7 +629,9 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
           <div className="bg-white rounded-2xl p-3 border border-[#E6DEC8] space-y-2">
             <div className="text-xs font-black text-[#1E1612] flex items-center justify-between">
               <span>🧾 الفواتير ({relatedInvoices.length})</span>
-              <span className="text-[10px] text-[#7A6855]">التفاصيل والآجل</span>
+              <span className="text-[10px] text-[#7A6855]">
+                التفاصيل والآجل
+              </span>
             </div>
             {relatedInvoices.length === 0 ? (
               <div className="text-center py-3 text-xs text-[#7A6855]">
@@ -723,108 +754,3 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
 // ============================================================================
 // 3. دوال النسخ الاحتياطي الشامل وتصدير إكسيل الكامل (Backup & Restore)
 // ============================================================================
-export function downloadFullBackupJson(statePayload: Record<string, unknown>) {
-  const dateStr = new Date().toISOString().slice(0, 10);
-  const blob = new Blob([JSON.stringify(statePayload, null, 2)], {
-    type: 'application/json;charset=utf-8',
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `نسخة_احتياطية_بن_العجوز_${dateStr}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-export function exportFullStoreExcel(
-  items: InventoryItem[],
-  salesInvoices: SalesInvoice[],
-  purchaseInvoices: PurchaseInvoice[],
-  suppliers: Supplier[],
-  customers: Customer[],
-  expenses: Expense[]
-) {
-  const wb = XLSX.utils.book_new();
-
-  // 1. شيت المخزن والأصناف
-  const itemsSheet = XLSX.utils.json_to_sheet(
-    items.map((i) => ({
-      الكود: i.code,
-      الصنف: i.name,
-      الرصيد: i.stock,
-      الوحدة: i.baseUnit === 'kg' ? 'كجم' : i.baseUnit === 'liter' ? 'لتر' : 'قطعة',
-      التكلفة: i.costPrice,
-      'سعر القطاعي': i.retailPrice,
-      'سعر الجملة': i.wholesalePrice,
-    }))
-  );
-  XLSX.utils.book_append_sheet(wb, itemsSheet, 'المخزن_والأصناف');
-
-  // 2. شيت فواتير البيع
-  const salesSheet = XLSX.utils.json_to_sheet(
-    salesInvoices.map((s) => ({
-      'رقم الفاتورة': s.invoiceNumber,
-      التاريخ: s.date,
-      النوع: s.saleType === 'wholesale' ? 'جملة' : s.saleType === 'retail' ? 'محل' : 'كاشير',
-      العميل: s.customerName,
-      الإجمالي: s.totalAmount,
-      التكلفة: s.totalCost,
-      'صافي الربح': s.netProfit,
-      المدفوع: s.paidAmount,
-      المتبقي: s.remainingAmount,
-      المسؤول: s.partnerName,
-    }))
-  );
-  XLSX.utils.book_append_sheet(wb, salesSheet, 'فواتير_البيع');
-
-  // 3. شيت فواتير الشراء
-  const purchaseSheet = XLSX.utils.json_to_sheet(
-    purchaseInvoices.map((p) => ({
-      'رقم الفاتورة': p.invoiceNumber,
-      التاريخ: p.date,
-      المورد: p.supplierName,
-      الإجمالي: p.totalAmount,
-      المدفوع: p.paidAmount,
-      المتبقي: p.remainingAmount,
-      المسؤول: p.partnerName,
-    }))
-  );
-  XLSX.utils.book_append_sheet(wb, purchaseSheet, 'فواتير_الشراء');
-
-  // 4. شيت الموردين والعملاء
-  const accountsSheet = XLSX.utils.json_to_sheet([
-    ...suppliers.map((s) => ({
-      النوع: 'مورد',
-      الاسم: s.name,
-      الموبايل: s.phone,
-      'إجمالي التعامل': s.totalPurchases,
-      'الرصيد المتبقي': s.balance,
-    })),
-    ...customers.map((c) => ({
-      النوع: 'عميل',
-      الاسم: c.name,
-      الموبايل: c.phone,
-      'إجمالي التعامل': c.totalSales,
-      'الرصيد المتبقي': c.balance,
-    })),
-  ]);
-  XLSX.utils.book_append_sheet(wb, accountsSheet, 'الموردين_والعملاء');
-
-  // 5. شيت المصروفات
-  const expSheet = XLSX.utils.json_to_sheet(
-    expenses.map((e) => ({
-      التاريخ: e.date,
-      البند: e.category,
-      البيان: e.title,
-      المبلغ: e.amount,
-      'جهة الصرف': e.paidFrom,
-      الشريك: e.partnerName,
-    }))
-  );
-  XLSX.utils.book_append_sheet(wb, expSheet, 'المصروفات');
-
-  const dateStr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `سجل_محل_بن_العجوز_الشامل_${dateStr}.xlsx`);
-}

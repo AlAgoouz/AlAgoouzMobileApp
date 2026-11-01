@@ -94,11 +94,11 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 
   const catalogStats = useMemo(() => {
     const rawAndSpices = items.filter(
-      (i) => i.category === 'raw_bean' || i.category === 'raw_spice'
+      (i) => i.category === 'raw_bean' || i.category === 'raw_spice',
     ).length;
     const blendsAndDrinks = items.filter(
       (i) =>
-        i.category === 'manufactured_blend' || i.category === 'drink_recipe'
+        i.category === 'manufactured_blend' || i.category === 'drink_recipe',
     ).length;
     const sellable = items.filter((i) => i.retailPrice > 0);
     const avgMargin =
@@ -108,7 +108,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
               s +
               ((i.retailPrice - i.costPrice) / Math.max(1, i.retailPrice)) *
                 100,
-            0
+            0,
           ) / sellable.length
         : 0;
 
@@ -186,8 +186,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
     const effectiveUnit = isDrink || isDirect ? 'piece' : newUnit;
 
     onAddNewItem({
-      code:
-        newCode.trim() || `BN-${Math.floor(110 + Math.random() * 880)}`,
+      code: newCode.trim() || `BN-${Math.floor(110 + Math.random() * 880)}`,
       name: newName.trim(),
       category: newCat,
       roastLevel:
@@ -245,7 +244,8 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 دليل المنتجات وأسعار البيع والتكلفة
               </h2>
               <p className="text-[10px] text-[#D4AF37] mt-0.5">
-                من هنا تُعرّف الأصناف التي تعتمد عليها المشتريات والإنتاج والمبيعات
+                من هنا تُعرّف الأصناف التي تعتمد عليها المشتريات والإنتاج
+                والمبيعات
               </p>
             </div>
             <span className="text-xs font-black bg-white/10 border border-[#C59B27]/40 text-[#FBF5B7] px-2.5 py-1 rounded-xl">
@@ -345,7 +345,8 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
         {/* قائمة بطاقات المنتجات والتسعير */}
         {filtered.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 text-center text-xs text-[#7A6855] border border-[#E6DEC8]">
-            لا توجد منتجات مسجلة في هذا التصنيف. اضغط (+ تعريف وإضافة منتج جديد) للبدء.
+            لا توجد منتجات مسجلة في هذا التصنيف. اضغط (+ تعريف وإضافة منتج جديد)
+            للبدء.
           </div>
         ) : (
           <div className="space-y-2.5">
@@ -355,10 +356,10 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 item.baseUnit === 'kg'
                   ? 'كجم'
                   : item.baseUnit === 'liter'
-                  ? 'لتر'
-                  : 'كوب/قطعة';
+                    ? 'لتر'
+                    : 'كوب/قطعة';
               const profitPerUnit = Number(
-                (item.retailPrice - item.costPrice).toFixed(1)
+                (item.retailPrice - item.costPrice).toFixed(1),
               );
               const marginPct =
                 item.retailPrice > 0
@@ -555,11 +556,21 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                     }}
                     className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-[#FAF8F4]"
                   >
-                    <option value="raw_bean">1. حبوب بن خام (شراء + بيع + إنتاج)</option>
-                    <option value="manufactured_blend">2. توليفة بن مصنعة (إنتاج + بيع)</option>
-                    <option value="raw_spice">3. تحويجة وخامات (حبهان/لبن/أكواب)</option>
-                    <option value="drink_recipe">4. مشروب كاشير بوصفة (بيع بالكوب)</option>
-                    <option value="direct_product">5. منتج بيع مباشر بالقطعة</option>
+                    <option value="raw_bean">
+                      1. حبوب بن خام (شراء + بيع + إنتاج)
+                    </option>
+                    <option value="manufactured_blend">
+                      2. توليفة بن مصنعة (إنتاج + بيع)
+                    </option>
+                    <option value="raw_spice">
+                      3. تحويجة وخامات (حبهان/لبن/أكواب)
+                    </option>
+                    <option value="drink_recipe">
+                      4. مشروب كاشير بوصفة (بيع بالكوب)
+                    </option>
+                    <option value="direct_product">
+                      5. منتج بيع مباشر بالقطعة
+                    </option>
                   </select>
                 </div>
 
@@ -574,7 +585,9 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                     }
                     className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-[#FAF8F4]"
                   >
-                    <option value="kg">كيلو جرام (يُباع بالجرام والكيلو)</option>
+                    <option value="kg">
+                      كيلو جرام (يُباع بالجرام والكيلو)
+                    </option>
                     <option value="piece">قطعة / كوب</option>
                     <option value="liter">لتر / مل</option>
                   </select>
@@ -596,7 +609,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                             | 'وسط'
                             | 'غامق'
                             | 'إسبريسو'
-                            | 'بدون'
+                            | 'بدون',
                         )
                       }
                       className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-[#FAF8F4]"
@@ -878,7 +891,7 @@ interface InventoryScreenProps {
         | 'retailPrice'
         | 'wholesalePrice'
       >
-    >
+    >,
   ) => void;
   onDeleteItem: (id: string) => void;
   onNavigateToProduction: () => void;
@@ -926,7 +939,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
       items
         .filter((i) => i.category !== 'drink_recipe')
         .reduce((s, i) => s + i.stock * i.costPrice, 0),
-    [items]
+    [items],
   );
 
   const handleCreateItem = () => {
@@ -964,7 +977,8 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
         <div className="text-center">
           <h1 className="text-base font-extrabold">المخزن والأصناف</h1>
           <p className="text-[11px] text-[#D4AF37]">
-            القيمة: {Math.round(totalInventoryCapital).toLocaleString('ar-EG')} ج.م
+            القيمة: {Math.round(totalInventoryCapital).toLocaleString('ar-EG')}{' '}
+            ج.م
           </p>
         </div>
         <button
@@ -1034,14 +1048,16 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                 item.baseUnit === 'kg'
                   ? 'كجم'
                   : item.baseUnit === 'liter'
-                  ? 'لتر'
-                  : 'قطعة';
+                    ? 'لتر'
+                    : 'قطعة';
 
               return (
                 <div
                   key={item.id}
                   className={`bg-white rounded-2xl p-3 border shadow-sm space-y-2 ${
-                    isLow ? 'border-amber-500 bg-amber-50/20' : 'border-[#E6DEC8]'
+                    isLow
+                      ? 'border-amber-500 bg-amber-50/20'
+                      : 'border-[#E6DEC8]'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -1391,7 +1407,7 @@ export const ShortagesScreen: React.FC<{
   onBack: () => void;
 }> = ({ items, onNavigateToPurchase, onNavigateToProduction, onBack }) => {
   const lowItems = items.filter(
-    (i) => i.category !== 'drink_recipe' && i.stock <= i.minStock
+    (i) => i.category !== 'drink_recipe' && i.stock <= i.minStock,
   );
 
   return (
@@ -1420,7 +1436,7 @@ export const ShortagesScreen: React.FC<{
               item.supplierPrices.length > 0
                 ? item.supplierPrices.reduce(
                     (min, p) => (p.price < min.price ? p : min),
-                    item.supplierPrices[0]
+                    item.supplierPrices[0],
                   )
                 : null;
 
@@ -1440,7 +1456,8 @@ export const ShortagesScreen: React.FC<{
                 </div>
                 <div className="text-xs text-[#7A6855]">
                   حد الطلب: <b>{item.minStock}</b>
-                  {cheapest && ` • أرخص مورد: ${cheapest.supplierName} (${cheapest.price} ج.م)`}
+                  {cheapest &&
+                    ` • أرخص مورد: ${cheapest.supplierName} (${cheapest.price} ج.م)`}
                 </div>
                 <button
                   onClick={
@@ -1473,8 +1490,16 @@ export const SuppliersAndCustomersScreen: React.FC<{
   purchaseInvoices: PurchaseInvoice[];
   salesInvoices: SalesInvoice[];
   accountPayments: AccountPaymentRecord[];
-  onPaySupplier: (supplierId: string, amount: number, notes?: string) => void;
-  onCollectCustomer: (customerId: string, amount: number, notes?: string) => void;
+  onPaySupplier: (
+    supplierId: string,
+    amount: number,
+    notes?: string,
+  ) => boolean;
+  onCollectCustomer: (
+    customerId: string,
+    amount: number,
+    notes?: string,
+  ) => boolean;
   onDeletePayment?: (paymentId: string) => void;
   onAddSupplier: (sup: Omit<Supplier, 'id'>) => void;
   onDeleteSupplier: (id: string) => void;
@@ -1503,7 +1528,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
     balance: number;
   } | null>(null);
   const [statementTargetId, setStatementTargetId] = useState<string | null>(
-    null
+    null,
   );
   const [amountInput, setAmountInput] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1706,9 +1731,9 @@ export const SuppliersAndCustomersScreen: React.FC<{
           accountPayments={accountPayments}
           onRecordPayment={(amt, notes) => {
             if (mode === 'suppliers') {
-              onPaySupplier(activeStatementEntity.id, amt, notes);
+              return onPaySupplier(activeStatementEntity.id, amt, notes);
             } else {
-              onCollectCustomer(activeStatementEntity.id, amt, notes);
+              return onCollectCustomer(activeStatementEntity.id, amt, notes);
             }
           }}
           onDeletePayment={onDeletePayment}
@@ -1735,9 +1760,9 @@ export const SuppliersAndCustomersScreen: React.FC<{
                   const val = parseFloat(amountInput) || 0;
                   if (val > 0) {
                     if (mode === 'suppliers') {
-                      onPaySupplier(payModalTarget.id, val);
+                      if (!onPaySupplier(payModalTarget.id, val)) return;
                     } else {
-                      onCollectCustomer(payModalTarget.id, val);
+                      if (!onCollectCustomer(payModalTarget.id, val)) return;
                     }
                   }
                   setPayModalTarget(null);
@@ -1873,15 +1898,16 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
                     {inv.isReturned
                       ? 'مرتجع'
                       : inv.saleType === 'wholesale'
-                      ? 'جملة'
-                      : inv.saleType === 'cashier_sync'
-                      ? 'كاشير'
-                      : 'محل'}
+                        ? 'جملة'
+                        : inv.saleType === 'cashier_sync'
+                          ? 'كاشير'
+                          : 'محل'}
                   </span>
                   <button
                     onClick={() => onDeleteInvoice(inv.id)}
                     className="p-1 text-red-500 hover:bg-red-50 rounded-lg"
-                    title="حذف الفاتورة نهائياً"
+                    disabled
+                    title="حذف المستند المعتمد معطل؛ استخدم المرتجع"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -1914,6 +1940,12 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
                     <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
                     <span>طباعة / واتساب</span>
                   </button>
+                  {inv.isReturned && inv.returnRefundAmount !== undefined && (
+                    <p className="text-xs text-amber-800">
+                      مبلغ الاسترداد المسجل:{' '}
+                      {inv.returnRefundAmount.toLocaleString('ar-EG')} ج.م
+                    </p>
+                  )}
                   {!inv.isReturned && (
                     <button
                       onClick={() => onReturnInvoice(inv.id)}
@@ -1937,7 +1969,7 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
             customers.find(
               (c) =>
                 c.id === selectedReceiptInv.customerId ||
-                c.name === selectedReceiptInv.customerName
+                c.name === selectedReceiptInv.customerName,
             )?.phone || ''
           }
           onClose={() => setSelectedReceiptInv(null)}
@@ -1967,7 +1999,7 @@ interface MoreMenuProps {
   onDeleteExpense: (id: string) => void;
   onUpdatePartnerAccount: (
     id: string,
-    patch: Partial<Pick<Partner, 'name' | 'username' | 'password' | 'phone'>>
+    patch: Partial<Pick<Partner, 'name' | 'username' | 'phone'>>,
   ) => void;
   onClearAllDemoData: () => void;
   onClearTransactionsKeepCatalog: () => void;
@@ -2041,8 +2073,8 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
               <span>النسخ الاحتياطي الشامل واسترجاع البيانات</span>
             </div>
             <p className="text-xs text-stone-300 leading-relaxed">
-              احفظ نسخة كاملة من بيانات المحل (أصناف، وصفات، فواتير، موردين، عملاء،
-              وعمال) على جهازك أو استرجعها في أي وقت بضغطة زر.
+              احفظ نسخة كاملة من بيانات المحل (أصناف، وصفات، فواتير، موردين،
+              عملاء، وعمال) على جهازك أو استرجعها في أي وقت بضغطة زر.
             </p>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -2070,15 +2102,25 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
+                  if (file.size > 10 * 1024 * 1024) {
+                    alert(
+                      'حجم النسخة أكبر من 10 ميجابايت؛ يلزم استرجاعها من أداة الإدارة.',
+                    );
+                    return;
+                  }
                   const reader = new FileReader();
                   reader.onload = (ev) => {
                     try {
-                      const parsed = JSON.parse(String(ev.target?.result || '{}'));
+                      const parsed = JSON.parse(
+                        String(ev.target?.result || '{}'),
+                      );
                       if (parsed && typeof parsed === 'object') {
                         onRestoreBackupJson(parsed);
                       }
                     } catch {
-                      alert('الملف غير صالح، يرجى اختيار ملف النسخة الاحتياطية الصحيح.');
+                      alert(
+                        'الملف غير صالح، يرجى اختيار ملف النسخة الاحتياطية الصحيح.',
+                      );
                     }
                   };
                   reader.readAsText(file);
@@ -2094,9 +2136,10 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
               <span>حذف الفواتير والحركات التجريبية فقط</span>
             </div>
             <p className="text-xs text-[#5C4B3E] leading-relaxed">
-              يحذف فواتير البيع والشراء والمصروفات والسجل التجريبي ويصفّر الأرصدة، مع{' '}
-              <b>الإبقاء على أسماء أصناف البن والتوليفات والوصفات</b> لتعديلها كما
-              تريد.
+              يحذف فواتير البيع والشراء والمصروفات والسجل التجريبي ويصفّر
+              الأرصدة، مع{' '}
+              <b>الإبقاء على أسماء أصناف البن والتوليفات والوصفات</b> لتعديلها
+              كما تريد.
             </p>
             <button
               onClick={onClearTransactionsKeepCatalog}
@@ -2195,21 +2238,21 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
               </select>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              {(
-                ['درج المحل', 'خزنة الشركة', 'من جيب الشريك'] as const
-              ).map((src) => (
-                <button
-                  key={src}
-                  onClick={() => setExpPaidFrom(src)}
-                  className={`py-2 rounded-xl text-xs font-extrabold border ${
-                    expPaidFrom === src
-                      ? 'bg-[#1E1612] border-[#C59B27] text-[#FBF5B7]'
-                      : 'bg-[#FAF8F4] border-[#DFD7C6] text-[#5C4B3E]'
-                  }`}
-                >
-                  {src}
-                </button>
-              ))}
+              {(['درج المحل', 'خزنة الشركة', 'من جيب الشريك'] as const).map(
+                (src) => (
+                  <button
+                    key={src}
+                    onClick={() => setExpPaidFrom(src)}
+                    className={`py-2 rounded-xl text-xs font-extrabold border ${
+                      expPaidFrom === src
+                        ? 'bg-[#1E1612] border-[#C59B27] text-[#FBF5B7]'
+                        : 'bg-[#FAF8F4] border-[#DFD7C6] text-[#5C4B3E]'
+                    }`}
+                  >
+                    {src}
+                  </button>
+                ),
+              )}
             </div>
             <button
               onClick={() => {
@@ -2241,6 +2284,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                 <div>
                   <div className="text-sm font-extrabold text-[#1E1612]">
                     {e.title}
+                    {e.isCancelled ? ' — ملغى' : ''}
                   </div>
                   <div className="text-xs text-[#7A6855]">
                     {e.category} • {e.paidFrom} • {e.partnerName}
@@ -2251,6 +2295,8 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                     {e.amount} ج.م
                   </span>
                   <button
+                    disabled={e.isCancelled || Boolean(e.sourceInvoiceId)}
+                    title="إلغاء المصروف مع حفظ السجل"
                     onClick={() => onDeleteExpense(e.id)}
                     className="p-1 text-red-500 hover:bg-red-50 rounded-lg"
                   >
@@ -2275,7 +2321,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
           >
             <ChevronRight className="w-6 h-6" />
           </button>
-          <h1 className="text-base font-extrabold">حسابات الشركاء الـ 4</h1>
+          <h1 className="text-base font-extrabold">حسابات الملاك والشركاء</h1>
           <div className="w-8" />
         </div>
         <div className="p-4 space-y-3.5">
@@ -2317,19 +2363,10 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                     className="w-full bg-white border border-[#DFD7C6] rounded-lg px-2 py-1 font-extrabold"
                   />
                 </div>
-                <div>
-                  <label className="text-[10px] text-[#7A6855] block">
-                    كلمة السر:
-                  </label>
-                  <input
-                    type="text"
-                    value={p.password}
-                    onChange={(e) =>
-                      onUpdatePartnerAccount(p.id, { password: e.target.value })
-                    }
-                    className="w-full bg-white border border-[#DFD7C6] rounded-lg px-2 py-1 font-extrabold text-[#9E7918]"
-                  />
-                </div>
+                <p className="text-xs text-stone-600">
+                  كلمات المرور تُدار من الحساب الموثق ولا تُحفظ ضمن بيانات
+                  المحل.
+                </p>
               </div>
             </div>
           ))}
@@ -2443,7 +2480,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
     },
     {
       id: 'partners',
-      title: 'حسابات الشركاء الـ 4',
+      title: 'حسابات الملاك والشركاء',
       subtitle: 'تعديل الأسماء وكلمات السر',
       icon: Shield,
       iconBg: 'bg-[#1E1612] text-[#FBF5B7]',

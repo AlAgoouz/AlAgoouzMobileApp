@@ -92,6 +92,13 @@ export interface PurchaseInvoice {
   paymentMethod: 'نقدي' | 'آجل' | 'جزئي';
   partnerName: string;
   notes?: string;
+  createdAt?: string;
+  isCancelled?: boolean;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  refundDue?: number;
+  inventoryBefore?: InventoryItem[];
+  inventoryAfter?: InventoryItem[];
 }
 
 export interface SalesInvoiceItem {
@@ -127,7 +134,13 @@ export interface SalesInvoice {
   paymentMethod: 'نقدي' | 'آجل' | 'محفظة/انستا باي';
   partnerName: string;
   sourceFile?: string;
+  sourceId?: string;
+  sourceQueueId?: string;
   isReturned?: boolean;
+  returnedAt?: string;
+  returnedBy?: string;
+  returnDebtReversed?: number;
+  returnRefundAmount?: number;
 }
 
 export interface Supplier {
@@ -159,14 +172,18 @@ export interface Expense {
   title: string;
   amount: number;
   partnerName: string;
-  paidFrom: 'درج المحل' | 'خزنة الشركة' | 'من جيب الشريك';
+  paidFrom: 'درج المحل' | 'خزنة الشركة' | 'من جيب الشريك' | 'تسوية مخزون (بدون نقدية)';
   notes?: string;
+  partnerId?: string;
+  isCancelled?: boolean;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  sourceInvoiceId?: string;
 }
 
 export interface Partner {
   id: string;
   username: string;                   // اسم المستخدم للدخول (مثلاً owner1)
-  password: string;                   // كلمة المرور الخاصة بالشريك
   name: string;                       // الاسم الكامل للشريك المالك
   role: string;                       // المسمى والاختصاص
   avatarLetter: string;
@@ -196,6 +213,7 @@ export interface AuditLogEntry {
     | 'شؤون عمال';
   description: string;
   amount?: number;
+  actorId?: string;
 }
 
 export interface StocktakingItemVariance {
@@ -256,6 +274,10 @@ export interface AccountPaymentRecord {
   amount: number;
   partnerName: string;
   notes?: string;
+  reversedAt?: string;
+  reversedBy?: string;
+  allocations?: {invoiceId:string;amount:number}[];
+  openingBalanceAmount?: number;
 }
 
 export interface ShiftRecord {

@@ -1,112 +1,142 @@
-/**
- * أداة المراقبة التلقائية لفولدر مبيعات كاشير (بُن العجوز - أصل المزاج)
- * تراقب الفولدر المحدد وبمجرد خروج أي شيت إكسيل (.xlsx / .xls / .csv) من برنامج الكاشير:
- * 1. تقرأ الأصناف والكميات والأوزان والمبالغ
- * 2. ترفعها فوراً إلى قاعدة بيانات Supabase ليتم خصم المخزون والوصفات تلقائياً
- * 3. تنقل الملف المعالج إلى مجلد Archive لعدم تكرار خصمه
- */
-
-import fs from 'node:fs';
+import fs from 'node:fs/promises';
 import path from 'node:path';
-import * as XLSX from 'xlsx';
+import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 import { createClient } from '@supabase/supabase-js';
+const require = createRequire(import.meta.url);
+const XLSX = require('xlsx');
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// إعدادات الفولدر المراد مراقبته على جهاز الكاشير
-const WATCH_FOLDER = process.env.CASHIER_WATCH_FOLDER || path.resolve(process.cwd(), 'cashier-exports');
-const ARCHIVE_FOLDER = path.join(WATCH_FOLDER, 'Archive');
-
-// بيانات الاتصال بـ Supabase
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
-
-if (!fs.existsSync(WATCH_FOLDER)) {
-  fs.mkdirSync(WATCH_FOLDER, { recursive: true });
+export function exportDate(fileName, configuredDate) {
+  const value =
+    configuredDate ||
+    fileName.match(/(?:^|[^0-9])(\d{4}-\d{2}-\d{2})(?:[^0-9]|$)/)?.[1];
+  if (
+    !value ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    new Date(value + 'T12:00:00Z').toISOString().slice(0, 10) !== value
+  )
+    throw new Error(
+      'حدد تاريخ المبيعات في اسم الملف YYYY-MM-DD أو CASHIER_SALE_DATE؛ لم يتم رفع الملف',
+    );
+  return value;
 }
-if (!fs.existsSync(ARCHIVE_FOLDER)) {
-  fs.mkdirSync(ARCHIVE_FOLDER, { recursive: true });
+async function stableFile(filePath) {
+  let last = '',
+    stable = 0;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const stat = await fs.stat(filePath);
+    if (stat.size > 10 * 1024 * 1024)
+      throw new Error('حجم الملف أكبر من 10 ميجابايت');
+    const current = stat.size + ':' + stat.mtimeMs;
+    if (current === last) stable++;
+    else stable = 0;
+    if (stable >= 3) return;
+    last = current;
+    await delay(200);
+  }
+  throw new Error('الملف لا يزال قيد الكتابة؛ ستعاد المحاولة');
 }
-
-console.log('==========================================================');
-console.log('☕ أداة الربط التلقائي لكاشير (بُن العجوز - أصل المزاج)');
-console.log(`📂 الفولدر المراقب حالياً: ${WATCH_FOLDER}`);
-console.log('==========================================================');
-
-const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-  : null;
-
-if (!supabase) {
-  console.log('⚠️ تنبيه: لم يتم ضبط متغيرات SUPABASE_URL و SUPABASE_ANON_KEY بعد.');
-  console.log('   سيتم قراءة الملفات محلياً وعرض محتواها حتى تضع مفاتيح Supabase.');
+export async function processCashierFile(
+  filePath,
+  { client, archiveFolder, saleDate, waitForStable = true },
+) {
+  if (!client) throw new Error('لا يوجد اتصال موثق؛ لم تتم أرشفة الملف');
+  const name = path.basename(filePath);
+  if (
+    name.startsWith('~$') ||
+    !['.xlsx', '.xls', '.csv'].includes(path.extname(name).toLowerCase())
+  )
+    return;
+  const date = exportDate(name, saleDate);
+  if (waitForStable) await stableFile(filePath);
+  const buffer = await fs.readFile(filePath);
+  if (buffer.byteLength > 10 * 1024 * 1024) throw new Error('الملف كبير جدًا');
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  if (!workbook.SheetNames.length)
+    throw new Error('الملف لا يحتوي ورقة بيانات');
+  const rows = XLSX.utils.sheet_to_json(
+    workbook.Sheets[workbook.SheetNames[0]],
+    { defval: '' },
+  );
+  if (!rows.length || rows.length > 10000)
+    throw new Error('عدد الصفوف غير صالح');
+  const hash = createHash('sha256')
+    .update(date + '\n')
+    .update(buffer)
+    .digest('hex');
+  const { data, error } = await client.rpc('bon_erp_enqueue_export', {
+    p_file_name: name,
+    p_sale_date: date,
+    p_raw_rows: rows,
+    p_content_hash: hash,
+  });
+  if (error || !data)
+    throw new Error(error?.message || 'لم يصل تأكيد رفع الملف');
+  await fs.mkdir(archiveFolder, { recursive: true });
+  const destination = path.join(archiveFolder, hash + '_' + name);
+  // rename follows confirmed idempotent enqueue. A failed rename is safe to retry.
+  await fs.rename(filePath, destination);
+  return { queueId: data, destination, rows: rows.length };
 }
-
-const processingFiles = new Set();
-
-async function processExcelFile(filePath) {
-  const fileName = path.basename(filePath);
-  if (fileName.startsWith('~$') || processingFiles.has(filePath)) return;
-
-  const ext = path.extname(fileName).toLowerCase();
-  if (!['.xlsx', '.xls', '.csv'].includes(ext)) return;
-
-  processingFiles.add(filePath);
-  try {
-    // انتظار نصف ثانية للتأكد من انتهاء برنامج الكاشير من كتابة الملف
-    await new Promise((r) => setTimeout(r, 600));
-    if (!fs.existsSync(filePath)) return;
-
-    console.log(`\n📥 تم اكتشاف شيت مبيعات جديد: ${fileName}`);
-    const fileBuffer = fs.readFileSync(filePath);
-    const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
-    const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-
-    console.log(`✅ تم قراءة ${rows.length} سطر من ملف الكاشير.`);
-
-    if (supabase && rows.length > 0) {
-      const today = new Date().toISOString().slice(0, 10);
-      const { error } = await supabase.from('cashier_sync_queue').insert({
-        file_name: fileName,
-        sale_date: today,
-        raw_rows: rows,
-        processed: false,
-      });
-
-      if (error) {
-        console.error('❌ خطأ أثناء الإرسال إلى Supabase:', error.message);
-        return;
+export async function startWatcher(env = process.env) {
+  const url = env.SUPABASE_URL || env.VITE_SUPABASE_URL;
+  const key = env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key || !env.CASHIER_EMAIL || !env.CASHIER_PASSWORD)
+    throw new Error(
+      'اضبط اتصال Supabase وبريد وكلمة مرور حساب الكاشير. لن يتم نقل أي ملف قبل ذلك.',
+    );
+  const client = createClient(url, key, { auth: { persistSession: false } });
+  const { error } = await client.auth.signInWithPassword({
+    email: env.CASHIER_EMAIL,
+    password: env.CASHIER_PASSWORD,
+  });
+  if (error) throw new Error('فشل توثيق حساب الكاشير؛ تحقق من إعداداته');
+  const folder = path.resolve(env.CASHIER_WATCH_FOLDER || 'cashier-exports');
+  const archiveFolder = path.join(folder, 'Archive');
+  await fs.mkdir(folder, { recursive: true });
+  let busy = false,
+    closed = false;
+  const scan = async () => {
+    if (busy || closed) return;
+    busy = true;
+    try {
+      for (const entry of await fs.readdir(folder, { withFileTypes: true })) {
+        if (!entry.isFile()) continue;
+        try {
+          const result = await processCashierFile(
+            path.join(folder, entry.name),
+            { client, archiveFolder, saleDate: env.CASHIER_SALE_DATE },
+          );
+          if (result) console.log('تم رفع وأرشفة:', entry.name);
+        } catch (error) {
+          console.error('لم يعتمد الملف:', entry.name, error.message);
+        }
       }
-      console.log('🚀 تم رفع مبيعات الكاشير إلى Supabase بنجاح! ستظهر الآن على موبايلات الشركاء الأربعة.');
+    } finally {
+      busy = false;
     }
-
-    // نقل الملف إلى مجلد Archive
-    const archivedName = `${Date.now()}_${fileName}`;
-    const destPath = path.join(ARCHIVE_FOLDER, archivedName);
-    fs.renameSync(filePath, destPath);
-    console.log(`📦 تم نقل الملف بعد معالجته إلى: Archive/${archivedName}`);
-  } catch (err) {
-    console.error(`❌ خطأ في قراءة الملف ${fileName}:`, err.message);
-  } finally {
-    processingFiles.delete(filePath);
-  }
+  };
+  const timer = setInterval(() => {
+    void scan().catch((error) =>
+      console.error('تعذر فحص المجلد:', error.message),
+    );
+  }, 5000);
+  await scan();
+  console.log('مراقبة ملفات الكاشير:', folder);
+  return () => {
+    closed = true;
+    clearInterval(timer);
+    client.auth.stopAutoRefresh();
+  };
 }
-
-// فحص أي ملفات موجودة عند بدء التشغيل
-for (const file of fs.readdirSync(WATCH_FOLDER)) {
-  const fullPath = path.join(WATCH_FOLDER, file);
-  if (fs.statSync(fullPath).isFile()) {
-    processExcelFile(fullPath);
-  }
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+) {
+  startWatcher().catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
 }
-
-// مراقبة الفولدر لحظياً
-fs.watch(WATCH_FOLDER, (eventType, filename) => {
-  if (!filename) return;
-  const fullPath = path.join(WATCH_FOLDER, filename);
-  if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
-    processExcelFile(fullPath);
-  }
-});
-
-console.log('👀 جاري مراقبة الفولدر... ضع أي شيت إكسيل خارج من الكاشير هنا ليتم رفعه تلقائياً.');

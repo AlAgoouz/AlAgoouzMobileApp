@@ -1,0 +1,118 @@
+{
+  "date": "2026-11-01",
+  "method": "Source executed in memory; React state simulated; effects disabled; no live data accessed.",
+  "results": [
+    {
+      "name": "overselling silently clips inventory shortage",
+      "reproduced": true,
+      "evidence": {
+        "stockBefore": 1,
+        "sold": 5,
+        "stockAfter": 0,
+        "unrecordedShortage": 4
+      }
+    },
+    {
+      "name": "sample quarter-kilo row becomes eight kilos",
+      "reproduced": true,
+      "evidence": {
+        "expectedKg": 2,
+        "actualKg": 8
+      }
+    },
+    {
+      "name": "negative return quantity becomes positive sale",
+      "reproduced": true,
+      "evidence": {
+        "inputQty": -2,
+        "outputQty": 2,
+        "inputTotal": -400,
+        "outputTotal": 400
+      }
+    },
+    {
+      "name": "item code column overwrites product name",
+      "reproduced": true,
+      "evidence": {
+        "rawName": "B1",
+        "matched": false
+      }
+    },
+    {
+      "name": "importing same file twice creates two invoices",
+      "reproduced": true,
+      "evidence": {
+        "sameFileImports": 2,
+        "invoices": 2
+      }
+    },
+    {
+      "name": "invoice return does not restore stock or customer debt",
+      "reproduced": true,
+      "evidence": {
+        "returned": true,
+        "stockUnchanged": 1,
+        "debtUnchanged": 200
+      }
+    },
+    {
+      "name": "deleting payment does not reverse balance",
+      "reproduced": true,
+      "evidence": {
+        "originalBalance": 100,
+        "payment": 40,
+        "balanceAfterPaymentDeletion": 60
+      }
+    },
+    {
+      "name": "reset leaves partner withdrawals unchanged",
+      "reproduced": true,
+      "evidence": {
+        "totalWithdrawals": 123,
+        "wrongFieldCreated": "totalWithdrawn"
+      }
+    },
+    {
+      "name": "production succeeds with missing ingredient",
+      "reproduced": true,
+      "evidence": {
+        "missingIngredient": "deleted",
+        "productionAccepted": true
+      }
+    },
+    {
+      "name": "backup restore omits partners",
+      "reproduced": true,
+      "evidence": {
+        "backupName": "Restored",
+        "actualName": "Original"
+      }
+    },
+    {
+      "name": "empty profit report fabricates chart values",
+      "reproduced": true,
+      "evidence": {
+        "actualNetProfit": 0,
+        "fabricatedChartTotal": 9400
+      }
+    },
+    {
+      "name": "supplier overpayment loses credit",
+      "reproduced": true,
+      "evidence": {
+        "oldDebt": 100,
+        "paid": 150,
+        "expectedCredit": 50,
+        "recordedBalance": 0
+      }
+    },
+    {
+      "name": "print HTML contains unescaped stored markup",
+      "reproduced": true,
+      "evidence": {
+        "unescapedMarkupReachedDocumentWrite": true,
+        "browserScriptExecutionTested": false
+      }
+    }
+  ]
+}

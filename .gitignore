@@ -5,3 +5,15 @@ dist/
 .vercel/
 *.log
 .DS_Store
+
+.vercel
+
+audit/baseline-*.zip
+cashier-exports/
+coverage/
+.env.*
+!.env.example
+
+supabase/.temp/
+*.local.sql
+*.local.json

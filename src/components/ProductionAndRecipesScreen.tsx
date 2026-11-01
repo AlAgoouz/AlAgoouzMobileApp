@@ -23,7 +23,7 @@ import {
   calculateRecipeTotalCost,
   convertToBaseUnit,
   getIngredientCostContribution,
-} from '../data/initialData';
+} from '../lib/itemCosts';
 
 interface ProductionAndRecipesScreenProps {
   items: InventoryItem[];

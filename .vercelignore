@@ -1,0 +1,7 @@
+audit/
+tests/
+supabase/
+cashier-watcher/
+.env.local
+*.local.sql
+*.local.json

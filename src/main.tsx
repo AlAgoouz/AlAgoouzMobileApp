@@ -5,6 +5,6 @@ import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <React.Suspense fallback={<div role="status" className="p-8 text-center">جارٍ تحميل الشاشة…</div>}><App /></React.Suspense>
   </React.StrictMode>,
 );

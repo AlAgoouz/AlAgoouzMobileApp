@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-01",
+  "reproduced": true,
+  "credentialsConfigured": false,
+  "networkUploadAttempted": false,
+  "sourceFileRemaining": false,
+  "archivedFiles": [
+    "1793486504939_audit-sale.csv"
+  ],
+  "folder": "C:\\Users\\turki\\AppData\\Local\\Temp\\mobile-erp-watcher-audit-dU3nC3",
+  "output": "==========================================================\n☕ أداة الربط التلقائي لكاشير (بُن العجوز - أصل المزاج)\n📂 الفولدر المراقب حالياً: C:\\Users\\turki\\AppData\\Local\\Temp\\mobile-erp-watcher-audit-dU3nC3\n==========================================================\n⚠️ تنبيه: لم يتم ضبط متغيرات SUPABASE_URL و SUPABASE_ANON_KEY بعد.\n   سيتم قراءة الملفات محلياً وعرض محتواها حتى تضع مفاتيح Supabase.\n👀 جاري مراقبة الفولدر... ضع أي شيت إكسيل خارج من الكاشير هنا ليتم رفعه تلقائياً.\n\n📥 تم اكتشاف شيت مبيعات جديد: audit-sale.csv\n✅ تم قراءة 1 سطر من ملف الكاشير.\n📦 تم نقل الملف بعد معالجته إلى: Archive/1793486504939_audit-sale.csv\n"
+}

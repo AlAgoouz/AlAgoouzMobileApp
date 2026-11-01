@@ -36,69 +36,135 @@ import {
   SalesInvoice,
   SalesInvoiceItem,
   Supplier,
-  Customer,
-  Expense,
   Partner,
   AuditLogEntry,
-  ShiftRecord,
   RecipeIngredient,
   Employee,
   EmployeeTransaction,
   StocktakingAuditRecord,
   StocktakingItemVariance,
-  AccountPaymentRecord,
 } from './types/erp';
+import { calculateRecipeTotalCost } from './lib/itemCosts';
+
+import { ParsedCashierRow, mapRawCashierRows } from './lib/cashierExcelParser';
+import { getSupabaseClient, getSupabaseCredentials } from './lib/supabaseSync';
+import { useErpStore } from './hooks/useErpStore';
+import { parseBackup, createBackup, type StoreState } from './lib/storeState';
+import { deductInventory, productionNeeds } from './lib/inventory';
 import {
-  INITIAL_ITEMS,
-  INITIAL_PRODUCTION_BATCHES,
-  INITIAL_PURCHASE_INVOICES,
-  INITIAL_SALES_INVOICES,
-  INITIAL_SUPPLIERS,
-  INITIAL_CUSTOMERS,
-  INITIAL_EXPENSES,
-  INITIAL_PARTNERS,
-  INITIAL_AUDIT_LOGS,
-  INITIAL_SHIFTS,
-  INITIAL_EMPLOYEES,
-  INITIAL_EMPLOYEE_TRANSACTIONS,
-  INITIAL_STOCKTAKING_RECORDS,
-  INITIAL_ACCOUNT_PAYMENTS,
-  calculateRecipeTotalCost,
-  convertToBaseUnit,
-} from './data/initialData';
-import { LoginScreen } from './components/LoginScreen';
-import { PurchaseScreen } from './components/PurchaseScreen';
-import { ProductionAndRecipesScreen } from './components/ProductionAndRecipesScreen';
+  reversePayment,
+  returnSale,
+  recordPayment,
+  cancelPurchase,
+  recordExpense,
+  cancelExpense,
+  operatingExpenses,
+} from './lib/ledger';
+import { businessDate } from './lib/dates';
+import { cashierSourceId } from './lib/cashierRows';
 import {
-  SmartInsightsScreen,
-  ProfitReportsScreen,
-} from './components/ReportsAndInsightsScreens';
-import {
-  SalesPosScreen,
-  CashierSyncScreen,
-} from './components/SalesAndCashierSyncScreens';
-import {
-  ProductsCatalogScreen,
-  InventoryScreen,
-  ShortagesScreen,
-  SuppliersAndCustomersScreen,
-  SalesInvoicesAndReturnsScreen,
-  MoreMenuScreen,
-} from './components/ManagementScreens';
-import {
-  StocktakingScreen,
-  StaffAndPayrollScreen,
-} from './components/StocktakingAndStaffScreens';
-import {
-  InvoiceReceiptModal,
   downloadFullBackupJson,
   exportFullStoreExcel,
-} from './components/ReceiptAndStatementModals';
-import { ParsedCashierRow, mapRawCashierRows } from './lib/cashierExcelParser';
-import { getSupabaseClient } from './lib/supabaseSync';
+} from './lib/backupExport';
 
-const LOCAL_STATE_KEY = 'bon_elagouz_erp_state_v3';
-const SESSION_OWNER_KEY = 'bon_elagouz_logged_owner_v2';
+const unloadedPartner: Partner = {
+  id: '',
+  username: '',
+  name: '',
+  role: '',
+  avatarLetter: '',
+  phone: '',
+  sharePercent: 0,
+  totalPaidFromPocket: 0,
+  totalWithdrawals: 0,
+};
+const LoginScreen = React.lazy(() =>
+  import('./components/LoginScreen').then((module) => ({
+    default: module.LoginScreen,
+  })),
+);
+
+const PurchaseScreen = React.lazy(() =>
+  import('./components/PurchaseScreen').then((module) => ({
+    default: module.PurchaseScreen,
+  })),
+);
+
+const ProductionAndRecipesScreen = React.lazy(() =>
+  import('./components/ProductionAndRecipesScreen').then((module) => ({
+    default: module.ProductionAndRecipesScreen,
+  })),
+);
+
+const SmartInsightsScreen = React.lazy(() =>
+  import('./components/ReportsAndInsightsScreens').then((module) => ({
+    default: module.SmartInsightsScreen,
+  })),
+);
+const ProfitReportsScreen = React.lazy(() =>
+  import('./components/ReportsAndInsightsScreens').then((module) => ({
+    default: module.ProfitReportsScreen,
+  })),
+);
+
+const SalesPosScreen = React.lazy(() =>
+  import('./components/SalesAndCashierSyncScreens').then((module) => ({
+    default: module.SalesPosScreen,
+  })),
+);
+const CashierSyncScreen = React.lazy(() =>
+  import('./components/SalesAndCashierSyncScreens').then((module) => ({
+    default: module.CashierSyncScreen,
+  })),
+);
+
+const ProductsCatalogScreen = React.lazy(() =>
+  import('./components/ManagementScreens').then((module) => ({
+    default: module.ProductsCatalogScreen,
+  })),
+);
+const InventoryScreen = React.lazy(() =>
+  import('./components/ManagementScreens').then((module) => ({
+    default: module.InventoryScreen,
+  })),
+);
+const ShortagesScreen = React.lazy(() =>
+  import('./components/ManagementScreens').then((module) => ({
+    default: module.ShortagesScreen,
+  })),
+);
+const SuppliersAndCustomersScreen = React.lazy(() =>
+  import('./components/ManagementScreens').then((module) => ({
+    default: module.SuppliersAndCustomersScreen,
+  })),
+);
+const SalesInvoicesAndReturnsScreen = React.lazy(() =>
+  import('./components/ManagementScreens').then((module) => ({
+    default: module.SalesInvoicesAndReturnsScreen,
+  })),
+);
+const MoreMenuScreen = React.lazy(() =>
+  import('./components/ManagementScreens').then((module) => ({
+    default: module.MoreMenuScreen,
+  })),
+);
+
+const StocktakingScreen = React.lazy(() =>
+  import('./components/StocktakingAndStaffScreens').then((module) => ({
+    default: module.StocktakingScreen,
+  })),
+);
+const StaffAndPayrollScreen = React.lazy(() =>
+  import('./components/StocktakingAndStaffScreens').then((module) => ({
+    default: module.StaffAndPayrollScreen,
+  })),
+);
+
+const InvoiceReceiptModal = React.lazy(() =>
+  import('./components/ReceiptAndStatementModals').then((module) => ({
+    default: module.InvoiceReceiptModal,
+  })),
+);
 
 export default function App() {
   const [activeScreen, setActiveScreen] = useState<string>('home');
@@ -108,158 +174,116 @@ export default function App() {
   const [hideProfits, setHideProfits] = useState<boolean>(false);
   const [globalSearch, setGlobalSearch] = useState<string>('');
   const [toastNotification, setToastNotification] = useState<string | null>(
-    null
+    null,
   );
 
-  // تحميل البيانات من التخزين المحلي أو البيانات الافتراضية لمحل (بُن العجوز)
-  const [items, setItems] = useState<InventoryItem[]>(() => {
+  const cloud = useErpStore();
+  const { engine, member } = cloud;
+  const loggedPartnerId = member?.partnerId ?? null;
+  const {
+    items,
+    productionBatches,
+    purchaseInvoices,
+    salesInvoices,
+    suppliers,
+    customers,
+    expenses,
+    partners,
+    auditLogs,
+    shifts,
+    employees,
+    employeeTransactions,
+    stocktakingRecords,
+    accountPayments,
+  } = cloud.state;
+  const currentPartner =
+    partners.find((p) => p.id === loggedPartnerId) || unloadedPartner;
+  const safeAction = (action: () => void) => {
     try {
-      const saved = localStorage.getItem(LOCAL_STATE_KEY);
-      if (saved) return JSON.parse(saved).items || INITIAL_ITEMS;
-    } catch {}
-    return INITIAL_ITEMS;
-  });
-
-  const [productionBatches, setProductionBatches] = useState<ProductionBatch[]>(
-    () => {
-      try {
-        const saved = localStorage.getItem(LOCAL_STATE_KEY);
-        if (saved)
-          return (
-            JSON.parse(saved).productionBatches || INITIAL_PRODUCTION_BATCHES
-          );
-      } catch {}
-      return INITIAL_PRODUCTION_BATCHES;
+      engine.transaction(action);
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'تعذر تنفيذ العملية');
+      return false;
     }
-  );
-
-  const [purchaseInvoices, setPurchaseInvoices] = useState<PurchaseInvoice[]>(
-    () => {
-      try {
-        const saved = localStorage.getItem(LOCAL_STATE_KEY);
-        if (saved)
-          return (
-            JSON.parse(saved).purchaseInvoices || INITIAL_PURCHASE_INVOICES
-          );
-      } catch {}
-      return INITIAL_PURCHASE_INVOICES;
-    }
-  );
-
-  const [salesInvoices, setSalesInvoices] = useState<SalesInvoice[]>(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STATE_KEY);
-      if (saved)
-        return JSON.parse(saved).salesInvoices || INITIAL_SALES_INVOICES;
-    } catch {}
-    return INITIAL_SALES_INVOICES;
-  });
-
-  const [suppliers, setSuppliers] = useState<Supplier[]>(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STATE_KEY);
-      if (saved) return JSON.parse(saved).suppliers || INITIAL_SUPPLIERS;
-    } catch {}
-    return INITIAL_SUPPLIERS;
-  });
-
-  const [customers, setCustomers] = useState<Customer[]>(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STATE_KEY);
-      if (saved) return JSON.parse(saved).customers || INITIAL_CUSTOMERS;
-    } catch {}
-    return INITIAL_CUSTOMERS;
-  });
-
-  const [expenses, setExpenses] = useState<Expense[]>(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STATE_KEY);
-      if (saved) return JSON.parse(saved).expenses || INITIAL_EXPENSES;
-    } catch {}
-    return INITIAL_EXPENSES;
-  });
-
-  const [partners, setPartners] = useState<Partner[]>(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STATE_KEY);
-      if (saved) {
-        const loaded: Partner[] = JSON.parse(saved).partners || INITIAL_PARTNERS;
-        return loaded.map((p, idx) => ({
-          ...INITIAL_PARTNERS[idx],
-          ...p,
-          username: p.username || INITIAL_PARTNERS[idx]?.username || `owner${idx + 1}`,
-          password: p.password || INITIAL_PARTNERS[idx]?.password || '123',
-        }));
-      }
-    } catch {}
-    return INITIAL_PARTNERS;
-  });
-
-  // حالة تسجيل الدخول المستقلة لكل مالك من الـ 4 مالكين
-  const [loggedPartnerId, setLoggedPartnerId] = useState<string | null>(() => {
-    return sessionStorage.getItem(SESSION_OWNER_KEY) || null;
-  });
-
-  const currentPartner = useMemo(
-    () => partners.find((p) => p.id === loggedPartnerId) || partners[0],
-    [partners, loggedPartnerId]
-  );
-
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STATE_KEY);
-      if (saved) return JSON.parse(saved).auditLogs || INITIAL_AUDIT_LOGS;
-    } catch {}
-    return INITIAL_AUDIT_LOGS;
-  });
-
-  const [shifts] = useState<ShiftRecord[]>(INITIAL_SHIFTS);
-
-  const [employees, setEmployees] = useState<Employee[]>(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STATE_KEY);
-      if (saved) return JSON.parse(saved).employees || INITIAL_EMPLOYEES;
-    } catch {}
-    return INITIAL_EMPLOYEES;
-  });
-
-  const [employeeTransactions, setEmployeeTransactions] = useState<
-    EmployeeTransaction[]
-  >(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STATE_KEY);
-      if (saved)
-        return (
-          JSON.parse(saved).employeeTransactions ||
-          INITIAL_EMPLOYEE_TRANSACTIONS
-        );
-    } catch {}
-    return INITIAL_EMPLOYEE_TRANSACTIONS;
-  });
-
-  const [stocktakingRecords, setStocktakingRecords] = useState<
-    StocktakingAuditRecord[]
-  >(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STATE_KEY);
-      if (saved)
-        return (
-          JSON.parse(saved).stocktakingRecords || INITIAL_STOCKTAKING_RECORDS
-        );
-    } catch {}
-    return INITIAL_STOCKTAKING_RECORDS;
-  });
-
-  const [accountPayments, setAccountPayments] = useState<
-    AccountPaymentRecord[]
-  >(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STATE_KEY);
-      if (saved)
-        return JSON.parse(saved).accountPayments || INITIAL_ACCOUNT_PAYMENTS;
-    } catch {}
-    return INITIAL_ACCOUNT_PAYMENTS;
-  });
+  };
+  const setItems = (
+    next:
+      | StoreState['items']
+      | ((previous: StoreState['items']) => StoreState['items']),
+  ) => engine.field('items', next);
+  const setProductionBatches = (
+    next:
+      | StoreState['productionBatches']
+      | ((
+          previous: StoreState['productionBatches'],
+        ) => StoreState['productionBatches']),
+  ) => engine.field('productionBatches', next);
+  const setPurchaseInvoices = (
+    next:
+      | StoreState['purchaseInvoices']
+      | ((
+          previous: StoreState['purchaseInvoices'],
+        ) => StoreState['purchaseInvoices']),
+  ) => engine.field('purchaseInvoices', next);
+  const setSalesInvoices = (
+    next:
+      | StoreState['salesInvoices']
+      | ((
+          previous: StoreState['salesInvoices'],
+        ) => StoreState['salesInvoices']),
+  ) => engine.field('salesInvoices', next);
+  const setSuppliers = (
+    next:
+      | StoreState['suppliers']
+      | ((previous: StoreState['suppliers']) => StoreState['suppliers']),
+  ) => engine.field('suppliers', next);
+  const setCustomers = (
+    next:
+      | StoreState['customers']
+      | ((previous: StoreState['customers']) => StoreState['customers']),
+  ) => engine.field('customers', next);
+  const setExpenses = (
+    next:
+      | StoreState['expenses']
+      | ((previous: StoreState['expenses']) => StoreState['expenses']),
+  ) => engine.field('expenses', next);
+  const setPartners = (
+    next:
+      | StoreState['partners']
+      | ((previous: StoreState['partners']) => StoreState['partners']),
+  ) => engine.field('partners', next);
+  const setAuditLogs = (
+    next:
+      | StoreState['auditLogs']
+      | ((previous: StoreState['auditLogs']) => StoreState['auditLogs']),
+  ) => engine.field('auditLogs', next);
+  const setEmployees = (
+    next:
+      | StoreState['employees']
+      | ((previous: StoreState['employees']) => StoreState['employees']),
+  ) => engine.field('employees', next);
+  const setEmployeeTransactions = (
+    next:
+      | StoreState['employeeTransactions']
+      | ((
+          previous: StoreState['employeeTransactions'],
+        ) => StoreState['employeeTransactions']),
+  ) => engine.field('employeeTransactions', next);
+  const setStocktakingRecords = (
+    next:
+      | StoreState['stocktakingRecords']
+      | ((
+          previous: StoreState['stocktakingRecords'],
+        ) => StoreState['stocktakingRecords']),
+  ) => engine.field('stocktakingRecords', next);
+  const setAccountPayments = (
+    next:
+      | StoreState['accountPayments']
+      | ((
+          previous: StoreState['accountPayments'],
+        ) => StoreState['accountPayments']),
+  ) => engine.field('accountPayments', next);
 
   const [receiptModalInvoice, setReceiptModalInvoice] =
     useState<SalesInvoice | null>(null);
@@ -271,166 +295,91 @@ export default function App() {
     }, 4500);
   };
 
-  // تحميل البيانات المشتركة من Supabase عند فتح التطبيق لأول مرة
-  const [cloudHydrated, setCloudHydrated] = useState<boolean>(false);
-
+  const [queueError, setQueueError] = useState('');
+  const queueBusy = React.useRef(false);
+  const queueHandler =
+    React.useRef<
+      (record: {
+        id: string;
+        file_name: string;
+        sale_date: string;
+        raw_rows: Record<string, unknown>[];
+      }) => Promise<void>
+    >();
   useEffect(() => {
-    const sb = getSupabaseClient();
-    if (!sb) {
-      setCloudHydrated(true);
-      return;
-    }
-    sb.from('bon_elagouz_store')
-      .select('*')
-      .eq('id', 'main_store')
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          if (Array.isArray(data.items) && data.items.length > 0)
-            setItems(data.items);
-          if (Array.isArray(data.production_batches))
-            setProductionBatches(data.production_batches);
-          if (Array.isArray(data.purchase_invoices))
-            setPurchaseInvoices(data.purchase_invoices);
-          if (Array.isArray(data.sales_invoices))
-            setSalesInvoices(data.sales_invoices);
-          if (Array.isArray(data.suppliers)) setSuppliers(data.suppliers);
-          if (Array.isArray(data.customers)) setCustomers(data.customers);
-          if (Array.isArray(data.expenses)) setExpenses(data.expenses);
-          if (Array.isArray(data.partners) && data.partners.length > 0)
-            setPartners(data.partners);
-          if (Array.isArray(data.audit_logs)) setAuditLogs(data.audit_logs);
-          if (Array.isArray(data.employees)) setEmployees(data.employees);
-          if (Array.isArray(data.employee_transactions))
-            setEmployeeTransactions(data.employee_transactions);
-          if (Array.isArray(data.stocktaking_records))
-            setStocktakingRecords(data.stocktaking_records);
-          if (Array.isArray(data.account_payments))
-            setAccountPayments(data.account_payments);
-        }
-        setCloudHydrated(true);
-      });
-  }, []);
-
-  // حفظ تلقائي في الجهاز ومزامنة مع Supabase
-  useEffect(() => {
-    const payload = {
-      items,
-      productionBatches,
-      purchaseInvoices,
-      salesInvoices,
-      suppliers,
-      customers,
-      expenses,
-      partners,
-      auditLogs,
-      employees,
-      employeeTransactions,
-      stocktakingRecords,
-      accountPayments,
-    };
-    try {
-      localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(payload));
-    } catch {}
-
-    if (!cloudHydrated) return;
-
-    const sb = getSupabaseClient();
-    if (sb) {
-      sb.from('bon_elagouz_store')
-        .upsert({
-          id: 'main_store',
-          updated_at: new Date().toISOString(),
-          updated_by: currentPartner?.name || 'شريك',
-          items,
-          production_batches: productionBatches,
-          purchase_invoices: purchaseInvoices,
-          sales_invoices: salesInvoices,
-          suppliers,
-          customers,
-          expenses,
-          partners,
-          audit_logs: auditLogs,
-          employees,
-          employee_transactions: employeeTransactions,
-          stocktaking_records: stocktakingRecords,
-          account_payments: accountPayments,
-        })
-        .then(() => {});
-    }
-  }, [
-    cloudHydrated,
-    items,
-    productionBatches,
-    purchaseInvoices,
-    salesInvoices,
-    suppliers,
-    customers,
-    expenses,
-    partners,
-    auditLogs,
-    employees,
-    employeeTransactions,
-    stocktakingRecords,
-    accountPayments,
-    currentPartner,
-  ]);
-
-  // الاستماع اللحظي لـ Supabase لشيتات الكاشير التلقائية (cashier_sync_queue)
-  useEffect(() => {
+    if (!member) return;
     const sb = getSupabaseClient();
     if (!sb) return;
-
-    const channel = sb
-      .channel('bon-elagouz-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'cashier_sync_queue',
-        },
-        (payload) => {
-          const newRecord = payload.new as {
-            id: string;
-            file_name: string;
-            raw_rows: Record<string, unknown>[];
-            processed: boolean;
-          };
-          if (newRecord && !newRecord.processed && newRecord.raw_rows) {
-            const parsed = mapRawCashierRows(newRecord.raw_rows, items);
-            if (parsed.length > 0) {
-              handleImportCashierRows(parsed, newRecord.file_name);
-              sb.from('cashier_sync_queue')
-                .update({
-                  processed: true,
-                  processed_at: new Date().toISOString(),
-                })
-                .eq('id', newRecord.id)
-                .then(() => {});
-            }
+    let disposed = false;
+    const processPending = async () => {
+      if (disposed || queueBusy.current || engine.snapshot.status !== 'ready')
+        return;
+      queueBusy.current = true;
+      try {
+        const { data, error } = await sb
+          .from('cashier_sync_queue')
+          .select('id,file_name,sale_date,raw_rows')
+          .eq('processed', false)
+          .order('created_at')
+          .limit(20);
+        if (error) throw new Error('تعذر قراءة الملفات المعلقة للكاشير');
+        const failures: string[] = [];
+        for (const record of data ?? []) {
+          if (disposed || engine.snapshot.status !== 'ready') break;
+          try {
+            await queueHandler.current?.(record);
+          } catch (error) {
+            failures.push(`${record.file_name}: ${(error as Error).message}`);
           }
         }
+        if (!disposed)
+          setQueueError(
+            failures.length
+              ? `ملفات لم تعتمد وتحتاج مراجعة: ${failures.slice(0, 3).join('؛ ')}`
+              : '',
+          );
+      } catch (error) {
+        if (!disposed)
+          setQueueError(
+            error instanceof Error ? error.message : 'تعذر معالجة ملف الكاشير',
+          );
+      } finally {
+        queueBusy.current = false;
+      }
+    };
+    const channel = sb
+      .channel('erp-cashier-v4')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'cashier_sync_queue' },
+        () => {
+          void processPending();
+        },
       )
       .subscribe();
-
+    const timer = setInterval(() => {
+      void processPending();
+    }, 10000);
+    void processPending();
+    window.addEventListener('online', processPending);
     return () => {
-      sb.removeChannel(channel);
+      disposed = true;
+      clearInterval(timer);
+      window.removeEventListener('online', processPending);
+      void sb.removeChannel(channel);
     };
-  }, [items]);
+  }, [member?.userId, engine]);
 
   const addAuditLog = (
     actionType: AuditLogEntry['actionType'],
     description: string,
     amount?: number,
-    customActor?: string
+    customActor?: string,
   ) => {
     const entry: AuditLogEntry = {
       id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      timestamp: new Date().toLocaleTimeString('ar-EG', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+      timestamp: new Date().toISOString(),
+      actorId: member?.userId,
       partnerName: customActor || currentPartner.name,
       actionType,
       description,
@@ -439,24 +388,8 @@ export default function App() {
     setAuditLogs((prev) => [entry, ...prev]);
   };
 
-  const handleLoginSuccess = (partner: Partner, rememberMe: boolean) => {
-    setLoggedPartnerId(partner.id);
-    if (rememberMe) {
-      sessionStorage.setItem(SESSION_OWNER_KEY, partner.id);
-    }
-    addAuditLog(
-      'دخول للنظام',
-      `تسجيل دخول بحساب المالك (@${partner.username})`,
-      undefined,
-      partner.name
-    );
-    showToast(`مرحباً بك يا ${partner.name.split('(')[0].trim()} في نظام بُن العجوز ☕`);
-  };
-
   const handleLogout = () => {
-    sessionStorage.removeItem(SESSION_OWNER_KEY);
-    setLoggedPartnerId(null);
-    setActiveScreen('home');
+    void cloud.signOut().catch((error) => showToast(error.message));
   };
 
   // إعادة حساب تكلفة جميع التوليفات والمشروبات التي لها وصفة بناءً على أحدث تكلفة للخامات
@@ -491,38 +424,27 @@ export default function App() {
   const handleExecuteProduction = (
     blendId: string,
     quantityKg: number,
-    notes: string
+    notes: string,
   ): { ok: boolean; message: string } => {
     const blend = items.find((i) => i.id === blendId);
     if (!blend || !blend.recipe || blend.recipe.length === 0) {
       return { ok: false, message: 'هذه التوليفة ليس لها وصفة محددة بعد.' };
     }
 
-    for (const ing of blend.recipe) {
-      const raw = items.find((i) => i.id === ing.ingredientId);
-      if (!raw) continue;
-      const reqInBase =
-        convertToBaseUnit(ing.quantity, ing.unit, raw.baseUnit) * quantityKg;
-      if (raw.stock < reqInBase) {
-        return {
-          ok: false,
-          message: `رصيد (${raw.name}) غير كافٍ! المتاح: ${raw.stock} كجم والمطلوب: ${reqInBase} كجم.`,
-        };
-      }
+    let needs: Map<string, number>;
+    try {
+      needs = productionNeeds(blend, quantityKg, engine.snapshot.state.items);
+    } catch (error) {
+      return { ok: false, message: (error as Error).message };
     }
 
     const consumedDetails: ProductionBatch['ingredientsConsumed'] = [];
     let totalBatchCost = 0;
 
     const updatedCatalog = items.map((item) => {
-      const recipeIng = blend.recipe?.find((r) => r.ingredientId === item.id);
-      if (recipeIng) {
-        const usedInBase = Number(
-          (
-            convertToBaseUnit(recipeIng.quantity, recipeIng.unit, item.baseUnit) *
-            quantityKg
-          ).toFixed(3)
-        );
+      const needed = needs.get(item.id);
+      if (needed !== undefined) {
+        const usedInBase = Number(needed.toFixed(6));
         const ingCost = Number((usedInBase * item.costPrice).toFixed(2));
         totalBatchCost += ingCost;
         consumedDetails.push({
@@ -537,7 +459,7 @@ export default function App() {
         });
         return {
           ...item,
-          stock: Number(Math.max(0, item.stock - usedInBase).toFixed(3)),
+          stock: Number((item.stock - usedInBase).toFixed(6)),
         };
       }
       return item;
@@ -557,9 +479,9 @@ export default function App() {
     });
 
     const newBatch: ProductionBatch = {
-      id: `batch-${Date.now()}`,
+      id: crypto.randomUUID(),
       batchNumber: `PRD-2026-${15 + productionBatches.length}`,
-      date: new Date().toLocaleDateString('ar-EG'),
+      date: businessDate(),
       blendId: blend.id,
       blendName: blend.name,
       quantityProducedKg: quantityKg,
@@ -575,10 +497,10 @@ export default function App() {
     addAuditLog(
       'إنتاج توليفة',
       `تم تصنيع ${quantityKg} كجم من (${blend.name}) وسحب الحبوب الخام والتحويجة من المخزن وإضافتها لرصيد التوليفة`,
-      totalBatchCost
+      totalBatchCost,
     );
     showToast(
-      `✅ تم تصنيع ${quantityKg} كجم من (${blend.name}) وإضافتها لرصيد المخزن بنجاح!`
+      `✅ تم تصنيع ${quantityKg} كجم من (${blend.name}) وإضافتها لرصيد المخزن بنجاح!`,
     );
     return {
       ok: true,
@@ -590,13 +512,31 @@ export default function App() {
 
   // 2. حفظ فاتورة شراء جديدة وتحديث متوسط التكلفة المرجح (WAC) والوصفات
   const handleSavePurchase = (
-    invoiceData: Omit<PurchaseInvoice, 'id' | 'invoiceNumber'>
+    invoiceData: Omit<PurchaseInvoice, 'id' | 'invoiceNumber'>,
   ) => {
-    const invNum = `PUR-${1043 + purchaseInvoices.length}`;
+    if (
+      !invoiceData.items.length ||
+      invoiceData.items.some(
+        (l) =>
+          !Number.isFinite(l.quantity) ||
+          l.quantity <= 0 ||
+          !Number.isFinite(l.purchasePrice) ||
+          l.purchasePrice < 0,
+      ) ||
+      !suppliers.some((s) => s.id === invoiceData.supplierId)
+    )
+      throw new Error(
+        'راجع الأصناف والكميات والأسعار والمورد قبل حفظ الفاتورة',
+      );
+    const invNum = `PUR-${crypto.randomUUID().slice(0, 8)}`;
     const newInvoice: PurchaseInvoice = {
       ...invoiceData,
-      id: `pur-${Date.now()}`,
+      id: crypto.randomUUID(),
       invoiceNumber: invNum,
+      createdAt: new Date().toISOString(),
+      inventoryBefore: items
+        .filter((i) => invoiceData.items.some((l) => l.itemId === i.id))
+        .map((i) => structuredClone(i)),
     };
 
     const nextItems = items.map((item) => {
@@ -612,7 +552,7 @@ export default function App() {
                 (oldStock * item.costPrice +
                   purchasedLine.quantity * purchasedLine.purchasePrice) /
                 newStock
-              ).toFixed(2)
+              ).toFixed(2),
             )
           : item.costPrice;
 
@@ -625,7 +565,7 @@ export default function App() {
           invoiceId: invNum,
         },
         ...item.supplierPrices.filter(
-          (sp) => sp.supplierId !== invoiceData.supplierId
+          (sp) => sp.supplierId !== invoiceData.supplierId,
         ),
       ];
 
@@ -640,6 +580,9 @@ export default function App() {
     });
 
     const cascadedCatalog = recalculateAllRecipeCosts(nextItems);
+    newInvoice.inventoryAfter = cascadedCatalog
+      .filter((i) => invoiceData.items.some((l) => l.itemId === i.id))
+      .map((i) => structuredClone(i));
     setItems(cascadedCatalog);
     setPurchaseInvoices((prev) => [newInvoice, ...prev]);
 
@@ -652,79 +595,59 @@ export default function App() {
               totalPurchases: sup.totalPurchases + invoiceData.totalAmount,
               invoicesCount: sup.invoicesCount + 1,
             }
-          : sup
-      )
+          : sup,
+      ),
     );
 
     addAuditLog(
       'شراء',
       `فاتورة شراء #${invNum} من (${invoiceData.supplierName}) وتحديث متوسط التكلفة (WAC) وتكلفة التوليفات المرتبطة`,
-      invoiceData.totalAmount
+      invoiceData.totalAmount,
     );
     showToast(
-      `✅ تم حفظ فاتورة المشتريات #${invNum} وتحديث المخزن وتكلفة التوليفات أوتوماتيك!`
+      `تم تسجيل فاتورة المشتريات #${invNum}؛ تابع حالة حفظ السحابة أعلى الشاشة.`,
     );
   };
 
   // دالة خصم الأصناف من المخزون (خصم مباشر للبن والتوليفات الجاهزة، وفك الوصفة للمشروبات!)
-  const deductSoldItemsFromInventory = (
-    soldItems: SalesInvoiceItem[],
-    currentCatalog: InventoryItem[]
-  ): InventoryItem[] => {
-    const deductionsMap = new Map<string, number>();
-
-    for (const line of soldItems) {
-      const target = currentCatalog.find((i) => i.id === line.itemId);
-      if (!target) continue;
-
-      if (
-        target.category === 'drink_recipe' &&
-        target.hasRecipe &&
-        target.recipe
-      ) {
-        for (const ing of target.recipe) {
-          const ingItem = currentCatalog.find((i) => i.id === ing.ingredientId);
-          if (!ingItem) continue;
-          const qtyInIngBase =
-            convertToBaseUnit(ing.quantity, ing.unit, ingItem.baseUnit) *
-            line.normalizedQtyInBaseUnit;
-          deductionsMap.set(
-            ingItem.id,
-            (deductionsMap.get(ingItem.id) || 0) + qtyInIngBase
-          );
-        }
-      } else {
-        deductionsMap.set(
-          target.id,
-          (deductionsMap.get(target.id) || 0) + line.normalizedQtyInBaseUnit
-        );
-      }
-    }
-
-    return currentCatalog.map((item) => {
-      const toDeduct = deductionsMap.get(item.id);
-      if (!toDeduct) return item;
-      return {
-        ...item,
-        stock: Number(Math.max(0, item.stock - toDeduct).toFixed(3)),
-        lastSoldDate: new Date().toISOString().slice(0, 10),
-      };
-    });
-  };
+  const deductSoldItemsFromInventory = deductInventory;
 
   // 3. حفظ فاتورة بيع (جملة أو قطاعي مباشر)
   const handleSaveSale = (
-    saleData: Omit<SalesInvoice, 'id' | 'invoiceNumber'>
+    saleData: Omit<SalesInvoice, 'id' | 'invoiceNumber'>,
   ) => {
+    let updatedInventory: InventoryItem[];
+    try {
+      if (
+        saleData.saleType === 'wholesale' &&
+        !engine.snapshot.state.customers.some(
+          (c) => c.id === saleData.customerId,
+        )
+      )
+        throw new Error('اختر عميل جملة موجودًا قبل حفظ الفاتورة');
+      updatedInventory = deductInventory(
+        saleData.items,
+        engine.snapshot.state.items,
+      );
+      if (
+        saleData.totalAmount < 0 ||
+        saleData.discount < 0 ||
+        saleData.paidAmount < 0
+      )
+        throw new Error('مبالغ الفاتورة غير صالحة');
+    } catch (error) {
+      showToast((error as Error).message);
+      return false;
+    }
     const prefix = saleData.saleType === 'wholesale' ? 'WH' : 'POS';
-    const invNum = `${prefix}-${2046 + salesInvoices.length}`;
+    const invNum = `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
     const newSale: SalesInvoice = {
       ...saleData,
-      id: `sal-${Date.now()}`,
+      id: crypto.randomUUID(),
       invoiceNumber: invNum,
     };
 
-    setItems((prev) => deductSoldItemsFromInventory(saleData.items, prev));
+    setItems(updatedInventory);
     setSalesInvoices((prev) => [newSale, ...prev]);
 
     if (saleData.customerId) {
@@ -738,8 +661,8 @@ export default function App() {
                 invoicesCount: c.invoicesCount + 1,
                 lastPurchaseDate: saleData.date,
               }
-            : c
-        )
+            : c,
+        ),
       );
     }
 
@@ -748,98 +671,137 @@ export default function App() {
       `فاتورة ${
         saleData.saleType === 'wholesale' ? 'بيع جملة' : 'بيع محل'
       } #${invNum} للعميل (${saleData.customerName}) وخصم الأصناف من المخزن`,
-      saleData.totalAmount
+      saleData.totalAmount,
     );
-    showToast(`✅ تم حفظ الفاتورة #${invNum} وخصم المخزون والوصفات بنجاح!`);
+    showToast(
+      `تم تسجيل الفاتورة #${invNum}؛ تابع حالة حفظ السحابة أعلى الشاشة.`,
+    );
     setReceiptModalInvoice(newSale);
     setActiveScreen('home');
+    return true;
   };
 
   // 4. استيراد شيت مبيعات الكاشير (Excel / CSV أو من الفولدر المراقب)
-  const handleImportCashierRows = (
+  const handleImportCashierRows = async (
     rows: ParsedCashierRow[],
-    sourceFileName: string
-  ) => {
-    const validRows = rows.filter((r) => r.matchedItem);
-    if (validRows.length === 0) return;
-
-    const invoiceItems: SalesInvoiceItem[] = validRows.map((r) => {
-      const item = r.matchedItem!;
-      const normalizedQty =
-        r.unitHint === 'gram' ? Number((r.quantity / 1000).toFixed(3)) : r.quantity;
-      const totalLinePrice =
-        r.totalPrice || Number((normalizedQty * item.retailPrice).toFixed(2));
-      const totalLineCost = Number((normalizedQty * item.costPrice).toFixed(2));
-
-      const deductionDetails =
-        item.category === 'drink_recipe' && item.recipe
-          ? `تم فك وصفة المشروب وخصم: ${item.recipe
-              .map(
-                (ing) =>
-                  `${ing.quantity * normalizedQty} ${
-                    ing.unit === 'gram' ? 'جم' : ing.unit === 'ml' ? 'مل' : 'قطعة'
-                  } (${ing.ingredientName.split('(')[0]})`
-              )
-              .join(' + ')}`
-          : `منتج/توليفة جاهزة — خُصم ${normalizedQty} ${
-              item.baseUnit === 'kg' ? 'كجم' : 'قطعة'
-            } مباشرة من المخزن`;
-
+    sourceFileName: string,
+    saleDate = businessDate(),
+    queueId?: string,
+  ): Promise<boolean> => {
+    if (
+      !rows.length ||
+      rows.some((r) => !r.matchedItem || r.error || r.quantity <= 0)
+    )
+      throw new Error(
+        'الملف يحتوي صفوفًا غير مطابقة أو مرتجعات أو كميات غير صالحة؛ أصلحها قبل الاعتماد.',
+      );
+    const sourceId = await cashierSourceId(rows, saleDate);
+    const state = engine.snapshot.state;
+    const duplicate = state.salesInvoices.find((i) => i.sourceId === sourceId);
+    if (duplicate) {
+      if (!queueId)
+        throw new Error('هذا الملف مستورد بالفعل؛ لم يتم تكرار الخصم.');
+      const next = {
+        ...state,
+        salesInvoices: state.salesInvoices.map((i) =>
+          i.id === duplicate.id ? { ...i, sourceQueueId: queueId } : i,
+        ),
+      };
+      engine.replace(next, queueId);
+      await engine.flush();
+      return engine.snapshot.status === 'ready';
+    }
+    const invoiceItems: SalesInvoiceItem[] = rows.map((r) => {
+      const item = state.items.find((i) => i.id === r.matchedItem!.id);
+      if (!item) throw new Error('تغير كتالوج الأصناف؛ أعد قراءة الملف.');
+      const quantity = ['gram', 'ml'].includes(r.unitHint)
+        ? r.quantity / 1000
+        : r.quantity;
+      const totalPrice =
+        r.totalPrice ??
+        Number(
+          (r.unitPrice !== undefined
+            ? r.unitPrice * r.quantity
+            : quantity * item.retailPrice
+          ).toFixed(2),
+        );
+      const totalCost = Number((quantity * item.costPrice).toFixed(2));
       return {
         itemId: item.id,
         itemName: item.name,
         category: item.category,
         quantity: r.quantity,
-        unitLabel:
-          r.unitHint === 'gram'
-            ? 'جرام'
-            : r.unitHint === 'kg'
-            ? 'كجم'
-            : 'كوب/قطعة',
-        normalizedQtyInBaseUnit: normalizedQty,
-        unitPrice: item.retailPrice,
+        unitLabel: r.unitHint,
+        normalizedQtyInBaseUnit: quantity,
+        unitPrice: quantity ? totalPrice / quantity : 0,
         unitCost: item.costPrice,
-        totalPrice: totalLinePrice,
-        totalCost: totalLineCost,
-        profit: Number((totalLinePrice - totalLineCost).toFixed(2)),
-        deductionDetails,
+        totalPrice,
+        totalCost,
+        profit: Number((totalPrice - totalCost).toFixed(2)),
       };
     });
-
-    const totalAmount = invoiceItems.reduce((s, i) => s + i.totalPrice, 0);
-    const totalCost = invoiceItems.reduce((s, i) => s + i.totalCost, 0);
-    const netProfit = Number((totalAmount - totalCost).toFixed(2));
-    const invNum = `POS-SYNC-${3011 + salesInvoices.length}`;
-
-    const syncInvoice: SalesInvoice = {
-      id: `sync-${Date.now()}`,
-      invoiceNumber: invNum,
-      date: new Date().toISOString().slice(0, 10),
+    const nextItems = deductInventory(invoiceItems, state.items);
+    const totalAmount = Number(
+      invoiceItems.reduce((sum, i) => sum + i.totalPrice, 0).toFixed(2),
+    );
+    const totalCost = Number(
+      invoiceItems.reduce((sum, i) => sum + i.totalCost, 0).toFixed(2),
+    );
+    const invoice: SalesInvoice = {
+      id: crypto.randomUUID(),
+      invoiceNumber: `POS-SYNC-${crypto.randomUUID().slice(0, 8)}`,
+      date: saleDate,
       saleType: 'cashier_sync',
-      customerName: `مبيعات كاشير المحل (${sourceFileName})`,
+      customerName: `مبيعات كاشير (${sourceFileName})`,
       sourceFile: sourceFileName,
+      sourceId,
+      sourceQueueId: queueId,
       items: invoiceItems,
       subtotal: totalAmount,
       discount: 0,
       totalAmount,
       totalCost,
-      netProfit,
+      netProfit: Number((totalAmount - totalCost).toFixed(2)),
       paidAmount: totalAmount,
       remainingAmount: 0,
       paymentMethod: 'نقدي',
       partnerName: currentPartner.name,
     };
-
-    setItems((prev) => deductSoldItemsFromInventory(invoiceItems, prev));
-    setSalesInvoices((prev) => [syncInvoice, ...prev]);
-    addAuditLog(
-      'مزامنة كاشير',
-      `استيراد شيت كاشير المحل (${sourceFileName}) بإجمالي ${totalAmount} ج.م وخصم الأصناف المباشرة والتوليفات وفك وصفات المشروبات`,
-      totalAmount,
-      'مزامنة الكاشير التلقائية'
+    engine.replace(
+      {
+        ...state,
+        items: nextItems,
+        salesInvoices: [invoice, ...state.salesInvoices],
+        auditLogs: [
+          {
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            actorId: member?.userId,
+            partnerName: currentPartner.name,
+            actionType: 'مزامنة كاشير',
+            description: `استيراد ${sourceFileName}`,
+            amount: totalAmount,
+          },
+          ...state.auditLogs,
+        ],
+      },
+      queueId,
     );
-    showToast(
-      `🚀 تم استيراد شيت الكاشير (${sourceFileName}) وخصم التوليفات ووصفات المشروبات!`
+    await engine.flush();
+    if (engine.snapshot.status !== 'ready')
+      throw new Error(
+        'لم يتأكد الحفظ؛ الملف لم يُعتمد. أعد محاولة الحفظ من التنبيه.',
+      );
+    showToast('تم حفظ ملف الكاشير على السحابة وخصم المخزون.');
+    setQueueError('');
+    return true;
+  };
+  queueHandler.current = async (record) => {
+    await handleImportCashierRows(
+      mapRawCashierRows(record.raw_rows, engine.snapshot.state.items),
+      record.file_name,
+      record.sale_date,
+      record.id,
     );
   };
 
@@ -847,7 +809,7 @@ export default function App() {
   const handleCommitStocktaking = (
     variances: StocktakingItemVariance[],
     notes: string,
-    chargeShortageToEmployeeId?: string
+    chargeShortageToEmployeeId?: string,
   ) => {
     const changed = variances.filter((v) => Math.abs(v.difference) > 0.0001);
     const totalShortage = changed
@@ -863,13 +825,13 @@ export default function App() {
         const found = variances.find((v) => v.itemId === item.id);
         if (!found) return item;
         return { ...item, stock: found.actualStock };
-      })
+      }),
     );
 
     const newRecord: StocktakingAuditRecord = {
-      id: `aud-${Date.now()}`,
+      id: crypto.randomUUID(),
       auditNumber: `AUD-2026-0${2 + stocktakingRecords.length}`,
-      date: new Date().toISOString().slice(0, 10),
+      date: businessDate(),
       partnerName: currentPartner.name,
       notes,
       totalShortageValue: Number(totalShortage.toFixed(2)),
@@ -886,17 +848,17 @@ export default function App() {
         chargeShortageToEmployeeId,
         'خصم/عجز',
         Number(totalShortage.toFixed(2)),
-        `تحميل عجز محضر الجرد #${newRecord.auditNumber}`
+        `تحميل عجز محضر الجرد #${newRecord.auditNumber}`,
       );
     }
 
     addAuditLog(
       'جرد مخزن',
       `اعتماد محضر الجرد الفعلي #${newRecord.auditNumber} (${changed.length} فروقات على الميزان) — صافي الفرق: ${newRecord.netVarianceValue} ج.م`,
-      Math.abs(newRecord.netVarianceValue)
+      Math.abs(newRecord.netVarianceValue),
     );
     showToast(
-      `✅ تم اعتماد محضر الجرد #${newRecord.auditNumber} وتحديث أرصدة المخزن!`
+      `✅ تم اعتماد محضر الجرد #${newRecord.auditNumber} وتحديث أرصدة المخزن!`,
     );
   };
 
@@ -905,7 +867,7 @@ export default function App() {
     employeeId: string,
     type: EmployeeTransaction['type'],
     amount: number,
-    notes: string
+    notes: string,
   ) => {
     const targetEmp = employees.find((e) => e.id === employeeId);
     if (!targetEmp) return;
@@ -932,12 +894,12 @@ export default function App() {
           return { ...emp, totalPaidOut: emp.totalPaidOut + amount };
         }
         return emp;
-      })
+      }),
     );
 
     const newTr: EmployeeTransaction = {
-      id: `etr-${Date.now()}`,
-      date: new Date().toISOString().slice(0, 10),
+      id: crypto.randomUUID(),
+      date: businessDate(),
       employeeId,
       employeeName: targetEmp.name,
       type,
@@ -950,7 +912,7 @@ export default function App() {
     addAuditLog(
       'شؤون عمال',
       `${type} للعامل (${targetEmp.name}): ${notes}`,
-      amount
+      amount,
     );
     showToast(`✅ تم تسجيل (${type}) للعامل ${targetEmp.name} بنجاح!`);
   };
@@ -961,7 +923,7 @@ export default function App() {
       prev.map((item) => ({
         ...item,
         stock: item.category === 'drink_recipe' ? 999 : 0,
-      }))
+      })),
     );
     setSalesInvoices([]);
     setPurchaseInvoices([]);
@@ -971,10 +933,15 @@ export default function App() {
     setEmployeeTransactions([]);
     setAccountPayments([]);
     setSuppliers((prev) =>
-      prev.map((s) => ({ ...s, balance: 0, totalPurchases: 0, invoicesCount: 0 }))
+      prev.map((s) => ({
+        ...s,
+        balance: 0,
+        totalPurchases: 0,
+        invoicesCount: 0,
+      })),
     );
     setCustomers((prev) =>
-      prev.map((c) => ({ ...c, balance: 0, totalSales: 0, invoicesCount: 0 }))
+      prev.map((c) => ({ ...c, balance: 0, totalSales: 0, invoicesCount: 0 })),
     );
     setEmployees((prev) =>
       prev.map((e) => ({
@@ -984,10 +951,10 @@ export default function App() {
         totalDeductions: 0,
         totalBonuses: 0,
         totalPaidOut: 0,
-      }))
+      })),
     );
     setPartners((prev) =>
-      prev.map((p) => ({ ...p, totalWithdrawn: 0, totalPaidFromPocket: 0 }))
+      prev.map((p) => ({ ...p, totalWithdrawals: 0, totalPaidFromPocket: 0 })),
     );
     setAuditLogs([
       {
@@ -995,7 +962,8 @@ export default function App() {
         timestamp: 'الآن',
         partnerName: currentPartner.name,
         actionType: 'تعديل وصفة/صنف',
-        description: 'تصفير الفواتير والأرصدة مع الإبقاء على كتالوج الأصناف والوصفات',
+        description:
+          'تصفير الفواتير والأرصدة مع الإبقاء على كتالوج الأصناف والوصفات',
       },
     ]);
     showToast('🧹 تم تصفير الفواتير والأرصدة مع الاحتفاظ بالأصناف والوصفات!');
@@ -1014,7 +982,7 @@ export default function App() {
     setStocktakingRecords([]);
     setAccountPayments([]);
     setPartners((prev) =>
-      prev.map((p) => ({ ...p, totalWithdrawn: 0, totalPaidFromPocket: 0 }))
+      prev.map((p) => ({ ...p, totalWithdrawals: 0, totalPaidFromPocket: 0 })),
     );
     setAuditLogs([
       {
@@ -1029,28 +997,15 @@ export default function App() {
   };
 
   const handleRestoreDefaultDemoData = () => {
-    setItems(INITIAL_ITEMS);
-    setProductionBatches(INITIAL_PRODUCTION_BATCHES);
-    setPurchaseInvoices(INITIAL_PURCHASE_INVOICES);
-    setSalesInvoices(INITIAL_SALES_INVOICES);
-    setSuppliers(INITIAL_SUPPLIERS);
-    setCustomers(INITIAL_CUSTOMERS);
-    setExpenses(INITIAL_EXPENSES);
-    setEmployees(INITIAL_EMPLOYEES);
-    setEmployeeTransactions(INITIAL_EMPLOYEE_TRANSACTIONS);
-    setStocktakingRecords(INITIAL_STOCKTAKING_RECORDS);
-    setAccountPayments(INITIAL_ACCOUNT_PAYMENTS);
-    setAuditLogs(INITIAL_AUDIT_LOGS);
-    showToast('🔄 تمت استعادة البيانات التجريبية المختصرة بنجاح!');
+    showToast('بيانات العرض التجريبية متاحة في بيئة الاختبار المنفصلة فقط.');
   };
 
-  // حسابات الشاشة الرئيسية والإحصائيات والرسوم البيانية
   const shortagesCount = useMemo(
     () =>
       items.filter(
-        (i) => i.category !== 'drink_recipe' && i.stock <= i.minStock
+        (i) => i.category !== 'drink_recipe' && i.stock <= i.minStock,
       ).length,
-    [items]
+    [items],
   );
 
   const dashboardAnalytics = useMemo(() => {
@@ -1058,7 +1013,7 @@ export default function App() {
     const salesTotal = activeSales.reduce((s, i) => s + i.totalAmount, 0);
     const costTotal = activeSales.reduce((s, i) => s + i.totalCost, 0);
     const grossProfit = activeSales.reduce((s, i) => s + i.netProfit, 0);
-    const expensesTotal = expenses.reduce((s, e) => s + e.amount, 0);
+    const expensesTotal = operatingExpenses(expenses);
     const netProfitAfterExpenses = grossProfit - expensesTotal;
     const margin = salesTotal > 0 ? (grossProfit / salesTotal) * 100 : 0;
 
@@ -1079,7 +1034,7 @@ export default function App() {
         (i) =>
           i.category === 'raw_bean' ||
           i.category === 'raw_spice' ||
-          i.category === 'direct_product'
+          i.category === 'direct_product',
       )
       .reduce((s, i) => s + Math.max(0, i.stock) * i.costPrice, 0);
     const blendStockValue = items
@@ -1089,7 +1044,10 @@ export default function App() {
 
     // المديونيات (لنا وعليها)
     const totalCustomerDebts = customers.reduce((s, c) => s + c.balance, 0);
-    const totalSupplierBalances = suppliers.reduce((s, sup) => s + sup.balance, 0);
+    const totalSupplierBalances = suppliers.reduce(
+      (s, sup) => s + sup.balance,
+      0,
+    );
 
     // أعلى الأصناف مبيعاً وربحاً للرسم البياني الأفقي
     const productStatsMap = new Map<
@@ -1145,23 +1103,123 @@ export default function App() {
     return items
       .filter(
         (i) =>
-          i.name.toLowerCase().includes(q) || i.code.toLowerCase().includes(q)
+          i.name.toLowerCase().includes(q) || i.code.toLowerCase().includes(q),
       )
       .slice(0, 6);
   }, [items, globalSearch]);
 
   // إذا لم يكن هناك شريك مسجل دخوله، نعرض صفحة الدخول الاحترافية الخاصة بـ (بُن العجوز)
-  if (!loggedPartnerId) {
+  if (!cloud.authReady)
+    return (
+      <div className="p-8 text-center" role="status">
+        جارٍ التحقق من الجلسة…
+      </div>
+    );
+  if (!loggedPartnerId)
     return (
       <LoginScreen
-        partners={partners}
-        onLoginSuccess={handleLoginSuccess}
+        onSignIn={cloud.signIn}
+        onSignUp={cloud.signUp}
+        authError={cloud.authError}
       />
     );
-  }
+  const blocked =
+    !['ready', 'dirty'].includes(cloud.status) ||
+    !partners.some((p) => p.id === loggedPartnerId);
+  const statusText =
+    cloud.status === 'saving'
+      ? 'جارٍ الحفظ على السحابة…'
+      : cloud.status === 'dirty'
+        ? 'تعديلات بانتظار الحفظ'
+        : cloud.status === 'ready'
+          ? 'محفوظ على السحابة'
+          : cloud.status === 'loading'
+            ? 'جارٍ تحميل بيانات المحل…'
+            : cloud.status === 'conflict'
+              ? 'تعارض مع تعديلات جهاز آخر'
+              : 'تعذر تأكيد الحفظ';
 
   return (
     <div className="min-h-screen bg-[#EFECE4] flex flex-col items-center justify-start">
+      {getSupabaseCredentials().url.startsWith('http://127.0.0.1:') && (
+        <div className="w-full bg-amber-100 p-2 text-center text-xs font-bold">
+          بيئة اختبار محلية — بيانات تجريبية منفصلة
+        </div>
+      )}
+      <div
+        role="status"
+        className="sticky top-0 z-40 w-full bg-stone-900 text-white text-xs text-center p-2"
+      >
+        {statusText}
+      </div>
+      {queueError && (
+        <div
+          role="alert"
+          className="w-full p-3 bg-amber-100 text-amber-900 text-sm"
+        >
+          {queueError}
+        </div>
+      )}
+      {blocked && (
+        <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4">
+          <div
+            className="bg-white rounded-2xl p-5 max-w-md space-y-3"
+            role="alert"
+          >
+            <h2 className="font-bold">{statusText}</h2>
+            <p>
+              {cloud.error ||
+                (!partners.some((p) => p.id === loggedPartnerId) &&
+                cloud.status === 'ready'
+                  ? 'هذا الحساب غير مرتبط بملف شريك داخل بيانات المحل'
+                  : '')}
+            </p>
+            {['error', 'conflict'].includes(cloud.status) && (
+              <>
+                <button
+                  className="border rounded p-2 m-1"
+                  onClick={() =>
+                    downloadFullBackupJson(createBackup(engine.snapshot.state))
+                  }
+                >
+                  حفظ نسخة من العمل الحالي
+                </button>
+                {cloud.status === 'error' && engine.hasPending && (
+                  <button
+                    className="border rounded p-2 m-1"
+                    onClick={() => void engine.flush()}
+                  >
+                    إعادة محاولة الحفظ
+                  </button>
+                )}
+                <button
+                  className="border rounded p-2 m-1"
+                  onClick={() => {
+                    if (
+                      !engine.hasPending ||
+                      window.confirm(
+                        'هل حفظت نسخة من العمل؟ إعادة التحميل تستبدل التعديلات غير المحفوظة ببيانات السحابة.',
+                      )
+                    )
+                      void engine.load();
+                  }}
+                >
+                  تحميل بيانات السحابة
+                </button>
+                {!engine.hasPending && (
+                  <button
+                    className="border rounded p-2 m-1"
+                    onClick={handleLogout}
+                  >
+                    تسجيل الخروج
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* إشعار عائم */}
       {toastNotification && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#1E1612] text-[#FBF5B7] px-4 py-3 rounded-2xl shadow-2xl border border-[#C59B27] flex items-center gap-2 text-xs font-extrabold max-w-sm w-[92%]">
@@ -1317,7 +1375,7 @@ export default function App() {
                       ملخص الإحصائيات والأرباح المباشر
                     </h2>
                     <p className="text-[10px] text-[#C59B27]">
-                      بُن العجوز — تحديث لحظي بين الـ 4 شركاء
+                      بُن العجوز — مزامنة بيانات المحل بين الأجهزة
                     </p>
                   </div>
                 </div>
@@ -1373,7 +1431,7 @@ export default function App() {
                     {hideProfits
                       ? '••••••'
                       : dashboardAnalytics.netProfitAfterExpenses.toLocaleString(
-                          'ar-EG'
+                          'ar-EG',
                         )}{' '}
                     <span className="text-[10px] text-emerald-300 font-normal">
                       ج.م
@@ -1388,7 +1446,7 @@ export default function App() {
                     </div>
                     <div className="text-xs font-black text-[#FBF5B7] mt-0.5">
                       {dashboardAnalytics.totalInventoryValue.toLocaleString(
-                        'ar-EG'
+                        'ar-EG',
                       )}{' '}
                       ج.م
                     </div>
@@ -1399,13 +1457,15 @@ export default function App() {
                 <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-2.5 flex items-center justify-between">
                   <div>
                     <div className="text-[10px] text-[#D8CBB8]">
-                      نصيب الشريك (25%)
+                      نصيب المالك ({currentPartner.sharePercent}%)
                     </div>
                     <div className="text-xs font-black text-[#FBF5B7] mt-0.5">
                       {hideProfits
                         ? '••••'
                         : Math.round(
-                            dashboardAnalytics.netProfitAfterExpenses / 4
+                            (dashboardAnalytics.netProfitAfterExpenses *
+                              currentPartner.sharePercent) /
+                              100,
                           ).toLocaleString('ar-EG')}{' '}
                       ج.م
                     </div>
@@ -1443,7 +1503,7 @@ export default function App() {
                 const maxVal = Math.max(
                   dashboardAnalytics.salesTotal,
                   dashboardAnalytics.costTotal,
-                  1
+                  1,
                 );
                 const bars = [
                   {
@@ -1476,7 +1536,10 @@ export default function App() {
                   },
                   {
                     label: 'الصافي النهائي',
-                    value: Math.max(0, dashboardAnalytics.netProfitAfterExpenses),
+                    value: Math.max(
+                      0,
+                      dashboardAnalytics.netProfitAfterExpenses,
+                    ),
                     color: 'from-[#047857] to-[#10B981]',
                     textColor: 'text-[#047857]',
                     hide: hideProfits,
@@ -1489,7 +1552,7 @@ export default function App() {
                       {bars.map((bar, idx) => {
                         const heightPct = Math.max(
                           12,
-                          Math.min(100, Math.round((bar.value / maxVal) * 100))
+                          Math.min(100, Math.round((bar.value / maxVal) * 100)),
                         );
                         return (
                           <div
@@ -1549,15 +1612,12 @@ export default function App() {
               {(() => {
                 const total = Math.max(1, dashboardAnalytics.salesTotal);
                 const wholesalePct = Math.round(
-                  (dashboardAnalytics.wholesaleSales / total) * 100
+                  (dashboardAnalytics.wholesaleSales / total) * 100,
                 );
                 const retailPct = Math.round(
-                  (dashboardAnalytics.retailPosSales / total) * 100
+                  (dashboardAnalytics.retailPosSales / total) * 100,
                 );
-                const cashierPct = Math.max(
-                  0,
-                  100 - wholesalePct - retailPct
-                );
+                const cashierPct = Math.max(0, 100 - wholesalePct - retailPct);
 
                 return (
                   <div className="space-y-3">
@@ -1588,7 +1648,7 @@ export default function App() {
                         </div>
                         <div className="text-xs font-black text-[#1E1612] mt-1">
                           {dashboardAnalytics.wholesaleSales.toLocaleString(
-                            'ar-EG'
+                            'ar-EG',
                           )}{' '}
                           ج.م
                         </div>
@@ -1604,7 +1664,7 @@ export default function App() {
                         </div>
                         <div className="text-xs font-black text-[#1E1612] mt-1">
                           {dashboardAnalytics.retailPosSales.toLocaleString(
-                            'ar-EG'
+                            'ar-EG',
                           )}{' '}
                           ج.م
                         </div>
@@ -1620,7 +1680,7 @@ export default function App() {
                         </div>
                         <div className="text-xs font-black text-[#1E1612] mt-1">
                           {dashboardAnalytics.cashierSales.toLocaleString(
-                            'ar-EG'
+                            'ar-EG',
                           )}{' '}
                           ج.م
                         </div>
@@ -1663,8 +1723,8 @@ export default function App() {
                       12,
                       Math.round(
                         (prod.revenue / dashboardAnalytics.maxProductRevenue) *
-                          100
-                      )
+                          100,
+                      ),
                     );
                     return (
                       <div key={idx} className="space-y-1">
@@ -1713,7 +1773,7 @@ export default function App() {
                 </div>
                 <div className="text-base font-black text-[#1E1612] mt-1">
                   {dashboardAnalytics.totalCustomerDebts.toLocaleString(
-                    'ar-EG'
+                    'ar-EG',
                   )}{' '}
                   <span className="text-[10px] font-normal text-[#7A6855]">
                     ج.م
@@ -1736,7 +1796,7 @@ export default function App() {
                 </div>
                 <div className="text-base font-black text-[#1E1612] mt-1">
                   {dashboardAnalytics.totalSupplierBalances.toLocaleString(
-                    'ar-EG'
+                    'ar-EG',
                   )}{' '}
                   <span className="text-[10px] font-normal text-[#7A6855]">
                     ج.م
@@ -1886,7 +1946,8 @@ export default function App() {
                       </span>
                     </div>
                     <div className="text-[11px] text-[#D8CBB8] font-semibold mt-0.5 truncate">
-                      أساس الدورة التشغيلية: تعريف البن الخام والتوليفات والمشروبات وأسعارها
+                      أساس الدورة التشغيلية: تعريف البن الخام والتوليفات
+                      والمشروبات وأسعارها
                     </div>
                   </div>
                 </div>
@@ -2155,26 +2216,45 @@ export default function App() {
             suppliers={suppliers}
             purchaseInvoices={purchaseInvoices}
             currentPartnerName={currentPartner.name}
-            onSavePurchase={handleSavePurchase}
+            onSavePurchase={(data) =>
+              safeAction(() => handleSavePurchase(data))
+            }
             onDeletePurchaseInvoice={(invId) => {
-              setPurchaseInvoices((prev) => prev.filter((p) => p.id !== invId));
-              showToast('🗑️ تم حذف فاتورة المشتريات!');
+              safeAction(() => {
+                const next = cancelPurchase(
+                  engine.snapshot.state,
+                  invId,
+                  currentPartner.name,
+                );
+                engine.replace({
+                  ...next,
+                  items: recalculateAllRecipeCosts(next.items),
+                });
+                addAuditLog('مرتجع', `إلغاء فاتورة مشتريات ${invId}`);
+                showToast(
+                  'تم إلغاء الفاتورة وعكس المخزون والمديونية مع حفظ الأصل ومبلغ الاسترداد.',
+                );
+              });
             }}
             onQuickAddSupplier={(newSup) => {
-              const created: Supplier = {
-                ...newSup,
-                id: `sup-${Date.now()}`,
-              };
-              setSuppliers((prev) => [created, ...prev]);
-              showToast(`✅ تمت إضافة المورد (${created.name})!`);
+              safeAction(() => {
+                const created: Supplier = {
+                  ...newSup,
+                  id: crypto.randomUUID(),
+                };
+                setSuppliers((prev) => [created, ...prev]);
+                showToast(`✅ تمت إضافة المورد (${created.name})!`);
+              });
             }}
             onQuickAddItem={(newItem) => {
-              const created: InventoryItem = {
-                ...newItem,
-                id: `item-${Date.now()}`,
-              };
-              setItems((prev) => [created, ...prev]);
-              showToast(`✅ تمت إضافة الصنف (${created.name}) للمخزن!`);
+              safeAction(() => {
+                const created: InventoryItem = {
+                  ...newItem,
+                  id: crypto.randomUUID(),
+                };
+                setItems((prev) => [created, ...prev]);
+                showToast(`✅ تمت إضافة الصنف (${created.name}) للمخزن!`);
+              });
             }}
             onBack={() => setActiveScreen('sections')}
           />
@@ -2185,12 +2265,20 @@ export default function App() {
             items={items}
             productionBatches={productionBatches}
             currentPartnerName={currentPartner.name}
-            onExecuteProduction={handleExecuteProduction}
+            onExecuteProduction={(...args) => {
+              try {
+                return engine.transaction(() =>
+                  handleExecuteProduction(...args),
+                );
+              } catch (error) {
+                return { ok: false, message: (error as Error).message };
+              }
+            }}
             onSaveItemRecipe={(
               targetId: string,
               recipe: RecipeIngredient[],
               retail?: number,
-              wholesale?: number
+              wholesale?: number,
             ) => {
               setItems((prev) => {
                 const updated = prev.map((item) =>
@@ -2202,7 +2290,7 @@ export default function App() {
                         retailPrice: retail ?? item.retailPrice,
                         wholesalePrice: wholesale ?? item.wholesalePrice,
                       }
-                    : item
+                    : item,
                 );
                 return recalculateAllRecipeCosts(updated);
               });
@@ -2211,18 +2299,34 @@ export default function App() {
             onCreateNewBlendOrDrink={(newItem) => {
               const created: InventoryItem = {
                 ...newItem,
-                id: `item-${Date.now()}`,
+                id: crypto.randomUUID(),
               };
               setItems((prev) => [created, ...prev]);
               addAuditLog('تعديل وصفة/صنف', `إضافة صنف: ${created.name}`);
             }}
             onDeleteItem={(id) => {
-              setItems((prev) => prev.filter((i) => i.id !== id));
-              showToast('🗑️ تم حذف الصنف بنجاح');
+              safeAction(() => {
+                if (
+                  engine.snapshot.state.items.some((i) =>
+                    i.recipe?.some((r) => r.ingredientId === id),
+                  ) ||
+                  engine.snapshot.state.salesInvoices.some((i) =>
+                    i.items.some((l) => l.itemId === id),
+                  ) ||
+                  engine.snapshot.state.purchaseInvoices.some((i) =>
+                    i.items.some((l) => l.itemId === id),
+                  )
+                ) {
+                  showToast('لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.');
+                  return;
+                }
+                setItems((prev) => prev.filter((i) => i.id !== id));
+                showToast('🗑️ تم حذف الصنف بنجاح');
+              });
             }}
             onDeleteBatch={(batchId) => {
               setProductionBatches((prev) =>
-                prev.filter((b) => b.id !== batchId)
+                prev.filter((b) => b.id !== batchId),
               );
               showToast('🗑️ تم حذف تشغيلة الإنتاج');
             }}
@@ -2235,7 +2339,14 @@ export default function App() {
             items={items}
             customers={customers}
             currentPartnerName={currentPartner.name}
-            onSaveSale={handleSaveSale}
+            onSaveSale={(data) => {
+              let saved = false;
+              return (
+                safeAction(() => {
+                  saved = handleSaveSale(data);
+                }) && saved
+              );
+            }}
             onNavigateToCashierSync={() => setActiveScreen('cashier_sync')}
             onBack={() => setActiveScreen('home')}
           />
@@ -2253,27 +2364,52 @@ export default function App() {
           <ProductsCatalogScreen
             items={items}
             onAddNewItem={(newItem) => {
-              setItems((prev) => [
-                { ...newItem, id: `item-${Date.now()}` },
-                ...prev,
-              ]);
-              addAuditLog('تعديل وصفة/صنف', `تعريف منتج جديد: ${newItem.name}`);
-              showToast(`✅ تمت إضافة المنتج (${newItem.name}) في الكتالوج!`);
+              safeAction(() => {
+                setItems((prev) => [
+                  { ...newItem, id: crypto.randomUUID() },
+                  ...prev,
+                ]);
+                addAuditLog(
+                  'تعديل وصفة/صنف',
+                  `تعريف منتج جديد: ${newItem.name}`,
+                );
+                showToast(`✅ تمت إضافة المنتج (${newItem.name}) في الكتالوج!`);
+              });
             }}
             onUpdateItem={(id, patch) => {
-              setItems((prev) => {
-                const next = prev.map((i) =>
-                  i.id === id ? { ...i, ...patch } : i
+              safeAction(() => {
+                setItems((prev) => {
+                  const next = prev.map((i) =>
+                    i.id === id ? { ...i, ...patch } : i,
+                  );
+                  return recalculateAllRecipeCosts(next);
+                });
+                addAuditLog('تعديل وصفة/صنف', `تحديث تسعير/بيانات منتج`);
+                showToast(
+                  '✅ تم تحديث المنتج وإعادة حساب تكلفة الوصفات المرتبطة!',
                 );
-                return recalculateAllRecipeCosts(next);
               });
-              addAuditLog('تعديل وصفة/صنف', `تحديث تسعير/بيانات منتج`);
-              showToast('✅ تم تحديث المنتج وإعادة حساب تكلفة الوصفات المرتبطة!');
             }}
             onDeleteItem={(id) => {
-              setItems((prev) => prev.filter((i) => i.id !== id));
-              addAuditLog('تعديل وصفة/صنف', `حذف منتج من الكتالوج`);
-              showToast('🗑️ تم حذف المنتج بنجاح!');
+              safeAction(() => {
+                if (
+                  engine.snapshot.state.items.some((i) =>
+                    i.recipe?.some((r) => r.ingredientId === id),
+                  ) ||
+                  engine.snapshot.state.salesInvoices.some((i) =>
+                    i.items.some((l) => l.itemId === id),
+                  ) ||
+                  engine.snapshot.state.purchaseInvoices.some((i) =>
+                    i.items.some((l) => l.itemId === id),
+                  )
+                ) {
+                  showToast('لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.');
+                  return;
+                }
+                setItems((prev) => prev.filter((i) => i.id !== id));
+                addAuditLog('تعديل وصفة/صنف', `حذف منتج من الكتالوج`);
+                showToast('🗑️ تم حذف المنتج بنجاح!');
+              });
             }}
             onNavigateToProduction={() => setActiveScreen('production')}
             onNavigateToInventory={() => setActiveScreen('inventory')}
@@ -2286,27 +2422,47 @@ export default function App() {
           <InventoryScreen
             items={items}
             onAddNewItem={(newItem) => {
-              setItems((prev) => [
-                { ...newItem, id: `item-${Date.now()}` },
-                ...prev,
-              ]);
-              addAuditLog('تعديل وصفة/صنف', `إضافة صنف: ${newItem.name}`);
-              showToast(`✅ تمت إضافة (${newItem.name}) للمخزن!`);
+              safeAction(() => {
+                setItems((prev) => [
+                  { ...newItem, id: crypto.randomUUID() },
+                  ...prev,
+                ]);
+                addAuditLog('تعديل وصفة/صنف', `إضافة صنف: ${newItem.name}`);
+                showToast(`✅ تمت إضافة (${newItem.name}) للمخزن!`);
+              });
             }}
             onUpdateItemPricesAndStock={(id, patch) => {
-              setItems((prev) => {
-                const next = prev.map((i) =>
-                  i.id === id ? { ...i, ...patch } : i
-                );
-                return recalculateAllRecipeCosts(next);
+              safeAction(() => {
+                setItems((prev) => {
+                  const next = prev.map((i) =>
+                    i.id === id ? { ...i, ...patch } : i,
+                  );
+                  return recalculateAllRecipeCosts(next);
+                });
+                addAuditLog('تعديل وصفة/صنف', `تعديل رصيد/سعر صنف`);
+                showToast('✅ تم تحديث الصنف وتكلفة الوصفات!');
               });
-              addAuditLog('تعديل وصفة/صنف', `تعديل رصيد/سعر صنف`);
-              showToast('✅ تم تحديث الصنف وتكلفة الوصفات!');
             }}
             onDeleteItem={(id) => {
-              setItems((prev) => prev.filter((i) => i.id !== id));
-              addAuditLog('تعديل وصفة/صنف', `حذف صنف من المخزن`);
-              showToast('🗑️ تم حذف الصنف من المخزن!');
+              safeAction(() => {
+                if (
+                  engine.snapshot.state.items.some((i) =>
+                    i.recipe?.some((r) => r.ingredientId === id),
+                  ) ||
+                  engine.snapshot.state.salesInvoices.some((i) =>
+                    i.items.some((l) => l.itemId === id),
+                  ) ||
+                  engine.snapshot.state.purchaseInvoices.some((i) =>
+                    i.items.some((l) => l.itemId === id),
+                  )
+                ) {
+                  showToast('لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.');
+                  return;
+                }
+                setItems((prev) => prev.filter((i) => i.id !== id));
+                addAuditLog('تعديل وصفة/صنف', `حذف صنف من المخزن`);
+                showToast('🗑️ تم حذف الصنف من المخزن!');
+              });
             }}
             onNavigateToProduction={() => setActiveScreen('production')}
             onBack={() => setActiveScreen('home')}
@@ -2330,49 +2486,69 @@ export default function App() {
             purchaseInvoices={purchaseInvoices}
             salesInvoices={salesInvoices}
             accountPayments={accountPayments}
-            onPaySupplier={(supId, amount, notes) => {
-              const targetSup = suppliers.find((s) => s.id === supId);
-              setSuppliers((prev) =>
-                prev.map((s) =>
-                  s.id === supId
-                    ? { ...s, balance: Math.max(0, s.balance - amount) }
-                    : s
-                )
-              );
-              setAccountPayments((prev) => [
-                {
-                  id: `pay-${Date.now()}`,
-                  date: new Date().toISOString().slice(0, 10),
-                  targetType: 'supplier',
-                  targetId: supId,
-                  targetName: targetSup?.name || 'مورد',
-                  amount,
-                  partnerName: currentPartner.name,
-                  notes: notes || 'سداد دفعة للمورد',
-                },
-                ...prev,
-              ]);
-              addAuditLog('سداد/تحصيل', `سداد للمورد ${amount} ج.م`, amount);
-              showToast(`✅ تم سداد ${amount} ج.م للمورد!`);
-            }}
+            onPaySupplier={(supId, amount, notes) =>
+              safeAction(() => {
+                engine.replace(
+                  recordPayment(
+                    engine.snapshot.state,
+                    'supplier',
+                    supId,
+                    amount,
+                    currentPartner.name,
+                    notes,
+                  ),
+                );
+                addAuditLog('سداد/تحصيل', 'سداد للمورد', amount);
+                showToast(
+                  'تم تسجيل الدفعة وتوزيعها على الفواتير المستحقة؛ تابع تأكيد الحفظ.',
+                );
+              })
+            }
             onDeletePayment={(payId) => {
-              setAccountPayments((prev) => prev.filter((p) => p.id !== payId));
-              showToast('🗑️ تم حذف سجل الدفعة!');
+              safeAction(() => {
+                engine.replace(
+                  reversePayment(
+                    engine.snapshot.state,
+                    payId,
+                    currentPartner.name,
+                  ),
+                );
+                addAuditLog('سداد/تحصيل', 'إلغاء دفعة بحركة عكسية');
+                showToast('تم إلغاء الدفعة وإعادة الرصيد مع حفظ السجل.');
+              });
             }}
             onAddSupplier={(sup) => {
-              setSuppliers((prev) => [
-                { ...sup, id: `sup-${Date.now()}` },
-                ...prev,
-              ]);
-              showToast(`✅ تمت إضافة المورد (${sup.name})!`);
+              safeAction(() => {
+                setSuppliers((prev) => [
+                  { ...sup, id: crypto.randomUUID() },
+                  ...prev,
+                ]);
+                showToast(`✅ تمت إضافة المورد (${sup.name})!`);
+              });
             }}
             onDeleteSupplier={(id) => {
-              setSuppliers((prev) => prev.filter((s) => s.id !== id));
-              showToast('🗑️ تم حذف المورد!');
+              safeAction(() => {
+                if (
+                  purchaseInvoices.some((i) => i.supplierId === id) ||
+                  accountPayments.some((p) => p.targetId === id) ||
+                  suppliers.find((s) => s.id === id)?.balance
+                ) {
+                  showToast('حساب المورد مرتبط بحركات أو رصيد؛ لا يمكن حذفه.');
+                  return;
+                }
+                setSuppliers((prev) => prev.filter((s) => s.id !== id));
+                showToast('🗑️ تم حذف المورد!');
+              });
             }}
-            onCollectCustomer={() => {}}
-            onAddCustomer={() => {}}
-            onDeleteCustomer={() => {}}
+            onCollectCustomer={() => {
+              return safeAction(() => {});
+            }}
+            onAddCustomer={() => {
+              safeAction(() => {});
+            }}
+            onDeleteCustomer={() => {
+              safeAction(() => {});
+            }}
             onBack={() => setActiveScreen('home')}
           />
         )}
@@ -2385,48 +2561,68 @@ export default function App() {
             purchaseInvoices={purchaseInvoices}
             salesInvoices={salesInvoices}
             accountPayments={accountPayments}
-            onPaySupplier={() => {}}
-            onAddSupplier={() => {}}
-            onDeleteSupplier={() => {}}
-            onCollectCustomer={(custId, amount, notes) => {
-              const targetCust = customers.find((c) => c.id === custId);
-              setCustomers((prev) =>
-                prev.map((c) =>
-                  c.id === custId
-                    ? { ...c, balance: Math.max(0, c.balance - amount) }
-                    : c
-                )
-              );
-              setAccountPayments((prev) => [
-                {
-                  id: `pay-${Date.now()}`,
-                  date: new Date().toISOString().slice(0, 10),
-                  targetType: 'customer',
-                  targetId: custId,
-                  targetName: targetCust?.name || 'عميل',
-                  amount,
-                  partnerName: currentPartner.name,
-                  notes: notes || 'تحصيل دفعة من العميل',
-                },
-                ...prev,
-              ]);
-              addAuditLog('سداد/تحصيل', `تحصيل من عميل ${amount} ج.م`, amount);
-              showToast(`✅ تم تحصيل ${amount} ج.م من العميل!`);
+            onPaySupplier={() => {
+              return safeAction(() => {});
             }}
+            onAddSupplier={() => {
+              safeAction(() => {});
+            }}
+            onDeleteSupplier={() => {
+              safeAction(() => {});
+            }}
+            onCollectCustomer={(custId, amount, notes) =>
+              safeAction(() => {
+                engine.replace(
+                  recordPayment(
+                    engine.snapshot.state,
+                    'customer',
+                    custId,
+                    amount,
+                    currentPartner.name,
+                    notes,
+                  ),
+                );
+                addAuditLog('سداد/تحصيل', 'تحصيل من العميل', amount);
+                showToast(
+                  'تم تسجيل الدفعة وتوزيعها على الفواتير المستحقة؛ تابع تأكيد الحفظ.',
+                );
+              })
+            }
             onDeletePayment={(payId) => {
-              setAccountPayments((prev) => prev.filter((p) => p.id !== payId));
-              showToast('🗑️ تم حذف سجل الدفعة!');
+              safeAction(() => {
+                engine.replace(
+                  reversePayment(
+                    engine.snapshot.state,
+                    payId,
+                    currentPartner.name,
+                  ),
+                );
+                addAuditLog('سداد/تحصيل', 'إلغاء دفعة بحركة عكسية');
+                showToast('تم إلغاء الدفعة وإعادة الرصيد مع حفظ السجل.');
+              });
             }}
             onAddCustomer={(cust) => {
-              setCustomers((prev) => [
-                { ...cust, id: `cust-${Date.now()}` },
-                ...prev,
-              ]);
-              showToast(`✅ تمت إضافة العميل (${cust.name})!`);
+              safeAction(() => {
+                setCustomers((prev) => [
+                  { ...cust, id: crypto.randomUUID() },
+                  ...prev,
+                ]);
+                showToast(`✅ تمت إضافة العميل (${cust.name})!`);
+              });
             }}
             onDeleteCustomer={(id) => {
-              setCustomers((prev) => prev.filter((c) => c.id !== id));
-              showToast('🗑️ تم حذف العميل!');
+              safeAction(() => {
+                if (
+                  salesInvoices.some((i) => i.customerId === id) ||
+                  accountPayments.some((p) => p.targetId === id) ||
+                  customers.find((c) => c.id === id)?.balance
+                ) {
+                  showToast('حساب العميل مرتبط بحركات أو رصيد؛ لا يمكن حذفه.');
+                  return;
+                }
+                setCustomers((prev) => prev.filter((c) => c.id !== id));
+                showToast('🗑️ تم حذف العميل!');
+              });
             }}
             onBack={() => setActiveScreen('home')}
           />
@@ -2437,23 +2633,23 @@ export default function App() {
             salesInvoices={salesInvoices}
             customers={customers}
             onReturnInvoice={(invId) => {
-              const target = salesInvoices.find((s) => s.id === invId);
-              if (!target || target.isReturned) return;
-              setSalesInvoices((prev) =>
-                prev.map((s) =>
-                  s.id === invId ? { ...s, isReturned: true } : s
-                )
-              );
-              addAuditLog(
-                'مرتجع',
-                `مرتجع فاتورة #${target.invoiceNumber}`,
-                target.totalAmount
-              );
-              showToast(`✅ تم عمل مرتجع للفاتورة #${target.invoiceNumber}!`);
+              safeAction(() => {
+                const state = returnSale(
+                  engine.snapshot.state,
+                  invId,
+                  currentPartner.name,
+                );
+                engine.replace(state);
+                addAuditLog('مرتجع', `مرتجع الفاتورة ${invId}`);
+                showToast(
+                  'تم تسجيل المرتجع وعكس المستحق؛ مكونات المشروبات تظل مستهلكة.',
+                );
+              });
             }}
             onDeleteInvoice={(invId) => {
-              setSalesInvoices((prev) => prev.filter((s) => s.id !== invId));
-              showToast('🗑️ تم حذف الفاتورة!');
+              showToast(
+                'هذه فاتورة معتمدة؛ استخدم المرتجع لعكس أثرها مع الاحتفاظ بالأصل.',
+              );
             }}
             onBack={() => setActiveScreen('home')}
           />
@@ -2485,7 +2681,9 @@ export default function App() {
             auditRecords={stocktakingRecords}
             employees={employees}
             currentPartnerName={currentPartner.name}
-            onCommitStocktaking={handleCommitStocktaking}
+            onCommitStocktaking={(...args) =>
+              safeAction(() => handleCommitStocktaking(...args))
+            }
             onBack={() => setActiveScreen('home')}
           />
         )}
@@ -2495,7 +2693,9 @@ export default function App() {
             employees={employees}
             transactions={employeeTransactions}
             currentPartnerName={currentPartner.name}
-            onRecordEmployeeAction={handleRecordEmployeeAction}
+            onRecordEmployeeAction={(...args) =>
+              safeAction(() => handleRecordEmployeeAction(...args))
+            }
             onAddNewEmployee={(newEmp) => {
               const created: Employee = {
                 ...newEmp,
@@ -2506,8 +2706,10 @@ export default function App() {
               showToast(`✅ تمت إضافة العامل (${created.name})!`);
             }}
             onDeleteEmployee={(empId) => {
-              setEmployees((prev) => prev.filter((e) => e.id !== empId));
-              showToast('🗑️ تم حذف العامل!');
+              safeAction(() => {
+                setEmployees((prev) => prev.filter((e) => e.id !== empId));
+                showToast('🗑️ تم حذف العامل!');
+              });
             }}
             onBack={() => setActiveScreen('home')}
           />
@@ -2521,108 +2723,94 @@ export default function App() {
             shifts={shifts}
             currentPartner={currentPartner}
             initialSubPage={moreInitialTab}
-            onAddExpense={(exp) => {
-              setExpenses((prev) => [
-                { ...exp, id: `exp-${Date.now()}` },
-                ...prev,
-              ]);
-              if (exp.paidFrom === 'من جيب الشريك') {
+            onAddExpense={(exp) =>
+              safeAction(() => {
+                engine.replace(
+                  recordExpense(engine.snapshot.state, exp, currentPartner.id),
+                );
+                addAuditLog('مصروف', exp.title, exp.amount);
+                showToast(
+                  'تم تسجيل الحركة وتحديث حساب الشريك؛ تابع تأكيد الحفظ.',
+                );
+              })
+            }
+            onDeleteExpense={(expId) =>
+              safeAction(() => {
+                engine.replace(
+                  cancelExpense(
+                    engine.snapshot.state,
+                    expId,
+                    currentPartner.name,
+                  ),
+                );
+                addAuditLog('مصروف', `إلغاء المصروف ${expId}`);
+                showToast('تم إلغاء المصروف وعكس رصيد الشريك مع حفظ الأصل.');
+              })
+            }
+            onUpdatePartnerAccount={(id, patch) => {
+              safeAction(() => {
                 setPartners((prev) =>
                   prev.map((p) =>
-                    p.id === currentPartner.id
+                    p.id === id
                       ? {
                           ...p,
-                          totalPaidFromPocket:
-                            p.totalPaidFromPocket + exp.amount,
+                          ...patch,
+                          avatarLetter:
+                            (patch.name || p.name).trim().charAt(0) ||
+                            p.avatarLetter,
                         }
-                      : p
-                  )
+                      : p,
+                  ),
                 );
-              }
-              addAuditLog('مصروف', `مصروف: ${exp.title}`, exp.amount);
-              showToast(`✅ تم تسجيل المصروف (${exp.amount} ج.م)!`);
+                showToast('✅ تم تحديث حساب المالك!');
+              });
             }}
-            onDeleteExpense={(expId) => {
-              setExpenses((prev) => prev.filter((e) => e.id !== expId));
-              showToast('🗑️ تم حذف المصروف!');
-            }}
-            onUpdatePartnerAccount={(id, patch) => {
-              setPartners((prev) =>
-                prev.map((p) =>
-                  p.id === id
-                    ? {
-                        ...p,
-                        ...patch,
-                        avatarLetter:
-                          (patch.name || p.name).trim().charAt(0) ||
-                          p.avatarLetter,
-                      }
-                    : p
+            onClearAllDemoData={() => {
+              downloadFullBackupJson(createBackup(engine.snapshot.state));
+              if (
+                window.confirm(
+                  'تم تنزيل نسخة احتياطية. هل تريد تصفير بيانات المحل بالكامل؟',
                 )
-              );
-              showToast('✅ تم تحديث حساب المالك!');
+              )
+                safeAction(handleClearAllDemoData);
             }}
-            onClearAllDemoData={handleClearAllDemoData}
-            onClearTransactionsKeepCatalog={handleClearTransactionsKeepCatalog}
+            onClearTransactionsKeepCatalog={() => {
+              downloadFullBackupJson(createBackup(engine.snapshot.state));
+              if (
+                window.confirm(
+                  'تم تنزيل نسخة احتياطية. هل تريد تصفير الفواتير والأرصدة؟',
+                )
+              )
+                safeAction(handleClearTransactionsKeepCatalog);
+            }}
             onRestoreDefaultDemoData={handleRestoreDefaultDemoData}
             onDownloadBackupJson={() => {
-              downloadFullBackupJson({
-                items,
-                productionBatches,
-                purchaseInvoices,
-                salesInvoices,
-                suppliers,
-                customers,
-                expenses,
-                partners,
-                auditLogs,
-                employees,
-                employeeTransactions,
-                stocktakingRecords,
-                accountPayments,
-              });
+              downloadFullBackupJson(createBackup(engine.snapshot.state));
               showToast('📥 تم تحميل النسخة الاحتياطية الكاملة بنجاح!');
             }}
-            onExportFullExcel={() => {
-              exportFullStoreExcel(
-                items,
-                salesInvoices,
-                purchaseInvoices,
-                suppliers,
-                customers,
-                expenses
-              );
-              showToast('📊 تم تصدير ملف الإكسيل الشامل للمحل بنجاح!');
+            onExportFullExcel={async () => {
+              try {
+                await exportFullStoreExcel(
+                  items,
+                  salesInvoices,
+                  purchaseInvoices,
+                  suppliers,
+                  customers,
+                  expenses,
+                );
+                showToast('📊 تم تصدير ملف الإكسيل الشامل للمحل بنجاح!');
+              } catch {
+                showToast('تعذر تصدير Excel؛ حاول مجددًا.');
+              }
             }}
             onRestoreBackupJson={(data) => {
-              if (Array.isArray(data.items)) setItems(data.items as InventoryItem[]);
-              if (Array.isArray(data.productionBatches))
-                setProductionBatches(data.productionBatches as ProductionBatch[]);
-              if (Array.isArray(data.purchaseInvoices))
-                setPurchaseInvoices(data.purchaseInvoices as PurchaseInvoice[]);
-              if (Array.isArray(data.salesInvoices))
-                setSalesInvoices(data.salesInvoices as SalesInvoice[]);
-              if (Array.isArray(data.suppliers))
-                setSuppliers(data.suppliers as Supplier[]);
-              if (Array.isArray(data.customers))
-                setCustomers(data.customers as Customer[]);
-              if (Array.isArray(data.expenses))
-                setExpenses(data.expenses as Expense[]);
-              if (Array.isArray(data.employees))
-                setEmployees(data.employees as Employee[]);
-              if (Array.isArray(data.employeeTransactions))
-                setEmployeeTransactions(
-                  data.employeeTransactions as EmployeeTransaction[]
+              safeAction(() => {
+                const restored = parseBackup(data);
+                engine.replace(restored);
+                showToast(
+                  'تم التحقق من النسخة واسترجاعها؛ تابع تأكيد الحفظ أعلى الشاشة.',
                 );
-              if (Array.isArray(data.stocktakingRecords))
-                setStocktakingRecords(
-                  data.stocktakingRecords as StocktakingAuditRecord[]
-                );
-              if (Array.isArray(data.accountPayments))
-                setAccountPayments(
-                  data.accountPayments as AccountPaymentRecord[]
-                );
-              showToast('✅ تم استرجاع النسخة الاحتياطية بالكامل بنجاح!');
+              });
             }}
             onLogout={handleLogout}
             onNavigate={(sc) => setActiveScreen(sc)}
@@ -2641,7 +2829,7 @@ export default function App() {
               customers.find(
                 (c) =>
                   c.id === receiptModalInvoice.customerId ||
-                  c.name === receiptModalInvoice.customerName
+                  c.name === receiptModalInvoice.customerName,
               )?.phone || ''
             }
             onClose={() => setReceiptModalInvoice(null)}

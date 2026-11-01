@@ -34,8 +34,8 @@ interface PurchaseScreenProps {
   purchaseInvoices: PurchaseInvoice[];
   currentPartnerName: string;
   onSavePurchase: (
-    invoice: Omit<PurchaseInvoice, 'id' | 'invoiceNumber'>
-  ) => void;
+    invoice: Omit<PurchaseInvoice, 'id' | 'invoiceNumber'>,
+  ) => boolean;
   onDeletePurchaseInvoice?: (invoiceId: string) => void;
   onQuickAddSupplier?: (supplier: Omit<Supplier, 'id'>) => void;
   onQuickAddItem?: (item: Omit<InventoryItem, 'id'>) => void;
@@ -66,10 +66,10 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
   // بيانات إنشاء فاتورة مشتريات جديدة
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>(
-    suppliers[0]?.id || ''
+    suppliers[0]?.id || '',
   );
   const [invoiceDate, setInvoiceDate] = useState<string>(
-    new Date().toISOString().slice(0, 10)
+    new Date().toISOString().slice(0, 10),
   );
   const [itemCategoryFilter, setItemCategoryFilter] = useState<
     'all' | 'raw_bean' | 'raw_spice' | 'direct_product'
@@ -77,7 +77,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showItemPickerModal, setShowItemPickerModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'نقدي' | 'آجل' | 'جزئي'>(
-    'نقدي'
+    'نقدي',
   );
   const [paidAmountInput, setPaidAmountInput] = useState<string>('');
   const [compareModalItem, setCompareModalItem] =
@@ -104,9 +104,9 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
         (i) =>
           i.category === 'raw_bean' ||
           i.category === 'raw_spice' ||
-          i.category === 'direct_product'
+          i.category === 'direct_product',
       ),
-    [items]
+    [items],
   );
 
   // سلة الفاتورة الجديدة (تبدأ فارغة تماماً ليختار المستخدم الأصناف بنفسه)
@@ -122,18 +122,15 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
   // إحصائيات قسم المشتريات
   const purchaseStats = useMemo(() => {
-    const totalPurchases = purchaseInvoices.reduce(
-      (s, inv) => s + inv.totalAmount,
-      0
-    );
-    const totalPaid = purchaseInvoices.reduce(
-      (s, inv) => s + inv.paidAmount,
-      0
-    );
-    const totalRemaining = purchaseInvoices.reduce(
-      (s, inv) => s + inv.remainingAmount,
-      0
-    );
+    const totalPurchases = purchaseInvoices
+      .filter((i) => !i.isCancelled)
+      .reduce((s, inv) => s + inv.totalAmount, 0);
+    const totalPaid = purchaseInvoices
+      .filter((i) => !i.isCancelled)
+      .reduce((s, inv) => s + inv.paidAmount, 0);
+    const totalRemaining = purchaseInvoices
+      .filter((i) => !i.isCancelled)
+      .reduce((s, inv) => s + inv.remainingAmount, 0);
     return {
       count: purchaseInvoices.length,
       totalPurchases,
@@ -157,7 +154,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
         const matchNum = inv.invoiceNumber.toLowerCase().includes(q);
         const matchSup = inv.supplierName.toLowerCase().includes(q);
         const matchItem = inv.items.some((it) =>
-          it.itemName.toLowerCase().includes(q)
+          it.itemName.toLowerCase().includes(q),
         );
         return matchNum || matchSup || matchItem;
       }
@@ -187,7 +184,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       const existing = prev.find((c) => c.item.id === item.id);
       if (existing) {
         return prev.map((c) =>
-          c.item.id === item.id ? { ...c, quantity: c.quantity + 1 } : c
+          c.item.id === item.id ? { ...c, quantity: c.quantity + 1 } : c,
         );
       }
       return [
@@ -210,10 +207,10 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       purchasePrice: number;
       newRetailPrice: string;
       updateCost: boolean;
-    }>
+    }>,
   ) => {
     setCart((prev) =>
-      prev.map((c) => (c.item.id === itemId ? { ...c, ...patch } : c))
+      prev.map((c) => (c.item.id === itemId ? { ...c, ...patch } : c)),
     );
   };
 
@@ -234,9 +231,9 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
     () =>
       cart.reduce(
         (sum, c) => sum + Number((c.quantity * c.purchasePrice).toFixed(2)),
-        0
+        0,
       ),
-    [cart]
+    [cart],
   );
 
   const handleStartNewInvoice = () => {
@@ -258,7 +255,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
         prices.length > 0
           ? prices.reduce(
               (min, p) => (p.price < min.price ? p : min),
-              prices[0]
+              prices[0],
             )
           : {
               price: c.item.lastPurchasePrice,
@@ -273,8 +270,8 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
           c.item.baseUnit === 'kg'
             ? 'كجم'
             : c.item.baseUnit === 'liter'
-            ? 'لتر'
-            : 'قطعة',
+              ? 'لتر'
+              : 'قطعة',
         purchasePrice: c.purchasePrice,
         newRetailPrice: parseFloat(c.newRetailPrice) || c.item.retailPrice,
         previousLastPrice: c.item.lastPurchasePrice,
@@ -289,10 +286,10 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       paymentMethod === 'نقدي'
         ? totalInvoiceAmount
         : paymentMethod === 'آجل'
-        ? 0
-        : Math.min(totalInvoiceAmount, parseFloat(paidAmountInput) || 0);
+          ? 0
+          : Math.min(totalInvoiceAmount, parseFloat(paidAmountInput) || 0);
 
-    onSavePurchase({
+    const accepted = onSavePurchase({
       date: invoiceDate,
       supplierId: selectedSupplierId,
       supplierName: supplier?.name || 'مورد عام',
@@ -304,6 +301,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       partnerName: currentPartnerName,
     });
 
+    if (accepted === false) return;
     setCart([]);
     setViewMode('list');
   };
@@ -383,7 +381,9 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-2.5">
-                <div className="text-[10px] text-[#D8CBB8]">إجمالي المشتريات</div>
+                <div className="text-[10px] text-[#D8CBB8]">
+                  إجمالي المشتريات
+                </div>
                 <div className="text-sm font-black text-white mt-0.5">
                   {purchaseStats.totalPurchases.toLocaleString('ar-EG')}{' '}
                   <span className="text-[9px] text-[#D4AF37]">ج.م</span>
@@ -438,16 +438,17 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
             <div className="grid grid-cols-3 gap-2">
               {[
-                { id: 'all', label: `كل الفواتير (${purchaseInvoices.length})` },
+                {
+                  id: 'all',
+                  label: `كل الفواتير (${purchaseInvoices.length})`,
+                },
                 { id: 'نقدي', label: 'فواتير نقدية' },
                 { id: 'آجل_أو_جزئي', label: 'عليها متبقي آجل' },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() =>
-                    setInvoiceFilter(
-                      tab.id as 'all' | 'نقدي' | 'آجل_أو_جزئي'
-                    )
+                    setInvoiceFilter(tab.id as 'all' | 'نقدي' | 'آجل_أو_جزئي')
                   }
                   className={`py-2 rounded-xl text-xs font-extrabold border transition ${
                     invoiceFilter === tab.id
@@ -472,7 +473,8 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                   لا توجد فواتير مشتريات مسجلة
                 </div>
                 <p className="text-xs text-[#8C7A6B]">
-                  اضغط على زر &quot;إنشاء فاتورة مشتريات جديدة&quot; لإضافة توريد جديد للمخزن
+                  اضغط على زر &quot;إنشاء فاتورة مشتريات جديدة&quot; لإضافة
+                  توريد جديد للمخزن
                 </p>
               </div>
             ) : (
@@ -490,6 +492,13 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-black text-[#1E1612]">
                             #{inv.invoiceNumber}
+                            {inv.isCancelled ? ' — ملغاة' : ''}
+                            {inv.isCancelled && (
+                              <span className="block text-amber-800">
+                                مبلغ الاسترداد من المورد: {inv.refundDue ?? 0}{' '}
+                                ج.م
+                              </span>
+                            )}
                           </span>
                           <span
                             className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
@@ -550,14 +559,19 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                         onClick={() => {
                           if (
                             window.confirm(
-                              `هل تريد حذف فاتورة المشتريات #${inv.invoiceNumber}؟`
+                              `هل تريد إلغاء فاتورة المشتريات وعكس المخزون والمديونية #${inv.invoiceNumber}{inv.isCancelled ? ' — ملغاة' : ''}؟`,
                             )
                           ) {
                             onDeletePurchaseInvoice(inv.id);
                           }
                         }}
                         className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition"
-                        title="حذف الفاتورة"
+                        disabled={inv.isCancelled}
+                        title={
+                          inv.isCancelled
+                            ? 'فاتورة ملغاة'
+                            : 'إلغاء الفاتورة وعكس أثرها'
+                        }
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -658,7 +672,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                         | 'all'
                         | 'raw_bean'
                         | 'raw_spice'
-                        | 'direct_product'
+                        | 'direct_product',
                     )
                   }
                   className={`py-1.5 px-1 rounded-xl text-[10px] font-extrabold border transition ${
@@ -740,7 +754,8 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                 </div>
                 <div>
                   <div className="text-xs font-black text-red-700">
-                    تنبيه: {higherThanCheapestCount} صنف بسعر أعلى من أرخص مورد مسجل
+                    تنبيه: {higherThanCheapestCount} صنف بسعر أعلى من أرخص مورد
+                    مسجل
                   </div>
                   <div className="text-[10px] text-red-600/80 font-semibold">
                     راجع مقارنة الموردين بالأسفل للحفاظ على تكلفة التوليفات
@@ -770,7 +785,8 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                   الفاتورة فارغة حالياً
                 </div>
                 <div className="text-[11px] text-[#8C7A6B]">
-                  اضغط على أي صنف من القائمة بالأعلى لإضافته وتحديد الكمية والسعر
+                  اضغط على أي صنف من القائمة بالأعلى لإضافته وتحديد الكمية
+                  والسعر
                 </div>
               </div>
             ) : (
@@ -788,7 +804,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                   const diffPercentFromLast =
                     lastPrice > 0
                       ? Math.round(
-                          ((purchasePrice - lastPrice) / lastPrice) * 100
+                          ((purchasePrice - lastPrice) / lastPrice) * 100,
                         )
                       : 0;
 
@@ -796,7 +812,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                     item.supplierPrices.length > 0
                       ? item.supplierPrices.reduce(
                           (min, p) => (p.price < min.price ? p : min),
-                          item.supplierPrices[0]
+                          item.supplierPrices[0],
                         )
                       : {
                           price: lastPrice,
@@ -811,7 +827,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                             (item.stock * item.costPrice +
                               quantity * purchasePrice) /
                             (item.stock + quantity)
-                          ).toFixed(2)
+                          ).toFixed(2),
                         )
                       : purchasePrice;
 
@@ -819,8 +835,8 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                     item.baseUnit === 'kg'
                       ? 'كجم'
                       : item.baseUnit === 'liter'
-                      ? 'لتر'
-                      : 'قطعة';
+                        ? 'لتر'
+                        : 'قطعة';
 
                   return (
                     <div
@@ -855,7 +871,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                                 updateCartItem(item.id, {
                                   purchasePrice: Math.max(
                                     0,
-                                    parseFloat(e.target.value) || 0
+                                    parseFloat(e.target.value) || 0,
                                   ),
                                 })
                               }
@@ -878,7 +894,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                                 updateCartItem(item.id, {
                                   quantity: Math.max(
                                     0.5,
-                                    Number((quantity - 1).toFixed(2))
+                                    Number((quantity - 1).toFixed(2)),
                                   ),
                                 })
                               }
@@ -894,7 +910,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                                 updateCartItem(item.id, {
                                   quantity: Math.max(
                                     0.1,
-                                    parseFloat(e.target.value) || 0.1
+                                    parseFloat(e.target.value) || 0.1,
                                   ),
                                 })
                               }
@@ -963,7 +979,9 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                         <div className="flex items-center justify-between text-[#6E5D4F]">
                           <span>
                             متوسط التكلفة (WAC): <b>{item.costPrice} ج.م</b> ←{' '}
-                            <b className="text-emerald-700">سيصبح {newWac} ج.م</b>
+                            <b className="text-emerald-700">
+                              سيصبح {newWac} ج.م
+                            </b>
                           </span>
                           <button
                             type="button"
@@ -982,7 +1000,8 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
                       <label className="flex items-center justify-between pt-0.5 cursor-pointer">
                         <span className="text-[11px] font-bold text-[#6E5D4F]">
-                          تحديث متوسط التكلفة (WAC) وتكلفة التوليفات المرتبطة تلقائياً
+                          تحديث متوسط التكلفة (WAC) وتكلفة التوليفات المرتبطة
+                          تلقائياً
                         </span>
                         <input
                           type="checkbox"
@@ -1021,8 +1040,8 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                   {method === 'نقدي'
                     ? 'نقدي بالكامل'
                     : method === 'آجل'
-                    ? 'آجل (على الحساب)'
-                    : 'سداد جزئي'}
+                      ? 'آجل (على الحساب)'
+                      : 'سداد جزئي'}
                 </button>
               ))}
             </div>
@@ -1051,8 +1070,8 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
             >
               <Check className="w-4 h-4 text-[#D4AF37]" />
               <span>
-                حفظ واعتماد الفاتورة ({totalInvoiceAmount.toLocaleString('ar-EG')}{' '}
-                ج.م)
+                حفظ واعتماد الفاتورة (
+                {totalInvoiceAmount.toLocaleString('ar-EG')} ج.م)
               </span>
             </button>
             <button
@@ -1094,14 +1113,17 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                   className="p-3 rounded-xl bg-[#FAF8F4] border border-[#E6DEC8] flex items-center justify-between text-xs"
                 >
                   <div>
-                    <div className="font-black text-[#1E1612]">{it.itemName}</div>
+                    <div className="font-black text-[#1E1612]">
+                      {it.itemName}
+                    </div>
                     <div className="text-[11px] text-[#7A6855]">
-                      الكمية: {it.quantity} {it.unit} × السعر: {it.purchasePrice}{' '}
-                      ج.م
+                      الكمية: {it.quantity} {it.unit} × السعر:{' '}
+                      {it.purchasePrice} ج.م
                     </div>
                   </div>
                   <div className="font-black text-[#9E7918]">
-                    {(it.quantity * it.purchasePrice).toLocaleString('ar-EG')} ج.م
+                    {(it.quantity * it.purchasePrice).toLocaleString('ar-EG')}{' '}
+                    ج.م
                   </div>
                 </div>
               ))}
@@ -1111,19 +1133,23 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
               <div className="flex justify-between">
                 <span>إجمالي الفاتورة:</span>
                 <span className="font-black">
-                  {selectedInvoiceDetails.totalAmount.toLocaleString('ar-EG')} ج.م
+                  {selectedInvoiceDetails.totalAmount.toLocaleString('ar-EG')}{' '}
+                  ج.م
                 </span>
               </div>
               <div className="flex justify-between text-emerald-400">
                 <span>المدفوع للمورد:</span>
                 <span className="font-black">
-                  {selectedInvoiceDetails.paidAmount.toLocaleString('ar-EG')} ج.م
+                  {selectedInvoiceDetails.paidAmount.toLocaleString('ar-EG')}{' '}
+                  ج.م
                 </span>
               </div>
               <div className="flex justify-between text-amber-400">
                 <span>المتبقي آجل:</span>
                 <span className="font-black">
-                  {selectedInvoiceDetails.remainingAmount.toLocaleString('ar-EG')}{' '}
+                  {selectedInvoiceDetails.remainingAmount.toLocaleString(
+                    'ar-EG',
+                  )}{' '}
                   ج.م
                 </span>
               </div>
@@ -1249,7 +1275,8 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
               onClick={() => {
                 if (!newItemName.trim()) return;
                 const cost = parseFloat(newItemCost) || 300;
-                const retail = parseFloat(newItemRetail) || Math.round(cost * 1.3);
+                const retail =
+                  parseFloat(newItemRetail) || Math.round(cost * 1.3);
                 const wholesale =
                   parseFloat(newItemWholesale) || Math.round(cost * 1.15);
                 onQuickAddItem({
@@ -1290,7 +1317,9 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                 <h3 className="text-sm font-black text-[#1E1612]">
                   مقارنة أسعار الموردين
                 </h3>
-                <p className="text-xs text-[#8C7A6B]">{compareModalItem.name}</p>
+                <p className="text-xs text-[#8C7A6B]">
+                  {compareModalItem.name}
+                </p>
               </div>
               <button
                 onClick={() => setCompareModalItem(null)}

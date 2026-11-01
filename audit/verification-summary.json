@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-01",
+  "tests": 81,
+  "passed": 81,
+  "failed": 0,
+  "dependencyAdvisories": 0,
+  "buildSucceeded": true,
+  "mainBundles": [
+    {
+      "file": "index-apCWiR7M.js",
+      "bytes": 531101,
+      "gzipBytes": 146871
+    }
+  ],
+  "liveDatabaseChanged": false,
+  "deployed": false
+}

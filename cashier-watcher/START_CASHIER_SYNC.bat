@@ -5,5 +5,5 @@ echo ==========================================================
 echo   تشغيل أداة مراقبة فولدر مبيعات كاشير (بُن العجوز)
 echo ==========================================================
 cd /d "%~dp0.."
-node cashier-watcher/watcher.mjs
+node --env-file-if-exists=.env.local cashier-watcher/watcher.mjs
 pause

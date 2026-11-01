@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-01",
+  "environment": "Disposable local HTTP gateway and PostgreSQL; no live Supabase writes",
+  "auth": "Real Supabase browser SDK against local test auth",
+  "version": 2,
+  "invoiceNumber": "WH-0f38af07",
+  "saleQuantityKg": 0.25,
+  "saleTotal": 106.25,
+  "isReturned": true,
+  "stockAfterReturn": 42.5,
+  "expectedStockAfterReturn": 42.5,
+  "invoiceRetained": true,
+  "appSourceSha256": "23cf49f74cc12f2defd22467a6fd916e1f83d873d057ef789e7d5896b278fbb4",
+  "screenshot": "audit/browser-return-proof.jpg"
+}
