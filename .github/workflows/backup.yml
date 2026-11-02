@@ -41,4 +41,21 @@ jobs:
         run: |
           test "$RUNNER_TEMP/agouz-backup" != / 
           rm -rf -- "$RUNNER_TEMP/agouz-backup"
+  keep-schedule-active:
+    needs: backup
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Keep the public repository schedule active
+        run: node scripts/backup/keep-schedule-active.mjs
+
 
