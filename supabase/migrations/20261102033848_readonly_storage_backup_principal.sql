@@ -17,4 +17,5 @@ using ((select bon_erp_private.is_storage_backup_reader()));
 create policy agouz_backup_reads_buckets on storage.buckets for select to authenticated
 using ((select bon_erp_private.is_storage_backup_reader()));
 grant select on storage.objects,storage.buckets to authenticated;
+grant usage on schema storage to authenticated;
 commit;
