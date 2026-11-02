@@ -1,0 +1,15 @@
+name: agouz_mobile_validation
+services:
+  db:
+    image: public.ecr.aws/supabase/postgres:17.11.0.004
+    environment:
+      POSTGRES_PASSWORD: local-agouz-validation-only-2748
+    ports:
+      - '127.0.0.1:55483:5432'
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    labels:
+      app.agouz.purpose: isolated-validation

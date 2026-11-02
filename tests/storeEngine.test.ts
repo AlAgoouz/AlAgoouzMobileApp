@@ -2,6 +2,22 @@ import { it, expect, vi, afterEach } from 'vitest';
 import { StoreEngine, type StoreTransport } from '../src/lib/storeEngine';
 import { emptyStore } from '../src/lib/storeState';
 afterEach(() => vi.useRealTimers());
+it('keeps owner restore mode and operation ID when retrying an uncertain save', async () => {
+  vi.useFakeTimers();
+  const { engine, transport } = setup();
+  await engine.load();
+  transport.save = vi.fn().mockRejectedValueOnce(new Error('network')).mockResolvedValue(2);
+  engine.restore(structuredClone(emptyStore));
+  expect(() => engine.restore(emptyStore)).toThrow();
+  await engine.flush();
+  await engine.flush();
+  const calls = vi.mocked(transport.save).mock.calls;
+  expect(calls).toHaveLength(2);
+  expect(calls[0][4]).toBe(true);
+  expect(calls[1][4]).toBe(true);
+  expect(calls[0][2]).toBe(calls[1][2]);
+  expect(engine.hasPending).toBe(false);
+});
 function setup() {
   let version = 1;
   const transport: StoreTransport = {

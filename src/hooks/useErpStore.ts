@@ -4,14 +4,22 @@ import { StoreEngine } from '../lib/storeEngine';
 import { fromCloud, toCloud } from '../lib/storeState';
 import { scrubLegacyPasswords } from '../lib/legacyCache';
 import { authErrorMessage } from '../lib/authErrors';
+import { storeWriteError } from '../lib/storeErrors';
 
 export function useErpStore() {
+  const recoveryFlow = useRef(new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery');
+  const [passwordRecovery, setPasswordRecovery] = useState(recoveryFlow.current);
+  const passwordUpdated = useRef(false);
+  const [recoveryPasswordUpdated, setRecoveryPasswordUpdated] = useState(false);
   const [member, setMember] = useState<{
     userId: string;
     partnerId: string;
   } | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [authError, setAuthError] = useState('');
+  const [authError, setAuthError] = useState(() => {
+    const code = new URLSearchParams(window.location.hash.slice(1)).get('error_code');
+    return code ? authErrorMessage({code}, 'recovery') : '';
+  });
   const generation = useRef(0);
   const activeUser = useRef<string | null>(null);
   const engineRef = useRef<StoreEngine>();
@@ -39,16 +47,16 @@ export function useErpStore() {
             );
           return { state: fromCloud(data), version: Number(data.version) };
         },
-        async save(state, version, operationId, queueId) {
+        async save(state, version, operationId, queueId, restore) {
           const sb = getSupabaseClient();
           if (!sb) throw new Error('إعداد الاتصال غير صالح');
-          const { data, error } = await sb.rpc('bon_erp_save_store', {
+          const { data, error } = await sb.rpc(restore ? 'bon_erp_restore_store' : 'bon_erp_save_store', {
             p_expected_version: version,
             p_state: toCloud(state),
             p_operation_id: operationId,
-            p_queue_id: queueId ?? null,
+            ...(!restore ? { p_queue_id: queueId ?? null } : {}),
           });
-          if (error) throw new Error(error.message);
+          if (error) throw new Error(storeWriteError(error.message));
           if (!data || !Number.isSafeInteger(Number(data.version)))
             throw new Error('لم يصل تأكيد حفظ صالح');
           return Number(data.version);
@@ -94,6 +102,10 @@ export function useErpStore() {
         setAuthReady(true);
         return;
       }
+      if (recoveryFlow.current) {
+        setAuthReady(true);
+        return;
+      }
       if (
         activeUser.current === user.id &&
         engine.snapshot.status !== 'signed-out'
@@ -135,7 +147,17 @@ export function useErpStore() {
     const {
       data: { subscription },
     } = sb.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') {
+      if (event === 'PASSWORD_RECOVERY') {
+        ++generation.current;
+        activeUser.current = null;
+        recoveryFlow.current = true;
+        passwordUpdated.current = false;
+        setRecoveryPasswordUpdated(false);
+        setPasswordRecovery(true);
+        setMember(null);
+        engine.logout();
+        setAuthReady(true);
+      } else if (event === 'SIGNED_OUT') {
         ++generation.current;
         activeUser.current = null;
         setMember(null);
@@ -226,12 +248,60 @@ export function useErpStore() {
     setMember(null);
     engine.logout();
   }
+  async function requestPasswordReset(email: string) {
+    const sb = getSupabaseClient();
+    if (!sb) throw new Error('إعداد الاتصال غير صالح');
+    const { error } = await sb.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+    if (error) throw new Error(authErrorMessage(error, 'recovery'));
+  }
+  async function resendConfirmation(email: string) {
+    const sb = getSupabaseClient();
+    if (!sb) throw new Error('إعداد الاتصال غير صالح');
+    const { error } = await sb.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: window.location.origin } });
+    if (error) throw new Error(authErrorMessage(error, 'recovery'));
+  }
+  async function updateRecoveredPassword(password: string) {
+    if (!recoveryFlow.current) throw new Error('افتح رابط استعادة كلمة المرور من بريدك أولًا');
+    if (!passwordUpdated.current && password.length < 12) throw new Error('اختر كلمة مرور من 12 حرفًا على الأقل');
+    const sb = getSupabaseClient();
+    if (!sb) throw new Error('إعداد الاتصال غير صالح');
+    if (!passwordUpdated.current) {
+      const verified = await sb.auth.getUser();
+      if (verified.error || !verified.data.user) throw new Error('رابط الاستعادة انتهى؛ اطلب رابطًا جديدًا');
+      const { error } = await sb.auth.updateUser({ password });
+      if (error) throw new Error(authErrorMessage(error, 'recovery'));
+      passwordUpdated.current = true;
+      setRecoveryPasswordUpdated(true);
+    }
+    const signedOut = await sb.auth.signOut({ scope: 'global' });
+    if (signedOut.error) throw new Error('تم تحديث كلمة المرور؛ تعذر إنهاء الجلسات. أعد المحاولة قبل المتابعة.');
+    recoveryFlow.current = false;
+    passwordUpdated.current = false;
+    setRecoveryPasswordUpdated(false);
+    setPasswordRecovery(false);
+    setMember(null);
+    engine.logout();
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+  async function cancelPasswordRecovery() {
+    const sb=getSupabaseClient();
+    const result=await sb?.auth.signOut({scope:'local'});
+    if(result?.error) throw new Error('تعذر إنهاء جلسة الاستعادة؛ حاول مرة أخرى');
+    recoveryFlow.current=false;passwordUpdated.current=false;setRecoveryPasswordUpdated(false);setPasswordRecovery(false);setMember(null);engine.logout();
+    window.history.replaceState(null,'',window.location.pathname+window.location.search);
+  }
   return {
     ...snapshot,
     engine,
     member,
     authReady,
     authError,
+    passwordRecovery,
+    recoveryPasswordUpdated,
+    requestPasswordReset,
+    resendConfirmation,
+    updateRecoveredPassword,
+    cancelPasswordRecovery,
     signIn,
     signUp,
     signOut,

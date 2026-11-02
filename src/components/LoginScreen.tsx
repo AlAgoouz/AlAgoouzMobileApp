@@ -19,13 +19,18 @@ interface LoginScreenProps {
   ) => Promise<void>;
   authError?: string;
   onSignUp?: (email: string, password: string) => Promise<void>;
+  onRequestPasswordReset?: (email:string)=>Promise<void>;
+  onResendConfirmation?: (email:string)=>Promise<void>;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
   onSignIn,
   authError,
   onSignUp,
+  onRequestPasswordReset,
+  onResendConfirmation,
 }) => {
+  const [emailAction, setEmailAction] = useState<'reset'|'resend'|null>(null);
   const [register, setRegister] = useState(false);
   const [notice, setNotice] = useState('');
   const [username, setUsername] = useState<string>('');
@@ -51,7 +56,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     setErrorMsg('');
     setIsSubmitting(true);
     try {
-      if (register && onSignUp) {
+      if (emailAction) {
+        const action = emailAction === 'reset' ? onRequestPasswordReset : onResendConfirmation;
+        if (!action) throw new Error('هذه الخدمة غير متاحة حاليًا');
+        await action(username);
+        setNotice('إذا كان البريد مسجلًا ومؤهلًا، ستصلك رسالة. راجع البريد الوارد والرسائل غير المرغوبة.');
+        setEmailAction(null);
+      } else if (register && onSignUp) {
         await onSignUp(username, password);
         setNotice(
           'راجع بريد المالك لتأكيد الحساب، ثم سجل الدخول. التسجيل ببريد آخر لا يمنح صلاحية إدارة المحل.',
@@ -149,6 +160,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   className="text-xs underline"
                   onClick={() => {
                     setRegister(!register);
+                    setEmailAction(null);
                     setErrorMsg('');
                   }}
                 >
@@ -157,6 +169,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                     : 'إنشاء حساب المالك لأول مرة'}
                 </button>
               )}
+              {!register && !emailAction && <div className="flex flex-wrap gap-4 text-xs underline">
+                {onRequestPasswordReset && <button disabled={isSubmitting} type="button" onClick={()=>{setEmailAction('reset');setErrorMsg('');setNotice('');}}>نسيت كلمة المرور؟</button>}
+                {onResendConfirmation && <button disabled={isSubmitting} type="button" onClick={()=>{setEmailAction('resend');setErrorMsg('');setNotice('');}}>إعادة إرسال تأكيد البريد</button>}
+              </div>}
+              {emailAction && <div className="text-sm space-y-2"><p>{emailAction === 'reset' ? 'أدخل بريد حسابك لإرسال رابط استعادة كلمة المرور.' : 'أدخل بريد حسابك لإعادة إرسال رسالة التأكيد.'}</p><button type="button" disabled={isSubmitting} className="underline" onClick={()=>{setEmailAction(null);setErrorMsg('');}}>العودة لتسجيل الدخول</button></div>}
               {register && (
                 <p className="text-xs">
                   أدخل بريد المالك المعتمد واختر كلمة مرور من 12 حرفًا على
@@ -220,6 +237,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 </div>
               </div>
 
+              {!emailAction && <>
               {/* حقل كلمة المرور */}
               <div className="space-y-1.5">
                 <label
@@ -301,6 +319,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 </label>
               </div>
 
+              </>}
               {/* زر تسجيل الدخول الفاخر مع شعاع اللمعة الذهبي وحالة التحميل */}
               <button
                 type="submit"
@@ -318,7 +337,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 ) : (
                   <>
                     <span>
-                      {register ? 'إنشاء حساب المالك' : 'تسجيل الدخول'}
+                      {emailAction ? 'إرسال الرسالة' : register ? 'إنشاء حساب المالك' : 'تسجيل الدخول'}
                     </span>
                     <ArrowLeft className="w-4 h-4 text-[#D4AF37] transition-transform duration-300 group-hover:-translate-x-1" />
                   </>

@@ -21,6 +21,7 @@ export interface StoreTransport {
     version: number,
     operationId: string,
     queueId?: string,
+    restore?: boolean,
   ): Promise<number>;
 }
 export class StoreEngine {
@@ -33,7 +34,7 @@ export class StoreEngine {
   private listeners = new Set<() => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private pending:
-    | { state: StoreState; version: number; id: string; queueId?: string }
+    | { state: StoreState; version: number; id: string; queueId?: string; restore?: boolean }
     | undefined;
   private epoch = 0;
   private batchState: StoreState | undefined;
@@ -48,6 +49,7 @@ export class StoreEngine {
     };
   };
   getSnapshot = () => this.snapshot;
+  get state() { return this.batchState ?? this.snapshot.state; }
   private publish(next: StoreSnapshot) {
     this.snapshot = next;
     this.listeners.forEach((fn) => fn());
@@ -102,6 +104,7 @@ export class StoreEngine {
       version: this.snapshot.version,
       id: crypto.randomUUID(),
       queueId,
+      restore: this.pending?.restore,
     };
     this.publish({
       ...this.snapshot,
@@ -121,6 +124,12 @@ export class StoreEngine {
     const state = this.batchState ?? this.snapshot.state;
     const value = typeof next === 'function' ? next(state[key]) : next;
     this.replace({ ...state, [key]: value }, this.pending?.queueId);
+  }
+  restore(state: StoreState) {
+    if (this.hasPending || this.batchState || this.snapshot.status !== 'ready')
+      throw new Error('احفظ التعديلات الحالية أولًا قبل استعادة نسخة');
+    this.replace(state);
+    this.pending!.restore = true;
   }
   transaction<T>(action: () => T): T {
     if (this.batchState) {
@@ -151,12 +160,15 @@ export class StoreEngine {
       epoch = this.epoch;
     this.publish({ ...this.snapshot, status: 'saving', error: '' });
     try {
-      const version = await this.transport.save(
+      const args = [
         pending.state,
         pending.version,
         pending.id,
         pending.queueId,
-      );
+      ] as const;
+      const version = pending.restore
+        ? await this.transport.save(...args, true)
+        : await this.transport.save(...args);
       if (epoch !== this.epoch) return;
       this.pending = undefined;
       this.publish({

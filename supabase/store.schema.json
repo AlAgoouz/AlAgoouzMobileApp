@@ -1,0 +1,1574 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "raw_bean",
+              "raw_spice",
+              "manufactured_blend",
+              "drink_recipe",
+              "direct_product"
+            ]
+          },
+          "baseUnit": {
+            "type": "string",
+            "enum": [
+              "kg",
+              "piece",
+              "liter"
+            ]
+          },
+          "openingStock": {
+            "type": "number",
+            "minimum": 0
+          },
+          "stock": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minStock": {
+            "type": "number",
+            "minimum": 0
+          },
+          "costPrice": {
+            "type": "number",
+            "minimum": 0
+          },
+          "lastPurchasePrice": {
+            "type": "number",
+            "minimum": 0
+          },
+          "retailPrice": {
+            "type": "number",
+            "minimum": 0
+          },
+          "wholesalePrice": {
+            "type": "number",
+            "minimum": 0
+          },
+          "canSellDirectly": {
+            "type": "boolean"
+          },
+          "hasRecipe": {
+            "type": "boolean"
+          },
+          "recipe": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ingredientId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "ingredientName": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "kg",
+                    "gram",
+                    "piece",
+                    "liter",
+                    "ml"
+                  ]
+                }
+              },
+              "required": [
+                "ingredientId",
+                "ingredientName",
+                "quantity",
+                "unit"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "supplierPrices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "supplierId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "supplierName": {
+                  "type": "string"
+                },
+                "price": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "date": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "supplierId",
+                "supplierName",
+                "price",
+                "date"
+              ],
+              "additionalProperties": {}
+            }
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "category",
+          "baseUnit",
+          "stock",
+          "minStock",
+          "costPrice",
+          "lastPurchasePrice",
+          "retailPrice",
+          "wholesalePrice",
+          "canSellDirectly",
+          "hasRecipe",
+          "supplierPrices"
+        ],
+        "additionalProperties": {}
+      }
+    },
+    "production_batches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "batchNumber": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "minLength": 1
+          },
+          "blendId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "blendName": {
+            "type": "string"
+          },
+          "quantityProducedKg": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unitCostPerKg": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalBatchCost": {
+            "type": "number",
+            "minimum": 0
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "ingredientsConsumed": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ingredientId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "ingredientName": {
+                  "type": "string"
+                },
+                "quantityUsed": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "displayQuantity": {
+                  "type": "string"
+                },
+                "cost": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "ingredientId",
+                "ingredientName",
+                "quantityUsed",
+                "displayQuantity",
+                "cost"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "batchNumber",
+          "date",
+          "blendId",
+          "blendName",
+          "quantityProducedKg",
+          "unitCostPerKg",
+          "totalBatchCost",
+          "partnerName",
+          "ingredientsConsumed"
+        ],
+        "additionalProperties": {}
+      }
+    },
+    "purchase_invoices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invoiceNumber": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "minLength": 1
+          },
+          "totalAmount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "paidAmount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "remainingAmount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "isCancelled": {
+            "type": "boolean"
+          },
+          "cancelledAt": {
+            "type": "string"
+          },
+          "cancelledBy": {
+            "type": "string"
+          },
+          "refundDue": {
+            "type": "number",
+            "minimum": 0
+          },
+          "supplierId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "paymentMethod": {
+            "type": "string",
+            "enum": [
+              "نقدي",
+              "آجل",
+              "جزئي"
+            ]
+          },
+          "supplierName": {
+            "type": "string"
+          },
+          "inventoryBefore": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "code": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "raw_bean",
+                    "raw_spice",
+                    "manufactured_blend",
+                    "drink_recipe",
+                    "direct_product"
+                  ]
+                },
+                "baseUnit": {
+                  "type": "string",
+                  "enum": [
+                    "kg",
+                    "piece",
+                    "liter"
+                  ]
+                },
+                "openingStock": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "stock": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "minStock": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "costPrice": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "lastPurchasePrice": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "retailPrice": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "wholesalePrice": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "canSellDirectly": {
+                  "type": "boolean"
+                },
+                "hasRecipe": {
+                  "type": "boolean"
+                },
+                "recipe": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "ingredientId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "ingredientName": {
+                        "type": "string"
+                      },
+                      "quantity": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "unit": {
+                        "type": "string",
+                        "enum": [
+                          "kg",
+                          "gram",
+                          "piece",
+                          "liter",
+                          "ml"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "ingredientId",
+                      "ingredientName",
+                      "quantity",
+                      "unit"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "supplierPrices": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "supplierId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "supplierName": {
+                        "type": "string"
+                      },
+                      "price": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "date": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "supplierId",
+                      "supplierName",
+                      "price",
+                      "date"
+                    ],
+                    "additionalProperties": {}
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "code",
+                "name",
+                "category",
+                "baseUnit",
+                "stock",
+                "minStock",
+                "costPrice",
+                "lastPurchasePrice",
+                "retailPrice",
+                "wholesalePrice",
+                "canSellDirectly",
+                "hasRecipe",
+                "supplierPrices"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "inventoryAfter": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "code": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "raw_bean",
+                    "raw_spice",
+                    "manufactured_blend",
+                    "drink_recipe",
+                    "direct_product"
+                  ]
+                },
+                "baseUnit": {
+                  "type": "string",
+                  "enum": [
+                    "kg",
+                    "piece",
+                    "liter"
+                  ]
+                },
+                "openingStock": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "stock": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "minStock": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "costPrice": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "lastPurchasePrice": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "retailPrice": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "wholesalePrice": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "canSellDirectly": {
+                  "type": "boolean"
+                },
+                "hasRecipe": {
+                  "type": "boolean"
+                },
+                "recipe": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "ingredientId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "ingredientName": {
+                        "type": "string"
+                      },
+                      "quantity": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "unit": {
+                        "type": "string",
+                        "enum": [
+                          "kg",
+                          "gram",
+                          "piece",
+                          "liter",
+                          "ml"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "ingredientId",
+                      "ingredientName",
+                      "quantity",
+                      "unit"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "supplierPrices": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "supplierId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "supplierName": {
+                        "type": "string"
+                      },
+                      "price": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "date": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "supplierId",
+                      "supplierName",
+                      "price",
+                      "date"
+                    ],
+                    "additionalProperties": {}
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "code",
+                "name",
+                "category",
+                "baseUnit",
+                "stock",
+                "minStock",
+                "costPrice",
+                "lastPurchasePrice",
+                "retailPrice",
+                "wholesalePrice",
+                "canSellDirectly",
+                "hasRecipe",
+                "supplierPrices"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "itemId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "itemName": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "purchasePrice": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "updateProductCost": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "itemId",
+                "itemName",
+                "quantity",
+                "purchasePrice",
+                "updateProductCost"
+              ],
+              "additionalProperties": {}
+            }
+          }
+        },
+        "required": [
+          "id",
+          "invoiceNumber",
+          "date",
+          "totalAmount",
+          "paidAmount",
+          "remainingAmount",
+          "partnerName",
+          "supplierId",
+          "paymentMethod",
+          "supplierName",
+          "items"
+        ],
+        "additionalProperties": {}
+      }
+    },
+    "sales_invoices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invoiceNumber": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "minLength": 1
+          },
+          "totalAmount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "paidAmount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "remainingAmount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "isCancelled": {
+            "type": "boolean"
+          },
+          "cancelledAt": {
+            "type": "string"
+          },
+          "cancelledBy": {
+            "type": "string"
+          },
+          "refundDue": {
+            "type": "number",
+            "minimum": 0
+          },
+          "saleType": {
+            "type": "string",
+            "enum": [
+              "retail",
+              "wholesale",
+              "cashier_sync"
+            ]
+          },
+          "paymentMethod": {
+            "type": "string",
+            "enum": [
+              "نقدي",
+              "آجل",
+              "محفظة/انستا باي"
+            ]
+          },
+          "customerName": {
+            "type": "string"
+          },
+          "isReturned": {
+            "type": "boolean"
+          },
+          "returnedAt": {
+            "type": "string"
+          },
+          "returnedBy": {
+            "type": "string"
+          },
+          "returnDebtReversed": {
+            "type": "number",
+            "minimum": 0
+          },
+          "returnRefundAmount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "itemId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "itemName": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "raw_bean",
+                    "raw_spice",
+                    "manufactured_blend",
+                    "drink_recipe",
+                    "direct_product"
+                  ]
+                },
+                "quantity": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "normalizedQtyInBaseUnit": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "totalPrice": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "totalCost": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "unitCost": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "unitPrice": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "profit": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "itemId",
+                "itemName",
+                "category",
+                "quantity",
+                "normalizedQtyInBaseUnit",
+                "totalPrice",
+                "totalCost",
+                "unitCost",
+                "unitPrice",
+                "profit"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "subtotal": {
+            "type": "number",
+            "minimum": 0
+          },
+          "discount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalCost": {
+            "type": "number",
+            "minimum": 0
+          },
+          "netProfit": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "invoiceNumber",
+          "date",
+          "totalAmount",
+          "paidAmount",
+          "remainingAmount",
+          "partnerName",
+          "saleType",
+          "paymentMethod",
+          "customerName",
+          "items",
+          "subtotal",
+          "discount",
+          "totalCost",
+          "netProfit"
+        ],
+        "additionalProperties": {}
+      }
+    },
+    "suppliers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "phone": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "balance": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalPurchases": {
+            "type": "number",
+            "minimum": 0
+          },
+          "invoicesCount": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "phone",
+          "category",
+          "balance",
+          "totalPurchases",
+          "invoicesCount"
+        ],
+        "additionalProperties": {}
+      }
+    },
+    "customers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "phone": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "balance": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalSales": {
+            "type": "number",
+            "minimum": 0
+          },
+          "invoicesCount": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "phone",
+          "type",
+          "balance",
+          "totalSales",
+          "invoicesCount"
+        ],
+        "additionalProperties": {}
+      }
+    },
+    "expenses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "إيجار",
+              "كهرباء ومياه وغاز",
+              "رواتب ويوميات",
+              "صيانة مطاحن وماكينات",
+              "أكياس وتغليف",
+              "نقل ومشال",
+              "مسحوبات شركاء",
+              "نثريات أخرى"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "paidFrom": {
+            "type": "string",
+            "enum": [
+              "درج المحل",
+              "خزنة الشركة",
+              "من جيب الشريك",
+              "تسوية مخزون (بدون نقدية)"
+            ]
+          },
+          "partnerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "isCancelled": {
+            "type": "boolean"
+          },
+          "cancelledAt": {
+            "type": "string"
+          },
+          "cancelledBy": {
+            "type": "string"
+          },
+          "sourceInvoiceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceEmployeeTransactionId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "category",
+          "title",
+          "amount",
+          "partnerName",
+          "paidFrom"
+        ],
+        "additionalProperties": {}
+      }
+    },
+    "partners": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "role": {
+            "type": "string"
+          },
+          "avatarLetter": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "sharePercent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "totalPaidFromPocket": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalWithdrawals": {
+            "type": "number",
+            "minimum": 0
+          },
+          "lastLogin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "name",
+          "role",
+          "avatarLetter",
+          "phone",
+          "sharePercent",
+          "totalPaidFromPocket",
+          "totalWithdrawals"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "audit_logs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "timestamp": {
+            "type": "string",
+            "minLength": 1
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "actionType": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "actorId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "timestamp",
+          "partnerName",
+          "actionType",
+          "description"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "shifts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "minLength": 1
+          },
+          "shiftName": {
+            "type": "string"
+          },
+          "cashierName": {
+            "type": "string"
+          },
+          "supervisorPartner": {
+            "type": "string"
+          },
+          "openingCash": {
+            "type": "number",
+            "minimum": 0
+          },
+          "cashSales": {
+            "type": "number",
+            "minimum": 0
+          },
+          "expensesPaid": {
+            "type": "number",
+            "minimum": 0
+          },
+          "expectedCash": {
+            "type": "number"
+          },
+          "actualCash": {
+            "type": "number",
+            "minimum": 0
+          },
+          "difference": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "shiftName",
+          "cashierName",
+          "supervisorPartner",
+          "openingCash",
+          "cashSales",
+          "expensesPaid",
+          "expectedCash",
+          "actualCash",
+          "difference",
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "employees": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "role": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "salaryType": {
+            "type": "string",
+            "enum": [
+              "شهري",
+              "يومية"
+            ]
+          },
+          "baseMonthlySalary": {
+            "type": "number",
+            "minimum": 0
+          },
+          "dailyRate": {
+            "type": "number",
+            "minimum": 0
+          },
+          "workedDaysThisMonth": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalAdvances": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalDeductions": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalBonuses": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalPaidOut": {
+            "type": "number",
+            "minimum": 0
+          },
+          "payrollPeriod": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+          },
+          "openingPayable": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "phone",
+          "salaryType",
+          "baseMonthlySalary",
+          "dailyRate",
+          "workedDaysThisMonth",
+          "totalAdvances",
+          "totalDeductions",
+          "totalBonuses",
+          "totalPaidOut"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "employee_transactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "minLength": 1
+          },
+          "employeeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "employeeName": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "سلفة",
+              "حضور يومية",
+              "خصم/عجز",
+              "مكافأة",
+              "صرف راتب",
+              "إقفال شهر"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "notes": {
+            "type": "string"
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "payrollPeriod": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+          },
+          "accountingVersion": {
+            "type": "number",
+            "const": 1
+          },
+          "partnerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "paidFrom": {
+            "type": "string",
+            "enum": [
+              "درج المحل",
+              "خزنة الشركة",
+              "من جيب الشريك"
+            ]
+          },
+          "expenseId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reversedAt": {
+            "type": "string"
+          },
+          "reversedBy": {
+            "type": "string"
+          },
+          "closingSummary": {
+            "type": "object",
+            "properties": {
+              "openingPayable": {
+                "type": "number"
+              },
+              "earned": {
+                "type": "number",
+                "minimum": 0
+              },
+              "advances": {
+                "type": "number",
+                "minimum": 0
+              },
+              "deductions": {
+                "type": "number",
+                "minimum": 0
+              },
+              "bonuses": {
+                "type": "number",
+                "minimum": 0
+              },
+              "paidOut": {
+                "type": "number",
+                "minimum": 0
+              },
+              "carryForward": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "openingPayable",
+              "earned",
+              "advances",
+              "deductions",
+              "bonuses",
+              "paidOut",
+              "carryForward"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "employeeId",
+          "employeeName",
+          "type",
+          "amount",
+          "notes",
+          "partnerName"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "stocktaking_records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "auditNumber": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "minLength": 1
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "totalShortageValue": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalSurplusValue": {
+            "type": "number",
+            "minimum": 0
+          },
+          "netVarianceValue": {
+            "type": "number"
+          },
+          "itemsAudited": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "itemId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "itemName": {
+                  "type": "string"
+                },
+                "baseUnit": {
+                  "type": "string"
+                },
+                "systemStock": {
+                  "type": "number"
+                },
+                "actualStock": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "difference": {
+                  "type": "number"
+                },
+                "unitCost": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "financialDifference": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "itemId",
+                "itemName",
+                "baseUnit",
+                "systemStock",
+                "actualStock",
+                "difference",
+                "unitCost",
+                "financialDifference"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "auditNumber",
+          "date",
+          "partnerName",
+          "totalShortageValue",
+          "totalSurplusValue",
+          "netVarianceValue",
+          "itemsAudited"
+        ],
+        "additionalProperties": {}
+      }
+    },
+    "account_payments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetType": {
+            "type": "string",
+            "enum": [
+              "supplier",
+              "customer"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetName": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "reversedAt": {
+            "type": "string"
+          },
+          "reversedBy": {
+            "type": "string"
+          },
+          "allocations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "invoiceId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "amount": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "invoiceId",
+                "amount"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "openingBalanceAmount": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "targetType",
+          "targetId",
+          "targetName",
+          "amount",
+          "partnerName"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "items",
+    "production_batches",
+    "purchase_invoices",
+    "sales_invoices",
+    "suppliers",
+    "customers",
+    "expenses",
+    "partners",
+    "audit_logs",
+    "shifts",
+    "employees",
+    "employee_transactions",
+    "stocktaking_records",
+    "account_payments"
+  ],
+  "additionalProperties": false
+}
