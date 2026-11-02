@@ -13,7 +13,7 @@ const password=randomBytes(24).toString('hex'),secret=randomBytes(48).toString('
 const generation=new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomBytes(4).toString('hex'),work=join(root,'pending',generation);
 fs.mkdirSync(work,{recursive:true,mode:0o700});
 const created=[];let pgEnv;
-function run(exe,args,env=process.env,input){try{return execFileSync(exe,args,{env,input,encoding:'utf8',windowsHide:true,timeout:180000,maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe']});}catch(error){fs.writeFileSync(join(work,'source-failure.private.log'),error.stderr||String(error.code),{mode:0o600});throw Error('ISOLATED_SOURCE_TOOL_FAILED');}}
+function run(exe,args,env=process.env,input){try{return execFileSync(exe,args,{env,input,encoding:'utf8',windowsHide:true,timeout:180000,maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe']});}catch(error){fs.writeFileSync(join(work,'source-failure.private.log'),error.stderr||String(error.code),{mode:0o600});const diagnostic=String(error.stderr||error.code).split('\n').filter(line=>/ERROR:|FATAL:|DETAIL:/.test(line)).join('\n').replaceAll(password,'[redacted]').replaceAll(secret,'[redacted]');if(diagnostic)console.error(diagnostic);throw Error('ISOLATED_SOURCE_TOOL_FAILED');}}
 const pg=name=>join(process.env.AGOUZ_PG_BIN,name+(process.platform==='win32'?'.exe':''));
 const sql=query=>run(pg('psql'),['-XqAt','-v','ON_ERROR_STOP=1','-d','agouz_source'],pgEnv,query).trim();
 async function wait(check){for(let i=0;i<120;i++){try{if(await check())return;}catch{}await new Promise(r=>setTimeout(r,1000));}throw Error('ISOLATED_SOURCE_START_TIMEOUT');}
