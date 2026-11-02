@@ -34,6 +34,7 @@ try{
  const user=await(await api(authURL,'/admin/users',{email:'backup-smoke@example.test',password:randomBytes(24).toString('base64url'),email_confirm:true})).json();
  container(storageAPI,'public.ecr.aws/supabase/storage-api:v1.87.2',['DATABASE_URL=postgres://supabase_admin:'+password+'@'+db+':5432/agouz_source','DB_SUPER_USER=supabase_admin','AUTH_JWT_SECRET='+secret,'PGRST_JWT_SECRET='+secret,'ANON_KEY='+jwt('anon'),'SERVICE_KEY='+jwt(),'STORAGE_BACKEND=file','STORAGE_FILE_BACKEND_PATH=/var/lib/storage','FILE_STORAGE_BACKEND_PATH=/var/lib/storage','SERVER_HOST=0.0.0.0','SERVER_PORT=5000','TENANT_ID=stub','REGION=local','GLOBAL_S3_BUCKET=stub','IMAGE_TRANSFORMATION_ENABLED=false','ENABLE_IMAGE_TRANSFORMATION=false','PG_QUEUE_ENABLE=false'],['--mount','type=volume,source='+fileVolume+',target=/var/lib/storage','--publish','127.0.0.1::5000']);
  const storageURL='http://127.0.0.1:'+port(storageAPI,5000);await wait(async()=> (await fetch(storageURL+'/status')).ok);
+ sql('create publication supabase_realtime;');
  sql(fs.readFileSync('supabase/schema.sql','utf8'));
  for(const file of fs.readdirSync('supabase/migrations').filter(x=>x.endsWith('.sql')).sort())sql(fs.readFileSync('supabase/migrations/'+file,'utf8'));
  const partner={id:'p1',name:'Synthetic Owner',username:'owner',role:'مدير',avatarLetter:'O',phone:'',sharePercent:100,totalPaidFromPocket:0,totalWithdrawals:0};
