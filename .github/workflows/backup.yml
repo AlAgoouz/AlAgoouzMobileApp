@@ -1,0 +1,44 @@
+name: Agouz daily verified backup
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+      timezone: Africa/Cairo
+permissions:
+  contents: read
+concurrency:
+  group: agouz-production-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install verified backup tools
+        run: bash scripts/backup/setup-cloud.sh
+      - name: Export, encrypt, upload, restore and verify
+        env:
+          AGOUZ_DATABASE_URL: ${{ secrets.AGOUZ_DATABASE_URL }}
+          AGOUZ_BACKUP_KEY: ${{ secrets.AGOUZ_BACKUP_KEY }}
+          AGOUZ_DRIVE_CONFIG: ${{ secrets.AGOUZ_DRIVE_CONFIG }}
+          AGOUZ_BACKUP_ROOT: ${{ runner.temp }}/agouz-backup
+          AGOUZ_PG_BIN: /usr/lib/postgresql/18/bin
+          AGOUZ_RCLONE: ${{ runner.temp }}/rclone/rclone-v1.75.2-linux-amd64/rclone
+          AGOUZ_RCLONE_CONFIG: ${{ runner.temp }}/agouz-backup/drive.conf
+        run: |
+          umask 077
+          mkdir -p "$AGOUZ_BACKUP_ROOT/pending"
+          printf '%s' "$AGOUZ_BACKUP_KEY" > "$AGOUZ_BACKUP_ROOT/recovery-key.base64"
+          printf '%s' "$AGOUZ_DRIVE_CONFIG" > "$AGOUZ_RCLONE_CONFIG"
+          unset AGOUZ_BACKUP_KEY AGOUZ_DRIVE_CONFIG
+          node scripts/backup/run-daily.mjs
+      - name: Clear temporary backup credentials and plaintext
+        if: always()
+        run: |
+          test "$RUNNER_TEMP/agouz-backup" != / 
+          rm -rf -- "$RUNNER_TEMP/agouz-backup"
+
