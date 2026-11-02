@@ -104,7 +104,23 @@ try{
   const login=await fetch(authURL+'/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:testEmail,password:testPassword}),signal:AbortSignal.timeout(15000)});
   const session=await login.json();
   if(!login.ok||!session.access_token||session.user?.email!==testEmail)throw new Error('RESTORE_LOGIN_FAILED');
-  proof={generation:receipt.generation,verifiedAt:new Date().toISOString(),encryptedSha256:receipt.encryptedSha256,allTableDataMatched:true,tablesCompared:Object.keys(expected).length-1,authUsersRestored:authUsers,syntheticAuthLoginVerified:true,restoredFromDownloadedArchive:true,productionWrites:false,restoreVerified:true};
+  const generated=await fetch(authURL+'/admin/generate_link',{method:'POST',headers:{Authorization:'Bearer '+jwt(),'Content-Type':'application/json'},body:JSON.stringify({type:'recovery',email:testEmail}),signal:AbortSignal.timeout(15000)});
+  const recovery=await generated.json();
+  if(!generated.ok||!recovery.hashed_token)throw new Error('RESTORE_RECOVERY_LINK_FAILED');
+  const verified=await fetch(authURL+'/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'recovery',token_hash:recovery.hashed_token}),signal:AbortSignal.timeout(15000)});
+  const recovered=await verified.json();
+  if(!verified.ok||!recovered.access_token)throw new Error('RESTORE_RECOVERY_TOKEN_FAILED');
+  const newPassword=randomBytes(24).toString('base64url');
+  const changed=await fetch(authURL+'/user',{method:'PUT',headers:{Authorization:'Bearer '+recovered.access_token,'Content-Type':'application/json'},body:JSON.stringify({password:newPassword}),signal:AbortSignal.timeout(15000)});
+  if(!changed.ok)throw new Error('RESTORE_RECOVERY_PASSWORD_FAILED');
+  const logout=await fetch(authURL+'/logout?scope=global',{method:'POST',headers:{Authorization:'Bearer '+recovered.access_token},signal:AbortSignal.timeout(15000)});
+  if(!logout.ok)throw new Error('RESTORE_RECOVERY_LOGOUT_FAILED');
+  const refresh=await fetch(authURL+'/token?grant_type=refresh_token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:recovered.refresh_token}),signal:AbortSignal.timeout(15000)});
+  if(refresh.ok)throw new Error('RESTORE_RECOVERY_SESSION_NOT_REVOKED');
+  const oldLogin=await fetch(authURL+'/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:testEmail,password:testPassword}),signal:AbortSignal.timeout(15000)});
+  const newLogin=await fetch(authURL+'/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:testEmail,password:newPassword}),signal:AbortSignal.timeout(15000)});
+  if(oldLogin.ok||!newLogin.ok)throw new Error('RESTORE_RECOVERY_NEW_LOGIN_FAILED');
+  proof={generation:receipt.generation,verifiedAt:new Date().toISOString(),encryptedSha256:receipt.encryptedSha256,allTableDataMatched:true,tablesCompared:Object.keys(expected).length-1,authUsersRestored:authUsers,syntheticAuthLoginVerified:true,syntheticPasswordRecoveryVerified:true,restoredFromDownloadedArchive:true,productionWrites:false,restoreVerified:true};
 }catch(error){
   for(const name of [dbContainer,authContainer]){try{const logs=spawnSync('docker',['logs','--tail','100',name],{encoding:'utf8',windowsHide:true,timeout:15000});writeFileSync(join(restore,name+'.private.log'),(logs.stdout||'')+(logs.stderr||''),{mode:0o600});}catch{}}
   console.error(error.message);process.exitCode=1;
