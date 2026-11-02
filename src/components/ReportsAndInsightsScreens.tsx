@@ -1,6 +1,7 @@
 import { operatingExpenses } from '../lib/ledger';
 import { isInPeriod } from '../lib/dates';
 import React, { useState, useMemo } from 'react';
+import {RecordPagination,useRecordPage} from './RecordPagination';
 import {
   ChevronRight,
   Share2,
@@ -357,6 +358,12 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
   const [bottomTab, setBottomTab] = useState<
     'summary' | 'partners_share' | 'products' | 'invoices'
   >('summary');
+  const [invoiceSearch,setInvoiceSearch]=useState('');
+  const matchingInvoices=useMemo(()=>{
+    const q=invoiceSearch.trim().toLocaleLowerCase();
+    return q?salesInvoices.filter(inv=>[inv.invoiceNumber,inv.customerName,inv.date].some(text=>text.toLocaleLowerCase().includes(q))):salesInvoices;
+  },[salesInvoices,invoiceSearch]);
+  const invoicePage=useRecordPage(matchingInvoices,invoiceSearch);
 
   const activeInvoices = useMemo(
     () => salesInvoices.filter((i) => !i.isReturned),
@@ -696,7 +703,9 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
         {/* تبويب الفواتير */}
         {bottomTab === 'invoices' && (
           <div className="space-y-3">
-            {salesInvoices.map((inv) => (
+            <input aria-label="بحث في كل فواتير التقرير" value={invoiceSearch} onChange={event=>setInvoiceSearch(event.target.value)} placeholder="رقم الفاتورة أو العميل أو التاريخ" className="w-full rounded-xl border p-3 text-sm" />
+            <RecordPagination {...invoicePage} />
+            {invoicePage.visible.map((inv) => (
               <div
                 key={inv.id}
                 className="bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-2"
@@ -736,6 +745,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                 </div>
               </div>
             ))}
+            <RecordPagination {...invoicePage} />
           </div>
         )}
       </div>

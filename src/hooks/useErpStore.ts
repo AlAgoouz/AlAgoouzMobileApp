@@ -26,6 +26,13 @@ export function useErpStore() {
   if (!engineRef.current) {
     engineRef.current = new StoreEngine(
       {
+        async getVersion() {
+          const sb = getSupabaseClient();
+          if (!sb) throw new Error('إعداد الاتصال غير صالح');
+          const {data,error} = await sb.from('bon_elagouz_store').select('version').eq('id','main_store').single();
+          if(error) throw new Error('تعذر التحقق من تحديث البيانات؛ تحقق من الاتصال');
+          return Number(data.version);
+        },
         async load() {
           const sb = getSupabaseClient();
           if (!sb) throw new Error('إعداد الاتصال غير صالح');
@@ -184,7 +191,7 @@ export function useErpStore() {
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'bon_elagouz_store',
+          table: 'bon_erp_store_versions',
           filter: 'id=eq.main_store',
         },
         () => {
@@ -193,9 +200,11 @@ export function useErpStore() {
       )
       .subscribe();
     const timer = setInterval(() => {
+      if (document.visibilityState === 'hidden' || !navigator.onLine) return;
       void engine.refresh();
     }, 15000);
     const refresh = () => {
+      if (document.visibilityState === 'hidden' || !navigator.onLine) return;
       void engine.refresh();
     };
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -206,12 +215,14 @@ export function useErpStore() {
     };
     window.addEventListener('online', refresh);
     window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
     window.addEventListener('beforeunload', beforeUnload);
     return () => {
       clearInterval(timer);
       void sb.removeChannel(channel);
       window.removeEventListener('online', refresh);
       window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
       window.removeEventListener('beforeunload', beforeUnload);
     };
   }, [engine, member?.userId]);
