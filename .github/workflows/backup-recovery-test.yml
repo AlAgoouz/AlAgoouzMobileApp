@@ -17,7 +17,7 @@ jobs:
         with:
           node-version: 24
       - run: bash scripts/backup/setup-cloud.sh
-      - run: node --test tests/backup/resources.node.test.mjs
+      - run: node --test tests/backup/*.node.test.mjs
       - run: node tests/backup/complete-recovery.mjs
       - uses: actions/upload-artifact@v4
         if: success()
