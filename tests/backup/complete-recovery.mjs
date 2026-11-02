@@ -34,7 +34,7 @@ try{
  const user=await(await api(authURL,'/admin/users',{email:'backup-smoke@example.test',password:randomBytes(24).toString('base64url'),email_confirm:true})).json();
  container(storageAPI,'public.ecr.aws/supabase/storage-api:v1.87.2',['DATABASE_URL=postgres://supabase_admin:'+password+'@'+db+':5432/agouz_source','DB_SUPER_USER=supabase_admin','AUTH_JWT_SECRET='+secret,'PGRST_JWT_SECRET='+secret,'ANON_KEY='+jwt('anon'),'SERVICE_KEY='+jwt(),'STORAGE_BACKEND=file','STORAGE_FILE_BACKEND_PATH=/var/lib/storage','FILE_STORAGE_BACKEND_PATH=/var/lib/storage','SERVER_HOST=0.0.0.0','SERVER_PORT=5000','TENANT_ID=stub','REGION=local','GLOBAL_S3_BUCKET=stub','IMAGE_TRANSFORMATION_ENABLED=false','ENABLE_IMAGE_TRANSFORMATION=false','PG_QUEUE_ENABLE=false'],['--mount','type=volume,source='+fileVolume+',target=/var/lib/storage','--publish','127.0.0.1::5000']);
  const storageURL='http://127.0.0.1:'+port(storageAPI,5000);await wait(async()=> (await fetch(storageURL+'/status')).ok);
- sql('grant usage on schema storage to service_role;grant all on all tables in schema storage to service_role;grant usage,select on all sequences in schema storage to service_role;create publication supabase_realtime;');
+ sql('create role agouz_backup nologin bypassrls;grant pg_read_all_data to agouz_backup;grant usage on schema storage to service_role;grant all on all tables in schema storage to service_role;grant usage,select on all sequences in schema storage to service_role;create publication supabase_realtime;');
  sql(fs.readFileSync('supabase/schema.sql','utf8'));
  for(const file of fs.readdirSync('supabase/migrations').filter(x=>x.endsWith('.sql')).sort())sql(fs.readFileSync('supabase/migrations/'+file,'utf8'));
  const partner={id:'p1',name:'Synthetic Owner',username:'owner',role:'مدير',avatarLetter:'O',phone:'',sharePercent:100,totalPaidFromPocket:0,totalWithdrawals:0};
@@ -43,7 +43,9 @@ try{
  const files=[['nested/image.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aB1sAAAAASUVORK5CYII=','base64'),'image/png'],['documents/test file.bin',randomBytes(256*1024),'application/octet-stream'],['empty.txt',Buffer.alloc(0),'text/plain']];
  for(const [name,bytes,type]of files)await api(storageURL,'/object/'+storagePath('agouz-test-private',name),bytes,type);
  sql(`update storage.objects set owner='${user.id}',owner_id='${user.id}',user_metadata='{"tag":"خاص"}'::jsonb;select vault.create_secret('synthetic ''quoted'' secret with عربي', 'agouz-smoke-secret','synthetic only');select vault.create_secret('line one'||chr(10)||'line two',null,'unnamed synthetic');`);
- sql('create role agouz_synthetic_backup nologin bypassrls;grant pg_read_all_data to agouz_synthetic_backup;set role agouz_synthetic_backup;'+vaultSnapshotSQL+'reset role;');
+ const exportedAsReader=JSON.parse(sql('set role agouz_backup;'+vaultSnapshotSQL+'reset role;'));
+ if(exportedAsReader.length!==2)throw Error('READONLY_VAULT_EXPORT_FAILED');
+ if(sql("select has_function_privilege('authenticated','bon_erp_private.export_vault_secrets()','execute') or has_function_privilege('anon','bon_erp_private.export_vault_secrets()','execute');")!=='f')throw Error('VAULT_EXPORT_PERMISSION_BOUNDARY_FAILED');
  const storage=JSON.parse(sql(storageSnapshotSQL)),vault=JSON.parse(sql(vaultSnapshotSQL));
  run(pg('pg_dump'),['--format=custom','--exclude-table-data=vault.secrets','--dbname','agouz_source','--file',join(work,'database.dump')],pgEnv);
  run(pg('pg_dumpall'),['--roles-only','--no-role-passwords','--file',join(work,'roles.sql')],pgEnv);

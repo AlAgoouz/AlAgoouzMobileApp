@@ -9,7 +9,7 @@ import {sha256} from './archive.mjs';
 export const project='srinizbfqozvdqsuvvbc';
 export const publicKey='sb_publishable_KTZ5q4aKE4Y3wEDdjbjyCQ_GAwL_BmS';
 export const storageSnapshotSQL="select jsonb_build_object('buckets',coalesce((select jsonb_agg(to_jsonb(b) order by id) from storage.buckets b),'[]'::jsonb),'objects',coalesce((select jsonb_agg(to_jsonb(o)-'last_accessed_at' order by id) from storage.objects o),'[]'::jsonb));";
-export const vaultSnapshotSQL="select coalesce(jsonb_agg(jsonb_build_object('id',id,'name',name,'description',description,'created_at',created_at,'updated_at',updated_at,'decrypted_secret',decrypted_secret) order by id),'[]'::jsonb) from vault.decrypted_secrets;";
+export const vaultSnapshotSQL="select bon_erp_private.export_vault_secrets();";
 export function storagePath(bucket,name){
   if(typeof bucket!=='string'||!bucket||typeof name!=='string'||!name||name.split('/').some(s=>!s||s==='.'||s==='..')||/[\x00-\x1f]/.test(bucket+name))throw Error('BACKUP_STORAGE_NAME_INVALID');
   return encodeURIComponent(bucket)+'/'+name.split('/').map(encodeURIComponent).join('/');
