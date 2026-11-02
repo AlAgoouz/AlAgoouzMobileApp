@@ -11,3 +11,4 @@ echo "349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702  $RUNNER_
 unzip -q "$RUNNER_TEMP/rclone.zip" -d "$RUNNER_TEMP/rclone"
 docker pull public.ecr.aws/supabase/postgres:17.11.0.004
 docker pull public.ecr.aws/supabase/gotrue:v2.197.0
+docker pull public.ecr.aws/supabase/storage-api:v1.87.2
