@@ -2726,8 +2726,8 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   const menuItems = [
     {
       id: "data_control",
-      title: "النسخ الاحتياطي وحذف التجريبي",
-      subtitle: "حفظ/استرجاع نسخة احتياطية • تصفير أو حذف التجريبي",
+      title: showDemoTools ? "النسخ الاحتياطي وحذف التجريبي" : "النسخ الاحتياطي والاسترجاع",
+      subtitle: showDemoTools ? "حفظ/استرجاع نسخة احتياطية • تصفير أو حذف التجريبي" : "تنزيل نسخة بيانات واسترجاعها",
       icon: Database,
       iconBg: "bg-red-50 text-red-600 border border-red-200",
       action: () => setSubPage("data_control"),

@@ -768,7 +768,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
             شؤون العمال والباريستا والرواتب
           </h1>
           <p className="text-[11px] text-[#D4AF37]">
-            متابعة اليوميات والسلف والخصومات والمرتبات بدفتر مستقل
+            متابعة المستحقات وربط صرف السلف والرواتب بالحسابات
           </p>
         </div>
         <button
