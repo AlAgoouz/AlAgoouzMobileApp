@@ -40,7 +40,7 @@ try{
  const partner={id:'p1',name:'Synthetic Owner',username:'owner',role:'مدير',avatarLetter:'O',phone:'',sharePercent:100,totalPaidFromPocket:0,totalWithdrawals:0};
  sql(`insert into public.bon_elagouz_store(id,partners)values('main_store','${JSON.stringify([partner])}'::jsonb);insert into public.erp_members(user_id,username,partner_id,role)values('${user.id}','owner','p1','partner');insert into bon_erp_private.owner_config(id,email)values(true,'backup-smoke@example.test');insert into bon_erp_private.storage_backup_principal(id,user_id)values(true,'${user.id}');`);
  await api(storageURL,'/bucket',{id:'agouz-test-private',name:'agouz-test-private',public:false});
- const files=[['nested/صورة.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aB1sAAAAASUVORK5CYII=','base64'),'image/png'],['مستندات/ملف تجريبي.bin',randomBytes(256*1024),'application/octet-stream'],['empty.txt',Buffer.alloc(0),'text/plain']];
+ const files=[['nested/image.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aB1sAAAAASUVORK5CYII=','base64'),'image/png'],['documents/test file.bin',randomBytes(256*1024),'application/octet-stream'],['empty.txt',Buffer.alloc(0),'text/plain']];
  for(const [name,bytes,type]of files)await api(storageURL,'/object/'+storagePath('agouz-test-private',name),bytes,type);
  sql(`update storage.objects set owner='${user.id}',owner_id='${user.id}',user_metadata='{"tag":"خاص"}'::jsonb;select vault.create_secret('synthetic ''quoted'' secret with عربي', 'agouz-smoke-secret','synthetic only');select vault.create_secret('line one'||chr(10)||'line two',null,'unnamed synthetic');`);
  const storage=JSON.parse(sql(storageSnapshotSQL)),vault=JSON.parse(sql(vaultSnapshotSQL));
