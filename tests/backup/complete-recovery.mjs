@@ -43,6 +43,7 @@ try{
  const files=[['nested/image.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aB1sAAAAASUVORK5CYII=','base64'),'image/png'],['documents/test file.bin',randomBytes(256*1024),'application/octet-stream'],['empty.txt',Buffer.alloc(0),'text/plain']];
  for(const [name,bytes,type]of files)await api(storageURL,'/object/'+storagePath('agouz-test-private',name),bytes,type);
  sql(`update storage.objects set owner='${user.id}',owner_id='${user.id}',user_metadata='{"tag":"خاص"}'::jsonb;select vault.create_secret('synthetic ''quoted'' secret with عربي', 'agouz-smoke-secret','synthetic only');select vault.create_secret('line one'||chr(10)||'line two',null,'unnamed synthetic');`);
+ sql('create role agouz_synthetic_backup nologin bypassrls;grant pg_read_all_data to agouz_synthetic_backup;set role agouz_synthetic_backup;'+vaultSnapshotSQL+'reset role;');
  const storage=JSON.parse(sql(storageSnapshotSQL)),vault=JSON.parse(sql(vaultSnapshotSQL));
  run(pg('pg_dump'),['--format=custom','--exclude-table-data=vault.secrets','--dbname','agouz_source','--file',join(work,'database.dump')],pgEnv);
  run(pg('pg_dumpall'),['--roles-only','--no-role-passwords','--file',join(work,'roles.sql')],pgEnv);

@@ -5,6 +5,7 @@ import {join,resolve} from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {encryptFile,decryptFile,sha256} from './archive.mjs';
 import {storageSnapshotSQL,vaultSnapshotSQL,storageReaderToken,downloadStorage,writeRecoveryConfig} from './resources.mjs';
+import {captureProviderSettings} from './provider-settings.mjs';
 
 const project='srinizbfqozvdqsuvvbc';
 const root=resolve(process.env.AGOUZ_BACKUP_ROOT || 'D:/AgouzPrivateBackups');
@@ -66,12 +67,16 @@ try{
   if(JSON.stringify(storage)!==JSON.stringify(query(storageSnapshotSQL))||JSON.stringify(vault)!==JSON.stringify(query(vaultSnapshotSQL)))throw new Error('BACKUP_RESOURCES_CHANGED_DURING_EXPORT');
   writeFileSync(join(work,'storage-index.json'),JSON.stringify(storage),{mode:0o600});
   writeFileSync(join(work,'vault-secrets.json'),JSON.stringify(vault),{mode:0o600});
-  writeRecoveryConfig(work);
+  const providerSettings=process.env.AGOUZ_SETTINGS_READ_TOKEN?await captureProviderSettings({project,token:process.env.AGOUZ_SETTINGS_READ_TOKEN,vault}):null;
+  if(process.env.AGOUZ_REQUIRE_PROVIDER_SETTINGS==='true'&&!providerSettings)throw Error('BACKUP_PROVIDER_SETTINGS_NOT_CONFIGURED');
+  writeRecoveryConfig(work,providerSettings);
   const listing=run(pgTool('pg_restore'),['--list',join(work,'database.dump')]);
   if(!listing.includes('TABLE DATA auth users')||!listing.includes('TABLE DATA public bon_elagouz_store')) throw new Error('BACKUP_REQUIRED_TABLES_MISSING');
   run('git',['archive','--format=tar','--output',join(work,'source.tar'),'HEAD']);
   const hashes={...storageHashes};for(const file of ['database.dump','roles.sql','source.tar','storage-index.json','vault-secrets.json','recovery-config.json']) hashes[file]=await sha256(join(work,file));
   const manifest={format:'agouz-full-logical-backup',version:2,project,generation,createdAt:new Date().toISOString(),sourceCommit:run('git',['rev-parse','HEAD']).trim(),inventory,files:hashes,restoreVerified:false,coverage:['PostgreSQL schema and data including Supabase Auth','database roles without database-role passwords','committed application source','Storage object bytes, bucket metadata and file ownership','portable Vault secrets re-encrypted with the restore target key','recovery configuration and backup connection credentials without the archive encryption key'],limitations:['Provider settings require a configured settings export; secret values unavailable from a provider must have an escrow source.','Versioned or archived Storage objects and PostgreSQL large objects fail closed until supported.']};
+  manifest.providerSettingsIncluded=!!providerSettings;
+  if(providerSettings)manifest.coverage.push('Live Supabase service settings, Edge Function source bundles and digest-verified custom-secret escrow');
   writeFileSync(join(work,'manifest.json'),JSON.stringify(manifest,null,2),{mode:0o600});
   const plain=join(work,'archive.tar.gz');
   run('tar',['-czf',plain,'-C',work,'database.dump','roles.sql','source.tar','manifest.json','storage-index.json','vault-secrets.json','recovery-config.json','storage']);

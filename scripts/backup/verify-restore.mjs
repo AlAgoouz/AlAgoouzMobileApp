@@ -4,6 +4,7 @@ import {resolve,join,sep} from 'node:path';
 import {randomBytes,createHash,createHmac} from 'node:crypto';
 import {sha256,decryptFile} from './archive.mjs';
 import {validateArchiveEntries,storageSnapshotSQL,vaultSnapshotSQL,vaultRecoverySQL,storagePath,resourceFile,downloadStorage} from './resources.mjs';
+import {validateProviderSettings} from './provider-settings.mjs';
 
 const root=resolve(process.env.AGOUZ_BACKUP_ROOT || 'D:/AgouzPrivateBackups');
 const work=resolve(process.argv[2] || '');
@@ -95,6 +96,8 @@ try{
     if(JSON.stringify(JSON.parse(sql(vaultSnapshotSQL)))!==JSON.stringify(vault))throw new Error('RESTORE_VAULT_PLAINTEXT_MISMATCH');
     const configuration=JSON.parse(readFileSync(join(inputs,'recovery-config.json'),'utf8'));
     if(configuration.project!==manifest.project||configuration.encryptionKeyIncluded!==false)throw new Error('RESTORE_RECOVERY_CONFIGURATION_INVALID');
+    if(manifest.providerSettingsIncluded&&!configuration.providerSettings?.supabase)throw Error('RESTORE_PROVIDER_CONFIGURATION_MISSING');
+    if(configuration.providerSettings?.supabase)validateProviderSettings(configuration.providerSettings.supabase,manifest.project);
   }
   console.log('Database restored; comparing every COPY table and sequence before testing login.');
   const original=join(restore,'original-data.sql'),restored=join(restore,'restored-data.sql');
