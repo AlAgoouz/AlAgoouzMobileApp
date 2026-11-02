@@ -4,7 +4,7 @@ import {readFileSync,writeFileSync,mkdirSync,existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {encryptFile,decryptFile,sha256} from './archive.mjs';
-import {storageSnapshotSQL,vaultSnapshotSQL,storageReaderToken,downloadStorage,writeRecoveryConfig} from './resources.mjs';
+import {storageSnapshotSQL,vaultSnapshotSQL,storageReaderToken,downloadStorage,writeRecoveryConfig,assertStorageCoverage} from './resources.mjs';
 import {captureProviderSettings} from './provider-settings.mjs';
 
 const project='srinizbfqozvdqsuvvbc';
@@ -55,6 +55,7 @@ try{
   const pgTool=(name)=>join(pg,name+(process.platform==='win32'?'.exe':''));
   const query=(sql)=>JSON.parse(run(pgTool('psql'),['-XqAt','-v','ON_ERROR_STOP=1','-c',(roleArgs.length?'set role postgres; ':'')+sql],sourceEnv));
   const storage=query(storageSnapshotSQL),vault=query(vaultSnapshotSQL);
+  assertStorageCoverage(query);
   run(pgTool('pg_dump'),[...roleArgs,'--exclude-table-data=vault.secrets','--format=custom','--file',join(work,'database.dump')],sourceEnv);
   run(pgTool('pg_dumpall'),[...roleArgs,'--roles-only','--no-role-passwords','--file',join(work,'roles.sql')],sourceEnv);
   const inventory=JSON.parse(run(pgTool('psql'),['-XqAt','-v','ON_ERROR_STOP=1','-c',(roleArgs.length?'set role postgres; ':'')+"select json_build_object('auth_users',(select count(*) from auth.users),'storage_objects',(select count(*) from storage.objects),'vault_secrets',(select count(*) from vault.secrets),'large_objects',(select count(*) from pg_largeobject_metadata),'store_version',(select version from public.bon_elagouz_store where id='main_store'),'postgres_version',current_setting('server_version'));"],sourceEnv));

@@ -10,6 +10,7 @@ const receipt=JSON.parse(readFileSync(join(work,'receipt.json'),'utf8'));
 const proof=JSON.parse(readFileSync(join(work,'restore-proof.json'),'utf8'));
 if(!proof.restoreVerified||!proof.cleanupComplete||!proof.restoredFromDownloadedArchive||!proof.syntheticAuthLoginVerified||!proof.allTableDataMatched||proof.generation!==receipt.generation||proof.encryptedSha256!==receipt.encryptedSha256)throw new Error('BACKUP_RESTORE_PROOF_REQUIRED');
 if(receipt.version===2&&(!proof.resourcesVerified||proof.storageFilesVerified!==receipt.inventory.storage_objects||proof.vaultSecretsVerified!==receipt.inventory.vault_secrets||!proof.storageOwnershipMatched))throw Error('BACKUP_RESOURCE_RESTORE_PROOF_REQUIRED');
+if(receipt.providerSettingsIncluded&&!proof.providerSettingsVerified)throw Error('BACKUP_PROVIDER_RESTORE_PROOF_REQUIRED');
 if(!/^[\dTZ-]+-[a-f0-9]{8}$/.test(receipt.generation))throw new Error('BACKUP_GENERATION_INVALID');
 if(await sha256(join(work,'downloaded.agouz'))!==proof.encryptedSha256)throw new Error('BACKUP_ARCHIVE_CHANGED');
 const drive=process.env.AGOUZ_RCLONE,config=process.env.AGOUZ_RCLONE_CONFIG;

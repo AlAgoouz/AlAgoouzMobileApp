@@ -20,7 +20,7 @@ const jwtSecret=randomBytes(48).toString('hex');
 const restore=join(work,'restore-'+nonce);mkdirSync(restore,{mode:0o700});
 const pgdata=join(restore,'pgdata');mkdirSync(pgdata,{mode:0o700});
 const receipt=JSON.parse(readFileSync(join(work,'receipt.json'),'utf8'));
-let manifest,proof;
+let manifest,proof,providerSettingsVerified=false,providerSettingsSections=0;
 const inputs=join(restore,'inputs');mkdirSync(inputs,{mode:0o700});
 let pgEnv,createdNetwork=false,createdDB=false,createdAuth=false,createdVolume=false,createdStorage=false,createdStorageVolume=false;
 function run(exe,args,env=process.env,input){
@@ -97,7 +97,7 @@ try{
     const configuration=JSON.parse(readFileSync(join(inputs,'recovery-config.json'),'utf8'));
     if(configuration.project!==manifest.project||configuration.encryptionKeyIncluded!==false)throw new Error('RESTORE_RECOVERY_CONFIGURATION_INVALID');
     if(manifest.providerSettingsIncluded&&!configuration.providerSettings?.supabase)throw Error('RESTORE_PROVIDER_CONFIGURATION_MISSING');
-    if(configuration.providerSettings?.supabase)validateProviderSettings(configuration.providerSettings.supabase,manifest.project);
+    if(configuration.providerSettings?.supabase){validateProviderSettings(configuration.providerSettings.supabase,manifest.project);providerSettingsVerified=true;providerSettingsSections=Object.keys(configuration.providerSettings.supabase.configuration).length;}
   }
   console.log('Database restored; comparing every COPY table and sequence before testing login.');
   const original=join(restore,'original-data.sql'),restored=join(restore,'restored-data.sql');
@@ -166,6 +166,7 @@ try{
   const newLogin=await fetch(authURL+'/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:testEmail,password:newPassword}),signal:AbortSignal.timeout(15000)});
   if(oldLogin.ok||!newLogin.ok)throw new Error('RESTORE_RECOVERY_NEW_LOGIN_FAILED');
   proof={generation:receipt.generation,verifiedAt:new Date().toISOString(),encryptedSha256:receipt.encryptedSha256,allTableDataMatched:true,tablesCompared:Object.keys(expected).length-1,authUsersRestored:authUsers,syntheticAuthLoginVerified:true,syntheticPasswordRecoveryVerified:true,restoredFromDownloadedArchive:true,resourcesVerified:manifest.version===2,storageFilesVerified:storage.objects.length,vaultSecretsVerified:vault.length,storageOwnershipMatched:true,productionWrites:false,restoreVerified:true};
+  proof.providerSettingsVerified=providerSettingsVerified;proof.providerSettingsSections=providerSettingsSections;
 }catch(error){
   for(const name of [dbContainer,authContainer,storageContainer]){try{const logs=spawnSync('docker',['logs','--tail','100',name],{encoding:'utf8',windowsHide:true,timeout:15000});writeFileSync(join(restore,name+'.private.log'),(logs.stdout||'')+(logs.stderr||''),{mode:0o600});}catch{}}
   console.error(error.message);process.exitCode=1;

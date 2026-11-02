@@ -435,7 +435,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
         <button
           onClick={() => window.print()}
           className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
-          title="طباعة التقرير"
+          title={bottomTab === 'invoices' ? 'طباعة الصفحة الحالية' : 'طباعة التقرير'}
         >
           <Download className="w-5 h-5" />
         </button>

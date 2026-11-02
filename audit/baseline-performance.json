@@ -1,0 +1,57 @@
+{
+  "label": "baseline",
+  "conditions": {
+    "invoices": 10000,
+    "cpuSlowdown": 6,
+    "downloadKbps": 400,
+    "uploadKbps": 200,
+    "latencyMs": 400,
+    "viewport": "360x740",
+    "sampleLimitMs": 90000,
+    "physicalPhoneTest": false
+  },
+  "samples": [
+    {
+      "homeReadyMs": 11016.613529999999,
+      "invoiceReadyMs": null,
+      "nodes": null,
+      "renderedInvoices": null,
+      "lcpMs": null,
+      "refreshWireBytes": null,
+      "phase": "opening-invoices",
+      "timedOut": false,
+      "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('heading', { name: /الفواتير والمرتجعات/ }) to be visible\n"
+    },
+    {
+      "homeReadyMs": 10959.754874999999,
+      "invoiceReadyMs": null,
+      "nodes": null,
+      "renderedInvoices": null,
+      "lcpMs": null,
+      "refreshWireBytes": null,
+      "phase": "opening-invoices",
+      "timedOut": false,
+      "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('heading', { name: /الفواتير والمرتجعات/ }) to be visible\n"
+    },
+    {
+      "homeReadyMs": 10964.742181000009,
+      "invoiceReadyMs": null,
+      "nodes": null,
+      "renderedInvoices": null,
+      "lcpMs": null,
+      "refreshWireBytes": null,
+      "phase": "opening-invoices",
+      "timedOut": false,
+      "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('heading', { name: /الفواتير والمرتجعات/ }) to be visible\n"
+    }
+  ],
+  "median": {
+    "homeReadyMs": 10964.742181000009,
+    "invoiceReadyMs": null,
+    "nodes": null,
+    "renderedInvoices": null,
+    "lcpMs": null,
+    "refreshWireBytes": null
+  },
+  "evidenceRun": "https://github.com/AlAgoouz/AlAgoouzMobileApp/actions/runs/41386693624"
+}

@@ -2096,6 +2096,8 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
         </h1>
         <button
           onClick={() => window.print()}
+          aria-label="طباعة الصفحة الحالية"
+          title="طباعة الصفحة الحالية"
           className="p-1.5 rounded-xl hover:bg-white/10 text-[#D4AF37]"
         >
           <Printer className="w-5 h-5" />
@@ -2107,7 +2109,7 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
         <RecordPagination {...invoicePage} />
         {matchingInvoices.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 text-center text-xs text-[#7A6855] border border-[#E6DEC8]">
-            لا توجد فواتير مسجلة حالياً.
+            {invoiceSearch.trim() ? 'لا توجد فواتير مطابقة للبحث.' : 'لا توجد فواتير مسجلة حالياً.'}
           </div>
         ) : (
           invoicePage.visible.map((inv) => (

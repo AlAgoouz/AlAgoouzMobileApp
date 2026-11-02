@@ -3,6 +3,7 @@ import React from 'react';
 import {it,expect,afterEach,vi} from 'vitest';
 import {render,screen,fireEvent,cleanup} from '@testing-library/react';
 import {SalesInvoicesAndReturnsScreen} from '../src/components/ManagementScreens';
+import {ProfitReportsScreen} from '../src/components/ReportsAndInsightsScreens';
 import {fixture} from './performance/fixture.mjs';
 afterEach(cleanup);
 it('keeps a large invoice history searchable and actionable while rendering only 50 cards',()=>{
@@ -15,4 +16,15 @@ it('keeps a large invoice history searchable and actionable while rendering only
   expect(screen.getAllByRole('button',{name:'طباعة / واتساب'})).toHaveLength(1);
   fireEvent.click(screen.getByRole('button',{name:'مرتجع',exact:true}));
   expect(onReturn).toHaveBeenCalledWith('invoice-999');
+});
+it('keeps report totals over the complete history when its invoice list is paginated and searched',()=>{
+ const data=fixture(1000);
+ render(<ProfitReportsScreen items={data.items} salesInvoices={data.sales_invoices} expenses={[]} partners={data.partners} onBack={()=>{}}/>);
+ expect(screen.getAllByText('10000.00 ج.م')).toHaveLength(2);
+ fireEvent.click(screen.getByRole('button',{name:'الفواتير',exact:true}));
+ expect(screen.getAllByText(/#INV-/)).toHaveLength(50);
+ fireEvent.change(screen.getByRole('textbox',{name:'بحث في كل فواتير التقرير'}),{target:{value:'INV-00999'}});
+ expect(screen.getAllByText(/#INV-/)).toHaveLength(1);
+ fireEvent.click(screen.getByRole('button',{name:'الملخص',exact:true}));
+ expect(screen.getAllByText('10000.00 ج.م')).toHaveLength(2);
 });

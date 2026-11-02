@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {join,resolve} from 'node:path';
 import {randomBytes,createHmac} from 'node:crypto';
 import {encryptFile,sha256} from '../../scripts/backup/archive.mjs';
-import {storageSnapshotSQL,vaultSnapshotSQL,downloadStorage,storagePath} from '../../scripts/backup/resources.mjs';
+import {storageSnapshotSQL,vaultSnapshotSQL,downloadStorage,storagePath,assertStorageCoverage} from '../../scripts/backup/resources.mjs';
 const root=resolve(process.env.AGOUZ_BACKUP_ROOT||'');
 if(!process.env.AGOUZ_BACKUP_ROOT||!process.env.AGOUZ_PG_BIN)throw Error('ISOLATED_TEST_ROOT_REQUIRED');
 const nonce=randomBytes(6).toString('hex'),prefix='agouz-backup-source-'+nonce,network=prefix;
@@ -47,6 +47,7 @@ try{
  if(exportedAsReader.length!==2)throw Error('READONLY_VAULT_EXPORT_FAILED');
  if(sql("select has_function_privilege('authenticated','bon_erp_private.export_vault_secrets()','execute') or has_function_privilege('anon','bon_erp_private.export_vault_secrets()','execute');")!=='f')throw Error('VAULT_EXPORT_PERMISSION_BOUNDARY_FAILED');
  const storage=JSON.parse(sql(storageSnapshotSQL)),vault=JSON.parse(sql(vaultSnapshotSQL));
+ assertStorageCoverage(query=>JSON.parse(sql(query)));
  run(pg('pg_dump'),['--format=custom','--exclude-table-data=vault.secrets','--dbname','agouz_source','--file',join(work,'database.dump')],pgEnv);
  run(pg('pg_dumpall'),['--roles-only','--no-role-passwords','--file',join(work,'roles.sql')],pgEnv);
  run('git',['archive','--format=tar','--output',join(work,'source.tar'),'HEAD']);

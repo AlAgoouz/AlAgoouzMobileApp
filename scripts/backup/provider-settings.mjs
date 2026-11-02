@@ -63,7 +63,9 @@ export function validateProviderSettings(settings,project){
  if(settings?.format!=='agouz-provider-settings'||settings.version!==1||settings.project!==project)throw Error('RESTORE_PROVIDER_CONFIGURATION_INVALID');
  for(const name of Object.keys(paths))if(settings.configuration[name]===undefined)throw Error('RESTORE_PROVIDER_CONFIGURATION_INCOMPLETE');
  if(settings.functionBundles.length!==settings.configuration.functions.length)throw Error('RESTORE_FUNCTION_BUNDLE_COUNT_MISMATCH');
- for(const bundle of settings.functionBundles)if(digest(Buffer.from(bundle.bodyBase64,'base64'))!==bundle.sha256)throw Error('RESTORE_FUNCTION_BUNDLE_HASH_MISMATCH');
+ const slugs=settings.functionBundles.map(bundle=>bundle.slug);
+ if(new Set(slugs).size!==slugs.length||JSON.stringify([...slugs].sort())!==JSON.stringify(settings.configuration.functions.map(fn=>fn.slug).sort()))throw Error('RESTORE_FUNCTION_BUNDLE_IDENTITY_MISMATCH');
+ for(const bundle of settings.functionBundles)if(!bundle.bodyBase64||digest(Buffer.from(bundle.bodyBase64,'base64'))!==bundle.sha256)throw Error('RESTORE_FUNCTION_BUNDLE_HASH_MISMATCH');
  for(const secret of settings.configuration.secretDigests){if(!generatedSecrets.has(secret.name)&&digest(settings.edgeSecrets[secret.name]??'')!==secret.value)throw Error('RESTORE_EDGE_SECRET_DIGEST_MISMATCH');}
  return true;
 }

@@ -5,7 +5,11 @@ import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import os from 'node:os';
 import {join,resolve,sep} from 'node:path';
 import {gzipSync} from 'node:zlib';
-import {storagePath,resourceFile,validateArchiveEntries,downloadStorage,vaultRecoverySQL} from '../../scripts/backup/resources.mjs';
+import {storagePath,resourceFile,validateArchiveEntries,downloadStorage,vaultRecoverySQL,assertStorageCoverage} from '../../scripts/backup/resources.mjs';
+test('unexported advanced Storage data or incomplete multipart uploads refuse a complete-backup claim',()=>{
+ assert.doesNotThrow(()=>assertStorageCoverage(query=>query.includes('information_schema')?['buckets','objects','migrations','buckets_vectors','s3_multipart_uploads']:0));
+ assert.throws(()=>assertStorageCoverage(query=>query.includes('information_schema')?['buckets','objects','future_versions']:1),/ADVANCED_STORAGE_EXPORT_REQUIRED/);
+});
 test('downloads encoded binary bytes unchanged and refuses missing, truncated or unsafe object paths',async()=>{
   const root=await mkdtemp(join(os.tmpdir(),'agouz-resource-test-')),bytes=gzipSync(Buffer.from('اختبار\n'.repeat(1000))),id='11111111-1111-4111-8111-111111111111';
   const server=http.createServer((req,res)=>{if(req.url.includes('/missing')){res.writeHead(404);return res.end();}res.writeHead(200,{'Content-Encoding':'gzip'});res.end(bytes);});
