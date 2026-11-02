@@ -88,6 +88,7 @@ const item = base
       "direct_product",
     ]),
     baseUnit: z.enum(["kg", "piece", "liter"]),
+    openingStock: money.optional(),
     stock: money,
     minStock: money,
     costPrice: money,
@@ -113,6 +114,7 @@ const line = z
   .object({
     itemId: id,
     itemName: text,
+    category: z.enum(['raw_bean','raw_spice','manufactured_blend','drink_recipe','direct_product']),
     quantity: money,
     normalizedQtyInBaseUnit: money,
     totalPrice: money,
@@ -136,7 +138,7 @@ const invoice = base
     refundDue: money.optional(),
   })
   .passthrough();
-const schema = z.object({
+export const schema = z.object({
   items: z.array(item),
   productionBatches: z.array(
     base
@@ -164,6 +166,7 @@ const schema = z.object({
   purchaseInvoices: z.array(
     invoice.extend({
       supplierId: id,
+      paymentMethod: z.enum(['نقدي','آجل','جزئي']),
       supplierName: text,
       inventoryBefore: z.array(item).optional(),
       inventoryAfter: z.array(item).optional(),
@@ -183,6 +186,7 @@ const schema = z.object({
   salesInvoices: z.array(
     invoice.extend({
       saleType: z.enum(["retail", "wholesale", "cashier_sync"]),
+      paymentMethod: z.enum(['نقدي','آجل','محفظة/انستا باي']),
       customerName: text,
       isReturned: z.boolean().optional(),
       returnedAt: text.optional(),
@@ -224,16 +228,17 @@ const schema = z.object({
     base
       .extend({
         date: id,
-        category: id,
+        category: z.enum(['إيجار','كهرباء ومياه وغاز','رواتب ويوميات','صيانة مطاحن وماكينات','أكياس وتغليف','نقل ومشال','مسحوبات شركاء','نثريات أخرى']),
         title: id,
         amount: money,
         partnerName: text,
-        paidFrom: id,
+        paidFrom: z.enum(['درج المحل','خزنة الشركة','من جيب الشريك','تسوية مخزون (بدون نقدية)']),
         partnerId: id.optional(),
         isCancelled: z.boolean().optional(),
         cancelledAt: text.optional(),
         cancelledBy: text.optional(),
         sourceInvoiceId: id.optional(),
+        sourceEmployeeTransactionId: id.optional(),
       })
       .passthrough(),
   ),
@@ -281,7 +286,7 @@ const schema = z.object({
       name: id,
       role: text,
       phone: text,
-      salaryType: text,
+      salaryType: z.enum(['شهري','يومية']),
       baseMonthlySalary: money,
       dailyRate: money,
       workedDaysThisMonth: money,
@@ -289,6 +294,8 @@ const schema = z.object({
       totalDeductions: money,
       totalBonuses: money,
       totalPaidOut: money,
+      payrollPeriod: text.regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+      openingPayable: number.optional(),
     }),
   ),
   employeeTransactions: z.array(
@@ -296,10 +303,18 @@ const schema = z.object({
       date: id,
       employeeId: id,
       employeeName: text,
-      type: id,
+      type: z.enum(['سلفة','حضور يومية','خصم/عجز','مكافأة','صرف راتب','إقفال شهر']),
       amount: money,
       notes: text,
       partnerName: text,
+      payrollPeriod: text.regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+      accountingVersion: z.literal(1).optional(),
+      partnerId: id.optional(),
+      paidFrom: z.enum(['درج المحل','خزنة الشركة','من جيب الشريك']).optional(),
+      expenseId: id.optional(),
+      reversedAt: text.optional(),
+      reversedBy: text.optional(),
+      closingSummary: z.object({openingPayable:number,earned:money,advances:money,deductions:money,bonuses:money,paidOut:money,carryForward:number}).optional(),
     }),
   ),
   stocktakingRecords: z.array(
@@ -370,6 +385,20 @@ export function validateStore(value: unknown): StoreState {
       throw new Error(`معرفات مكررة في ${key}`);
   }
   const ids = new Set(parsed.items.map((i) => i.id));
+  for (const transaction of parsed.employeeTransactions) {
+    if (transaction.accountingVersion !== 1) continue;
+    if (!parsed.employees.some((e)=>e.id===transaction.employeeId) || !parsed.partners.some((p)=>p.id===transaction.partnerId))
+      throw new Error('حركة العامل مرتبطة بعامل أو شريك غير موجود');
+    if (transaction.type==='صرف راتب' || transaction.type==='سلفة') {
+      const expense=parsed.expenses.find((e)=>e.id===transaction.expenseId);
+      if(!expense || expense.sourceEmployeeTransactionId!==transaction.id || expense.category!=='رواتب ويوميات' || expense.amount!==transaction.amount || expense.paidFrom!==transaction.paidFrom || expense.partnerId!==transaction.partnerId || Boolean(expense.isCancelled)!==Boolean(transaction.reversedAt))
+        throw new Error('مصروف الراتب أو السلفة لا يطابق حركة العامل');
+    } else if (transaction.expenseId) throw new Error('هذه الحركة ليست صرفًا نقديًا للعامل');
+  }
+  for(const expense of parsed.expenses) {
+    if(expense.sourceEmployeeTransactionId && !parsed.employeeTransactions.some((t)=>t.id===expense.sourceEmployeeTransactionId && t.expenseId===expense.id))
+      throw new Error('مصروف العامل غير مرتبط بحركة صحيحة');
+  }
   if (
     new Set(parsed.items.map((i) => i.code.trim().toUpperCase())).size !==
     parsed.items.length

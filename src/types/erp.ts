@@ -31,6 +31,7 @@ export interface InventoryItem {
   roastLevel?: 'فاتح' | 'وسط' | 'غامق' | 'إسبريسو' | 'بدون';
   baseUnit: 'kg' | 'piece' | 'liter';
   stock: number;
+  openingStock?: number;
   minStock: number;
   costPrice: number;
   lastPurchasePrice: number;
@@ -179,6 +180,7 @@ export interface Expense {
   cancelledAt?: string;
   cancelledBy?: string;
   sourceInvoiceId?: string;
+  sourceEmployeeTransactionId?: string;
 }
 
 export interface Partner {
@@ -252,6 +254,8 @@ export interface Employee {
   totalDeductions: number;   // الخصومات أو تحميل عجز الجرد
   totalBonuses: number;      // المكافآت والإضافي
   totalPaidOut: number;      // ما تم صرفه من الراتب
+  payrollPeriod?: string;
+  openingPayable?: number;
 }
 
 export interface EmployeeTransaction {
@@ -259,10 +263,26 @@ export interface EmployeeTransaction {
   date: string;
   employeeId: string;
   employeeName: string;
-  type: 'سلفة' | 'حضور يومية' | 'خصم/عجز' | 'مكافأة' | 'صرف راتب';
+  type: 'سلفة' | 'حضور يومية' | 'خصم/عجز' | 'مكافأة' | 'صرف راتب' | 'إقفال شهر';
   amount: number;
   notes: string;
   partnerName: string;
+  payrollPeriod?: string;
+  accountingVersion?: 1;
+  partnerId?: string;
+  paidFrom?: 'درج المحل' | 'خزنة الشركة' | 'من جيب الشريك';
+  expenseId?: string;
+  reversedAt?: string;
+  reversedBy?: string;
+  closingSummary?: {
+    openingPayable: number;
+    earned: number;
+    advances: number;
+    deductions: number;
+    bonuses: number;
+    paidOut: number;
+    carryForward: number;
+  };
 }
 
 export interface AccountPaymentRecord {

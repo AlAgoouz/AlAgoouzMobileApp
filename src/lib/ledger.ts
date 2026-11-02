@@ -326,6 +326,8 @@ export function cancelExpense(
     throw new Error('المصروف غير موجود أو ملغى بالفعل');
   if (expense.sourceInvoiceId)
     throw new Error('هذه تسوية مرتبطة بمرتجع؛ لا تُلغى منفصلة عن أصلها.');
+  if (expense.sourceEmployeeTransactionId)
+    throw new Error('هذا المصروف مرتبط بحركة عامل؛ اعكس الحركة من سجل العمال.');
   const partner = state.partners.find((p) =>
     expense.partnerId
       ? p.id === expense.partnerId

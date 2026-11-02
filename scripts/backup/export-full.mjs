@@ -1,0 +1,82 @@
+// Full logical database export. This stage does NOT mark a backup as restore-verified.
+import {execFileSync} from 'node:child_process';
+import {readFileSync,writeFileSync,mkdirSync,existsSync} from 'node:fs';
+import {join,resolve} from 'node:path';
+import {randomBytes} from 'node:crypto';
+import {encryptFile,decryptFile,sha256} from './archive.mjs';
+
+const project='srinizbfqozvdqsuvvbc';
+const root=resolve(process.env.AGOUZ_BACKUP_ROOT || 'D:/AgouzPrivateBackups');
+const cli=process.env.AGOUZ_SUPABASE_CLI;
+const pg=process.env.AGOUZ_PG_BIN;
+const drive=process.env.AGOUZ_RCLONE;
+const driveConfig=process.env.AGOUZ_RCLONE_CONFIG;
+if((!cli&&!process.env.AGOUZ_DATABASE_URL)||!pg||!drive||!driveConfig) throw new Error('BACKUP_TOOLS_NOT_CONFIGURED');
+const config=readFileSync(driveConfig,'utf8');
+if(!/^root_folder_id\s*=\s*1Y0woq-P9w6C5zvPVlgmVTZDGEWOPhig4\s*$/m.test(config)) throw new Error('BACKUP_DRIVE_FOLDER_MISMATCH');
+const generation=new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomBytes(4).toString('hex');
+const work=join(root,'pending',generation);
+mkdirSync(work,{recursive:true,mode:0o700});
+let sourceEnv;
+function run(exe,args,env=process.env){
+  try{return execFileSync(exe,args,{encoding:'utf8',env,windowsHide:true,timeout:180000,maxBuffer:8*1024*1024,stdio:['ignore','pipe','pipe']});}
+  catch(error){
+    // Tool stderr can include connection details. Keep it private and report a fixed code.
+    writeFileSync(join(work,'failure.private.log'),error.stderr || String(error.code),{mode:0o600});
+    throw new Error('BACKUP_TOOL_FAILED: '+exe.split(/[\\/]/).pop());
+  }
+}
+function parseEnvironment(script){
+  const values={};
+  for(const match of script.matchAll(/^export\s+(PGHOST|PGPORT|PGUSER|PGPASSWORD|PGDATABASE)=(.*)$/gm)){
+    let value=match[2].trim();
+    if(value.startsWith('"')&&value.endsWith('"')) value=value.slice(1,-1).replace(/\\([\\"$`])/g,'$1');
+    else if(value.startsWith("'")&&value.endsWith("'")) value=value.slice(1,-1).replaceAll("'\"'\"'","'");
+    else if(!/^[A-Za-z0-9._-]+$/.test(value)) throw new Error('BACKUP_CONNECTION_FORMAT_UNSUPPORTED');
+    values[match[1]]=value;
+  }
+  if(Object.keys(values).length!==5||!(values.PGHOST.includes(project)||values.PGUSER.includes(project))) throw new Error('BACKUP_SOURCE_MISMATCH');
+  return {...process.env,...values,PGSSLMODE:'require',PGCONNECT_TIMEOUT:'20',PGOPTIONS:'-c role=postgres -c default_transaction_read_only=on'};
+}
+try{
+  let roleArgs=['--role=postgres'];
+  if(process.env.AGOUZ_DATABASE_URL){
+    const url=new URL(process.env.AGOUZ_DATABASE_URL);
+    if(!['postgres:','postgresql:'].includes(url.protocol)||decodeURIComponent(url.username)!=='agouz_backup.'+project||!url.hostname.endsWith('.pooler.supabase.com'))throw new Error('BACKUP_SOURCE_MISMATCH');
+    sourceEnv={...process.env,PGHOST:url.hostname,PGPORT:url.port||'5432',PGUSER:decodeURIComponent(url.username),PGPASSWORD:decodeURIComponent(url.password),PGDATABASE:'postgres',PGSSLMODE:'require',PGCONNECT_TIMEOUT:'20',PGOPTIONS:'-c default_transaction_read_only=on'};
+    delete sourceEnv.AGOUZ_DATABASE_URL;
+    roleArgs=[];
+  }else{
+    const connectionScript=run(cli,['db','dump','--project-ref',project,'--dry-run']);
+    sourceEnv=parseEnvironment(connectionScript);
+  }
+  const pgTool=(name)=>join(pg,name+(process.platform==='win32'?'.exe':''));
+  run(pgTool('pg_dump'),[...roleArgs,'--format=custom','--file',join(work,'database.dump')],sourceEnv);
+  run(pgTool('pg_dumpall'),[...roleArgs,'--roles-only','--no-role-passwords','--file',join(work,'roles.sql')],sourceEnv);
+  const inventory=JSON.parse(run(pgTool('psql'),['-XqAt','-v','ON_ERROR_STOP=1','-c',(roleArgs.length?'set role postgres; ':'')+"select json_build_object('auth_users',(select count(*) from auth.users),'storage_objects',(select count(*) from storage.objects),'vault_secrets',(select count(*) from vault.secrets),'large_objects',(select count(*) from pg_largeobject_metadata),'store_version',(select version from public.bon_elagouz_store where id='main_store'),'postgres_version',current_setting('server_version'));"],sourceEnv));
+  if(inventory.storage_objects!==0) throw new Error('BACKUP_STORAGE_FILES_REQUIRE_EXPORT');
+  if(inventory.vault_secrets!==0||inventory.large_objects!==0)throw new Error('BACKUP_ADDITIONAL_SECRET_OR_OBJECT_EXPORT_REQUIRED');
+  const listing=run(pgTool('pg_restore'),['--list',join(work,'database.dump')]);
+  if(!listing.includes('TABLE DATA auth users')||!listing.includes('TABLE DATA public bon_elagouz_store')) throw new Error('BACKUP_REQUIRED_TABLES_MISSING');
+  run('git',['archive','--format=tar','--output',join(work,'source.tar'),'HEAD']);
+  const hashes={};for(const file of ['database.dump','roles.sql','source.tar']) hashes[file]=await sha256(join(work,file));
+  const manifest={format:'agouz-full-logical-backup',version:1,project,generation,createdAt:new Date().toISOString(),sourceCommit:run('git',['rev-parse','HEAD']).trim(),inventory,files:hashes,restoreVerified:false,coverage:['PostgreSQL schema and data including Supabase Auth','database roles without database-role passwords','committed application source'],limitations:['External provider settings and deployment secrets require separate secure configuration.','Archive byte checks do not prove database or login restoration.','Storage files must be implemented before accepting any nonempty storage.objects table.']};
+  writeFileSync(join(work,'manifest.json'),JSON.stringify(manifest,null,2),{mode:0o600});
+  const plain=join(work,'archive.tar.gz');
+  run('tar',['-czf',plain,'-C',work,'database.dump','roles.sql','source.tar','manifest.json']);
+  const keyPath=join(root,'recovery-key.base64');
+  if(!existsSync(keyPath))writeFileSync(keyPath,randomBytes(32).toString('base64'),{flag:'wx',mode:0o600});
+  const key=Buffer.from(readFileSync(keyPath,'utf8').trim(),'base64');
+  const encrypted=join(work,generation+'.agouz');
+  await encryptFile(plain,encrypted,key);
+  const remote='agouzdrive:pending-verification/'+generation+'.agouz';
+  run(drive,['copyto',encrypted,remote,'--config',driveConfig,'--immutable','--log-level','ERROR']);
+  const downloaded=join(work,'downloaded.agouz');
+  run(drive,['copyto',remote,downloaded,'--config',driveConfig,'--immutable','--log-level','ERROR']);
+  if(await sha256(encrypted)!==await sha256(downloaded))throw new Error('BACKUP_REMOTE_HASH_MISMATCH');
+  const decrypted=join(work,'downloaded.tar.gz');await decryptFile(downloaded,decrypted,key);
+  if(await sha256(plain)!==await sha256(decrypted))throw new Error('BACKUP_DECRYPTED_HASH_MISMATCH');
+  const receipt={...manifest,encryptedSha256:await sha256(encrypted),remote,uploadVerified:true,decryptionVerified:true,restoreVerified:false};
+  writeFileSync(join(work,'receipt.json'),JSON.stringify(receipt,null,2),{mode:0o600});
+  console.log(JSON.stringify({status:'uploaded-pending-restore-verification',generation,work,authUsers:inventory.auth_users,uploadVerified:true,decryptionVerified:true,restoreVerified:false}));
+}catch(error){console.error(error.message);process.exitCode=1;}

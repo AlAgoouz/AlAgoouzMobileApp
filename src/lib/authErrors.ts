@@ -1,8 +1,16 @@
-export function authErrorMessage(error: unknown, action: 'signIn' | 'signUp'): string {
+export function authErrorMessage(error: unknown, action: 'signIn' | 'signUp' | 'recovery'): string {
   const info = error && typeof error === 'object'
     ? error as { code?: string; status?: number; name?: string }
     : {};
   switch (info.code) {
+    case 'otp_expired':
+    case 'flow_state_expired':
+    case 'flow_state_not_found':
+      return 'رابط الاستعادة أو التأكيد انتهى؛ اطلب رسالة جديدة من شاشة الدخول.';
+    case 'same_password':
+      return 'اختر كلمة مرور جديدة تختلف عن كلمة المرور الحالية.';
+    case 'weak_password':
+      return 'كلمة المرور ضعيفة؛ اختر 12 حرفًا على الأقل وتجنب الكلمات الشائعة.';
     case 'email_not_confirmed':
       return 'البريد لم يُؤكَّد بعد؛ افتح رسالة التأكيد في بريدك ثم سجّل الدخول.';
     case 'invalid_credentials':
@@ -25,6 +33,7 @@ export function authErrorMessage(error: unknown, action: 'signIn' | 'signUp'): s
     return 'تعذر الاتصال بخدمة الدخول؛ تحقق من الإنترنت ثم حاول مرة أخرى.';
   if (info.status && info.status >= 500)
     return 'خدمة الدخول تواجه مشكلة مؤقتة؛ حاول لاحقًا.';
+  if (action === 'recovery') return 'تعذر إكمال استعادة الدخول؛ اطلب رسالة جديدة أو حاول لاحقًا.';
   return action === 'signIn'
     ? 'تعذر تسجيل الدخول؛ حاول مرة أخرى. إذا استمرت المشكلة تواصل مع المسؤول.'
     : 'تعذر إنشاء الحساب؛ تحقق من البريد أو سجل الدخول إذا كان موجودًا.';

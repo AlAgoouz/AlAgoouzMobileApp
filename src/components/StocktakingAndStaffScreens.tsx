@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { payrollBalance, currentPayrollPeriod } from '../lib/payroll';
 import {
   ChevronRight,
   Scale,
@@ -582,7 +583,10 @@ interface StaffAndPayrollScreenProps {
     type: EmployeeTransaction["type"],
     amount: number,
     notes: string,
+    paidFrom?: EmployeeTransaction['paidFrom'],
   ) => void | boolean;
+  onReverseEmployeeAction?: (id:string)=>boolean;
+  onClosePayrollPeriod?: (employeeId:string)=>boolean;
   onAddNewEmployee: (emp: Omit<Employee, "id">) => void | boolean;
   onDeleteEmployee: (empId: string) => void;
   onBack: () => void;
@@ -592,6 +596,8 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
   employees,
   transactions,
   onRecordEmployeeAction,
+  onReverseEmployeeAction,
+  onClosePayrollPeriod,
   onAddNewEmployee,
   onDeleteEmployee,
   onBack,
@@ -604,6 +610,8 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
   const [actionAmount, setActionAmount] = useState<string>("");
   const [actionNotes, setActionNotes] = useState<string>("");
   const [actionError, setActionError] = useState<string>("");
+  const [paidFrom, setPaidFrom] = useState<EmployeeTransaction['paidFrom']>('درج المحل');
+  const [ledgerError, setLedgerError] = useState('');
 
   // نافذة إضافة عامل جديد
   const [showAddEmpModal, setShowAddEmpModal] = useState(false);
@@ -618,18 +626,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
 
   // حساب مستحقات العامل الصافية
   const calculateNetPayable = (emp: Employee) => {
-    const earned =
-      emp.salaryType === "يومية"
-        ? emp.workedDaysThisMonth * emp.dailyRate
-        : emp.baseMonthlySalary;
-    return Math.max(
-      0,
-      earned +
-        emp.totalBonuses -
-        emp.totalAdvances -
-        emp.totalDeductions -
-        emp.totalPaidOut,
-    );
+    return payrollBalance(emp).payable;
   };
 
   const totals = useMemo(() => {
@@ -651,6 +648,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
   ) => {
     setActionModal({ employee: emp, type });
     setActionError("");
+    setPaidFrom('درج المحل');
     if (type === "حضور يومية") {
       setActionAmount(String(emp.dailyRate));
       setActionNotes("تسجيل حضور يومية عمل");
@@ -708,7 +706,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
     }
     setActionError("");
     if (
-      onRecordEmployeeAction(liveEmp.id, actionModal.type, amt, actionNotes) ===
+      onRecordEmployeeAction(liveEmp.id, actionModal.type, amt, actionNotes, paidFrom) ===
       false
     ) {
       setActionError("لم تُسجل الحركة؛ راجع التنبيه وحاول مرة أخرى");
@@ -851,6 +849,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                         <span className="text-sm font-black text-[#1E1612]">
                           {emp.name}
                         </span>
+                      <span className="text-xs">شهر {emp.payrollPeriod ?? currentPayrollPeriod()}</span>
                         <span className="text-[10px] font-extrabold bg-[#FDF8EB] text-[#9E7918] px-2 py-0.5 rounded-lg border border-[#E8D8A8]">
                           {emp.role}
                         </span>
@@ -882,6 +881,14 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                   </div>
 
                   {/* تفصيل الحساب */}
+                  {!!emp.openingPayable && <p className="text-xs">مرحل من الشهر السابق: {emp.openingPayable} ج.م</p>}
+                  {payrollBalance(emp).balance < 0 && <p className="text-xs text-red-700">على العامل {Math.abs(payrollBalance(emp).balance)} ج.م تُرحّل عند الإقفال.</p>}
+                  {onClosePayrollPeriod && <button disabled={(emp.payrollPeriod ?? currentPayrollPeriod()) >= currentPayrollPeriod()} className="text-xs border rounded-xl p-2 disabled:opacity-50" onClick={()=>{
+                    if(window.confirm(`إقفال شهر ${emp.payrollPeriod ?? currentPayrollPeriod()} للعامل ${emp.name} وترحيل المستحقات؟`)) {
+                      if(!onClosePayrollPeriod(emp.id)) setLedgerError('لم يُقفل الشهر؛ راجع التنبيه');
+                      else setLedgerError('');
+                    }
+                  }}>إقفال الشهر وترحيل المستحقات</button>}
                   <div className="grid grid-cols-4 gap-1.5 text-center bg-[#FAF8F4] p-2.5 rounded-2xl border border-[#EDE6D8] text-xs">
                     <div>
                       <div className="text-[10px] text-[#7A6855]">المستحق</div>
@@ -990,6 +997,14 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                   <div className="text-[10px] text-[#7A6855]">
                     بواسطة: {tr.partnerName} • {tr.date}
                   </div>
+                  <p className="text-xs">{tr.payrollPeriod ?? 'سجل سابق'} {tr.paidFrom ? `• ${tr.paidFrom}` : ''} {tr.expenseId ? '• مرتبط بمصروف' : ''} {tr.reversedAt ? '• معكوسة' : ''}</p>
+                  {tr.closingSummary && <p className="text-xs">مرحل للشهر التالي: {tr.closingSummary.carryForward} ج.م</p>}
+                  {onReverseEmployeeAction && tr.accountingVersion===1 && tr.type!=='إقفال شهر' && !tr.reversedAt && employees.find((e)=>e.id===tr.employeeId)?.payrollPeriod===tr.payrollPeriod && <button className="text-xs text-red-700 border rounded-xl p-2" onClick={()=>{
+                    if(window.confirm('عكس حركة العامل ومصروفها مع الاحتفاظ بالأصل؟')) {
+                      if(!onReverseEmployeeAction(tr.id)) setLedgerError('لم تُعكس الحركة؛ راجع التنبيه');
+                      else setLedgerError('');
+                    }
+                  }}>عكس الحركة ومصروفها</button>}
                 </div>
                 <div className="text-sm font-black text-[#1E1612]">
                   {tr.amount.toLocaleString("ar-EG")} ج.م
@@ -1001,12 +1016,16 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
       </div>
 
       {/* نافذة تسجيل حركة للعامل */}
+      {ledgerError && <p role="alert" className="text-red-700 p-3">{ledgerError}</p>}
       {actionModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-4 shadow-2xl border border-[#C59B27]">
             <h3 className="text-sm font-extrabold text-[#1E1612]">
               تسجيل ({actionModal.type}) — {actionModal.employee.name}
             </h3>
+            {(actionModal.type==='سلفة'||actionModal.type==='صرف راتب') && <label className="block text-sm">مصدر الصرف<select aria-label="مصدر صرف العامل" className="block w-full border rounded-xl p-2" value={paidFrom} onChange={(event)=>setPaidFrom(event.target.value as EmployeeTransaction['paidFrom'])}>
+              <option>درج المحل</option><option>خزنة الشركة</option><option>من جيب الشريك</option>
+            </select></label>}
             {actionError && (
               <p className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
                 {actionError}

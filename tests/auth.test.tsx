@@ -11,6 +11,7 @@ afterEach(() => {
   cleanup();
   sessionStorage.clear();
   localStorage.clear();
+  window.history.replaceState(null,'','/');
 });
 function client(role = 'partner', user: any = { id: 'user1' }) {
   let authCallback: (event: string) => void = () => {};
@@ -18,6 +19,9 @@ function client(role = 'partner', user: any = { id: 'user1' }) {
     auth: {
       getUser: vi.fn(async () => ({ data: { user }, error: null })),
       signInWithPassword: vi.fn(async () => ({ error: null })),
+      resetPasswordForEmail: vi.fn(async () => ({ error: null })),
+      resend: vi.fn(async () => ({ error: null })),
+      updateUser: vi.fn(async () => ({ error: null })),
       signOut: vi.fn(async () => {
         authCallback('SIGNED_OUT');
         return { error: null };
@@ -55,6 +59,65 @@ it('never trusts a forged local owner identifier', async () => {
   client('partner', null);
   const { result } = renderHook(() => useErpStore());
   await waitFor(() => expect(result.current.authReady).toBe(true));
+  expect(result.current.member).toBeNull();
+  expect(result.current.status).toBe('signed-out');
+});
+
+it('requests recovery and confirmation through Supabase with the approved application origin',async()=>{
+  const {sb}=client('partner',null);
+  const {result}=renderHook(()=>useErpStore());
+  await waitFor(()=>expect(result.current.authReady).toBe(true));
+  await act(()=>result.current.requestPasswordReset(' owner@example.test '));
+  await act(()=>result.current.resendConfirmation(' owner@example.test '));
+  expect(sb.auth.resetPasswordForEmail).toHaveBeenCalledWith('owner@example.test',{redirectTo:window.location.origin});
+  expect(sb.auth.resend).toHaveBeenCalledWith({type:'signup',email:'owner@example.test',options:{emailRedirectTo:window.location.origin}});
+});
+
+it('refuses password changes outside recovery and rejects an expired verified session',async()=>{
+  const {sb,event}=client('partner',null);
+  const {result}=renderHook(()=>useErpStore());
+  await waitFor(()=>expect(result.current.authReady).toBe(true));
+  await expect(result.current.updateRecoveredPassword('a secure password')).rejects.toThrow('افتح رابط');
+  act(()=>event('PASSWORD_RECOVERY'));
+  await expect(result.current.updateRecoveredPassword('a secure password')).rejects.toThrow('انتهى');
+  expect(sb.auth.updateUser).not.toHaveBeenCalled();
+});
+
+it('gates a recovery link before reading business data and revokes sessions after changing the password',async()=>{
+  window.history.replaceState(null,'','/#type=recovery');
+  const {sb}=client();
+  const {result}=renderHook(()=>useErpStore());
+  await waitFor(()=>expect(result.current.authReady).toBe(true));
+  expect(result.current.passwordRecovery).toBe(true);
+  expect(result.current.member).toBeNull();
+  expect(sb.from).not.toHaveBeenCalled();
+  await act(()=>result.current.updateRecoveredPassword('  a secure new password  '));
+  expect(sb.auth.updateUser).toHaveBeenCalledWith({password:'  a secure new password  '});
+  expect(sb.auth.signOut).toHaveBeenCalledWith({scope:'global'});
+  expect(result.current.passwordRecovery).toBe(false);
+  expect(window.location.hash).toBe('');
+});
+
+it('retries session revocation without changing the password twice',async()=>{
+  window.history.replaceState(null,'','/#type=recovery');
+  const {sb}=client();
+  sb.auth.signOut.mockResolvedValueOnce({error:{status:503}} as any);
+  const {result}=renderHook(()=>useErpStore());
+  await waitFor(()=>expect(result.current.authReady).toBe(true));
+  await act(async()=>{await expect(result.current.updateRecoveredPassword('a secure new password')).rejects.toThrow('تم تحديث');});
+  expect(result.current.recoveryPasswordUpdated).toBe(true);
+  await act(()=>result.current.updateRecoveredPassword(''));
+  expect(sb.auth.updateUser).toHaveBeenCalledTimes(1);
+  expect(sb.auth.signOut).toHaveBeenCalledTimes(2);
+  expect(result.current.passwordRecovery).toBe(false);
+});
+
+it('stops an existing business session when a recovery event arrives',async()=>{
+  const {event}=client();
+  const {result}=renderHook(()=>useErpStore());
+  await waitFor(()=>expect(result.current.status).toBe('ready'));
+  act(()=>event('PASSWORD_RECOVERY'));
+  expect(result.current.passwordRecovery).toBe(true);
   expect(result.current.member).toBeNull();
   expect(result.current.status).toBe('signed-out');
 });

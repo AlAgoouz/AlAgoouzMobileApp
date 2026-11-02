@@ -66,6 +66,8 @@ import {
   operatingExpenses,
 } from "./lib/ledger";
 import { businessDate } from "./lib/dates";
+import { recordEmployeeAction, reverseEmployeeAction, closePayrollPeriod, currentPayrollPeriod } from './lib/payroll';
+import { adjustCatalogItem } from './lib/catalogAdjustments';
 import { cashierSourceId } from "./lib/cashierRows";
 import {
   downloadFullBackupJson,
@@ -85,21 +87,6 @@ const unloadedPartner: Partner = {
 };
 
 // صافي مستحقات العامل (نفس معادلة شاشة شؤون العمال) لمحاربة تجاوز الصرف
-function employeeNetPayable(emp: Employee): number {
-  const earned =
-    emp.salaryType === "يومية"
-      ? emp.workedDaysThisMonth * emp.dailyRate
-      : emp.baseMonthlySalary;
-  return Math.max(
-    0,
-    earned +
-      emp.totalBonuses -
-      emp.totalAdvances -
-      emp.totalDeductions -
-      emp.totalPaidOut,
-  );
-}
-
 // ترقيم مسلسل فريد لا يتكرر حتى بعد حذف سجلات قديمة (خطأ تكرار PRD/AUD القديم)
 function nextSequentialNumber(
   existing: string[],
@@ -117,19 +104,7 @@ function hasInvalidNumbers(values: (number | undefined)[]): boolean {
   return values.some((v) => v !== undefined && (!Number.isFinite(v) || v < 0));
 }
 
-// إزالة الرصيد الوهمي (999) عند تحويل مشروب بوصفة إلى صنف عادي
-function resetPhantomStock(
-  beforeCategory: string,
-  afterCategory: string | undefined,
-  stock: number,
-): number {
-  return beforeCategory === "drink_recipe" &&
-    (afterCategory ?? "drink_recipe") !== "drink_recipe" &&
-    Math.abs(stock - 999) < 0.0001
-    ? 0
-    : stock;
-}
-
+const PasswordRecoveryScreen = React.lazy(() => import('./components/PasswordRecoveryScreen').then((module)=>({default:module.PasswordRecoveryScreen})));
 const LoginScreen = React.lazy(() =>
   import("./components/LoginScreen").then((module) => ({
     default: module.LoginScreen,
@@ -949,72 +924,10 @@ export default function App() {
   };
 
   // 6. تسجيل حركة للعامل (سلفة، يومية حضور، خصم/عجز، مكافأة، صرف راتب)
-  const handleRecordEmployeeAction = (
-    employeeId: string,
-    type: EmployeeTransaction["type"],
-    amount: number,
-    notes: string,
-  ) => {
-    const targetEmp = employees.find((e) => e.id === employeeId);
-    if (!targetEmp) throw new Error("العامل غير موجود");
-
-    if (type !== "حضور يومية") {
-      if (!Number.isFinite(amount) || amount <= 0) {
-        throw new Error("أدخل مبلغًا صحيحًا أكبر من صفر");
-      }
-      if (type === "صرف راتب") {
-        const net = employeeNetPayable(targetEmp);
-        if (amount > net + 0.011) {
-          throw new Error(
-            `لا يمكن صرف أكثر من صافي مستحقات العامل (${net.toFixed(2)} ج.م)`,
-          );
-        }
-      }
-    }
-
-    setEmployees((prev) =>
-      prev.map((emp) => {
-        if (emp.id !== employeeId) return emp;
-        if (type === "سلفة") {
-          return { ...emp, totalAdvances: emp.totalAdvances + amount };
-        }
-        if (type === "حضور يومية") {
-          return {
-            ...emp,
-            workedDaysThisMonth: emp.workedDaysThisMonth + 1,
-          };
-        }
-        if (type === "خصم/عجز") {
-          return { ...emp, totalDeductions: emp.totalDeductions + amount };
-        }
-        if (type === "مكافأة") {
-          return { ...emp, totalBonuses: emp.totalBonuses + amount };
-        }
-        if (type === "صرف راتب") {
-          return { ...emp, totalPaidOut: emp.totalPaidOut + amount };
-        }
-        return emp;
-      }),
-    );
-
-    const newTr: EmployeeTransaction = {
-      id: crypto.randomUUID(),
-      date: businessDate(),
-      employeeId,
-      employeeName: targetEmp.name,
-      type,
-      amount,
-      notes,
-      partnerName: currentPartner.name,
-    };
-
-    setEmployeeTransactions((prev) => [newTr, ...prev]);
-    addAuditLog(
-      "شؤون عمال",
-      `${type} للعامل (${targetEmp.name}): ${notes}`,
-      amount,
-    );
-    showToast(`✅ تم تسجيل (${type}) للعامل ${targetEmp.name} بنجاح!`);
+  const handleRecordEmployeeAction = (employeeId:string,type:EmployeeTransaction['type'],amount:number,notes:string,paidFrom?:EmployeeTransaction['paidFrom']) => {
+    engine.replace(recordEmployeeAction(engine.state,employeeId,type,amount,notes,currentPartner.id,paidFrom));
+    addAuditLog('شؤون عمال', `${type} للعامل: ${employeeId} — ${notes}`,amount);
+    showToast('تم تسجيل حركة العامل وربط الصرف بمصروفه؛ تابع تأكيد الحفظ.');
   };
 
   // 7. أدوات التحكم الشامل في البيانات (تصفير وحذف الداتا التجريبية)
@@ -1215,11 +1128,14 @@ export default function App() {
         جارٍ التحقق من الجلسة…
       </div>
     );
+  if (cloud.passwordRecovery) return <PasswordRecoveryScreen passwordUpdated={cloud.recoveryPasswordUpdated} onUpdatePassword={cloud.updateRecoveredPassword} onCancel={cloud.cancelPasswordRecovery} />;
   if (!loggedPartnerId)
     return (
       <LoginScreen
         onSignIn={cloud.signIn}
         onSignUp={cloud.signUp}
+        onRequestPasswordReset={cloud.requestPasswordReset}
+        onResendConfirmation={cloud.resendConfirmation}
         authError={cloud.authError}
       />
     );
@@ -2353,6 +2269,7 @@ export default function App() {
                 const created: InventoryItem = {
                   ...newItem,
                   id: crypto.randomUUID(),
+                  openingStock: newItem.stock,
                 };
                 setItems((prev) => [created, ...prev]);
                 showToast(`✅ تمت إضافة الصنف (${created.name}) للمخزن!`);
@@ -2405,6 +2322,7 @@ export default function App() {
                 const created: InventoryItem = {
                   ...newItem,
                   id: crypto.randomUUID(),
+                  openingStock: newItem.stock,
                 };
                 setItems((prev) => [created, ...prev]);
                 addAuditLog("تعديل وصفة/صنف", `إضافة صنف: ${created.name}`);
@@ -2487,7 +2405,7 @@ export default function App() {
                   return;
                 }
                 setItems((prev) => [
-                  { ...newItem, id: crypto.randomUUID() },
+                  { ...newItem, id: crypto.randomUUID(), openingStock:newItem.stock },
                   ...prev,
                 ]);
                 addAuditLog(
@@ -2514,21 +2432,7 @@ export default function App() {
                   );
                   return;
                 }
-                setItems((prev) => {
-                  const next = prev.map((i) => {
-                    if (i.id !== id) return i;
-                    const merged = { ...i, ...patch };
-                    return {
-                      ...merged,
-                      stock: resetPhantomStock(
-                        i.category,
-                        merged.category,
-                        merged.stock,
-                      ),
-                    };
-                  });
-                  return recalculateAllRecipeCosts(next);
-                });
+                engine.replace(adjustCatalogItem(engine.state,id,patch,currentPartner.name));
                 addAuditLog("تعديل وصفة/صنف", `تحديث تسعير/بيانات منتج`);
                 showToast(
                   "✅ تم تحديث المنتج وإعادة حساب تكلفة الوصفات المرتبطة!",
@@ -2607,21 +2511,7 @@ export default function App() {
                   );
                   return;
                 }
-                setItems((prev) => {
-                  const next = prev.map((i) => {
-                    if (i.id !== id) return i;
-                    const merged = { ...i, ...patch };
-                    return {
-                      ...merged,
-                      stock: resetPhantomStock(
-                        i.category,
-                        merged.category,
-                        merged.stock,
-                      ),
-                    };
-                  });
-                  return recalculateAllRecipeCosts(next);
-                });
+                engine.replace(adjustCatalogItem(engine.state,id,patch,currentPartner.name));
                 addAuditLog("تعديل وصفة/صنف", `تعديل رصيد/سعر صنف`);
                 showToast("✅ تم تحديث الصنف وتكلفة الوصفات!");
               });
@@ -2897,6 +2787,15 @@ export default function App() {
             employees={employees}
             transactions={employeeTransactions}
             currentPartnerName={currentPartner.name}
+            onReverseEmployeeAction={(id)=>safeAction(()=>{
+              engine.replace(reverseEmployeeAction(engine.state,id,currentPartner.name));
+              addAuditLog('شؤون عمال',`عكس حركة العامل ${id} ومصروفها`);
+            })}
+            onClosePayrollPeriod={(id)=>safeAction(()=>{
+              if(engine.hasPending) throw new Error('انتظر اكتمال حفظ التعديلات قبل إقفال شهر آخر');
+              engine.replace(closePayrollPeriod(engine.state,id,currentPartner.id));
+              addAuditLog('شؤون عمال',`إقفال شهر العامل ${id} وترحيل المستحقات`);
+            })}
             onRecordEmployeeAction={(...args) =>
               safeAction(() => handleRecordEmployeeAction(...args))
             }
@@ -2921,6 +2820,8 @@ export default function App() {
                 }
                 const created: Employee = {
                   ...newEmp,
+                  payrollPeriod: currentPayrollPeriod(),
+                  openingPayable: 0,
                   id: crypto.randomUUID(),
                 };
                 setEmployees((prev) => [created, ...prev]);
@@ -3036,7 +2937,7 @@ export default function App() {
             onRestoreBackupJson={(data) => {
               safeAction(() => {
                 const restored = parseBackup(data);
-                engine.replace(restored);
+                engine.restore(restored);
                 showToast(
                   "تم التحقق من النسخة واسترجاعها؛ تابع تأكيد الحفظ أعلى الشاشة.",
                 );

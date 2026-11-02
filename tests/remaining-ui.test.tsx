@@ -126,6 +126,7 @@ it("keeps the payroll amount editable after rejecting an overpayment and permits
     "صرف راتب",
     100,
     expect.any(String),
+    "درج المحل",
   );
 });
 it("rejects a blank inventory count rather than applying the previous valid number", () => {

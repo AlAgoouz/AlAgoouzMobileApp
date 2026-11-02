@@ -2549,7 +2549,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                     {e.amount} ج.م
                   </span>
                   <button
-                    disabled={e.isCancelled || Boolean(e.sourceInvoiceId)}
+                    disabled={e.isCancelled || Boolean(e.sourceInvoiceId) || Boolean(e.sourceEmployeeTransactionId)}
                     title="إلغاء المصروف مع حفظ السجل"
                     onClick={() => onDeleteExpense(e.id)}
                     className="p-1 text-red-500 hover:bg-red-50 rounded-lg"
