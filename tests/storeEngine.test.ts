@@ -2,6 +2,32 @@ import { it, expect, vi, afterEach } from 'vitest';
 import { StoreEngine, type StoreTransport } from '../src/lib/storeEngine';
 import { emptyStore } from '../src/lib/storeState';
 afterEach(() => vi.useRealTimers());
+it('checks a small version without reloading unchanged data and deduplicates refresh requests', async () => {
+  const {engine,transport}=setup();
+  await engine.load();
+  let resolveVersion!:(version:number)=>void;
+  transport.getVersion=vi.fn(()=>new Promise<number>(resolve=>{resolveVersion=resolve;}));
+  const first=engine.refresh(),second=engine.refresh();
+  expect(first).toBe(second);
+  resolveVersion(1);await first;
+  expect(transport.load).toHaveBeenCalledTimes(1);
+  expect(engine.snapshot.status).toBe('ready');
+  transport.getVersion=vi.fn(async()=>2);
+  transport.load=vi.fn(async()=>({state:structuredClone(emptyStore),version:2}));
+  await engine.refresh();
+  expect(transport.load).toHaveBeenCalledTimes(1);
+  expect(engine.snapshot.version).toBe(2);
+});
+it('preserves conflict protection when a newer version is found by the light check',async()=>{
+  vi.useFakeTimers();
+  const {engine,transport}=setup();await engine.load();
+  transport.getVersion=vi.fn(async()=>2);
+  transport.load=vi.fn(async()=>({state:structuredClone(emptyStore),version:2}));
+  engine.replace(structuredClone(emptyStore));await engine.refresh();
+  expect(engine.snapshot.status).toBe('conflict');
+  expect(engine.hasPending).toBe(true);
+  expect(transport.save).not.toHaveBeenCalled();
+});
 it('keeps owner restore mode and operation ID when retrying an uncertain save', async () => {
   vi.useFakeTimers();
   const { engine, transport } = setup();

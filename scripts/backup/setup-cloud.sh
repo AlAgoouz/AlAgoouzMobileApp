@@ -9,5 +9,13 @@ sudo apt-get install -y postgresql-client-18
 curl --fail --silent --show-error -o "$RUNNER_TEMP/rclone.zip" https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.zip
 echo "349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702  $RUNNER_TEMP/rclone.zip" | sha256sum --check
 unzip -q "$RUNNER_TEMP/rclone.zip" -d "$RUNNER_TEMP/rclone"
-docker pull public.ecr.aws/supabase/postgres:17.11.0.004
-docker pull public.ecr.aws/supabase/gotrue:v2.197.0
+pull_image() {
+  for attempt in 1 2 3; do
+    if docker pull "$1"; then return 0; fi
+    if [ "$attempt" -lt 3 ]; then sleep 5; fi
+  done
+  return 1
+}
+pull_image public.ecr.aws/supabase/postgres:17.11.0.004
+pull_image public.ecr.aws/supabase/gotrue:v2.197.0
+pull_image public.ecr.aws/supabase/storage-api:v1.87.2

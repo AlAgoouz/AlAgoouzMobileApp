@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import {RecordPagination,useRecordPage} from './RecordPagination';
 import {
   ChevronRight,
   ChevronLeft,
@@ -2074,6 +2075,12 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
 }) => {
   const [selectedReceiptInv, setSelectedReceiptInv] =
     useState<SalesInvoice | null>(null);
+  const [invoiceSearch,setInvoiceSearch]=useState('');
+  const matchingInvoices=useMemo(()=>{
+    const q=invoiceSearch.trim().toLocaleLowerCase();
+    return q?salesInvoices.filter(inv=>[inv.invoiceNumber,inv.customerName,inv.date,...inv.items.map(line=>line.itemName)].some(text=>text.toLocaleLowerCase().includes(q))):salesInvoices;
+  },[salesInvoices,invoiceSearch]);
+  const invoicePage=useRecordPage(matchingInvoices,invoiceSearch);
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
@@ -2089,6 +2096,8 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
         </h1>
         <button
           onClick={() => window.print()}
+          aria-label="طباعة الصفحة الحالية"
+          title="طباعة الصفحة الحالية"
           className="p-1.5 rounded-xl hover:bg-white/10 text-[#D4AF37]"
         >
           <Printer className="w-5 h-5" />
@@ -2096,12 +2105,14 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
       </div>
 
       <div className="p-3.5 space-y-3">
-        {salesInvoices.length === 0 ? (
+        <input aria-label="بحث في كل الفواتير" placeholder="رقم الفاتورة أو العميل أو التاريخ أو الصنف" value={invoiceSearch} onChange={event=>setInvoiceSearch(event.target.value)} className="w-full rounded-xl border border-[#E6DEC8] p-3 text-sm" />
+        <RecordPagination {...invoicePage} />
+        {matchingInvoices.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 text-center text-xs text-[#7A6855] border border-[#E6DEC8]">
-            لا توجد فواتير مسجلة حالياً.
+            {invoiceSearch.trim() ? 'لا توجد فواتير مطابقة للبحث.' : 'لا توجد فواتير مسجلة حالياً.'}
           </div>
         ) : (
-          salesInvoices.map((inv) => (
+          invoicePage.visible.map((inv) => (
             <div
               key={inv.id}
               className={`bg-white rounded-2xl p-3.5 border shadow-sm space-y-2.5 ${
@@ -2188,6 +2199,7 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
         )}
       </div>
 
+      <div className="px-3.5"><RecordPagination {...invoicePage} /></div>
       {selectedReceiptInv && (
         <InvoiceReceiptModal
           invoice={selectedReceiptInv}

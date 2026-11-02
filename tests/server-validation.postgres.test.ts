@@ -23,6 +23,12 @@ function save(value:any){return sql(`begin;set local request.jwt.claim.sub='${ow
 const accept=(store:StoreState)=>expect(save(toCloud(store))).toContain('"version": 1');
 const reject=(store:StoreState,reason:string)=>{expect(()=>save(toCloud(store))).toThrow(reason);expect(sql("select version from public.bon_elagouz_store where id='main_store'")).toBe('0');};
 it.skipIf(!active)('accepts an actual complete store through the versioned API',()=>expect(save(toCloud(state))).toContain('"version": 1'));
+it.skipIf(!active)('publishes a small protected version row in the same financial transaction',()=>{
+  expect(sql(`begin;set local request.jwt.claim.sub='${owner}';set local role authenticated;select public.bon_erp_save_store(0,${literal(toCloud(state))},gen_random_uuid(),null);select version from public.bon_erp_store_versions where id='main_store';rollback;`)).toContain('\n1');
+  expect(sql("select version from public.bon_erp_store_versions where id='main_store'")).toBe('0');
+  expect(()=>sql("begin;set local role anon;select * from public.bon_erp_store_versions;rollback;")).toThrow('permission denied');
+  expect(()=>sql("begin;set local role authenticated;update public.bon_erp_store_versions set version=5;rollback;")).toThrow('permission denied');
+});
 it.skipIf(!active).each([
   ['missing-fields',{...toCloud(state),items:[{id:'bad'}]}],
   ['numeric-string',{...toCloud(state),partners:[{...state.partners[0],sharePercent:'100'}]}],
@@ -112,4 +118,10 @@ it.skipIf(!active)('restricts snapshot restoration to the verified owner and sep
 it.skipIf(!active)('does not expose privileged validation helpers or direct table updates',()=>{
   expect(sql("select has_function_privilege('authenticated','bon_erp_private.validate_changes(jsonb,jsonb)','EXECUTE')")).toBe('f');
   expect(()=>sql("begin;set local role authenticated;update public.bon_elagouz_store set items='[]' where id='main_store';rollback;")).toThrow('permission denied');
+});
+it.skipIf(!active)('lets only the backup principal read private files without acquiring ERP or storage write access',()=>{
+  const reader='33333333-3333-4333-8333-333333333333';
+  expect(sql(`begin;insert into auth.users values('${reader}','backup@local.test',now());insert into bon_erp_private.storage_backup_principal values(true,'${reader}');insert into storage.objects values(gen_random_uuid(),'private','nested/file.bin');set local request.jwt.claim.sub='${reader}';set local role authenticated;select name from storage.objects;select count(*) from public.bon_elagouz_store;rollback;`)).toBe('nested/file.bin\n0');
+  expect(()=>sql(`begin;set local role authenticated;insert into storage.objects values(gen_random_uuid(),'private','bad');rollback;`)).toThrow('permission denied');
+  expect(()=>sql(`begin;set local role authenticated;delete from storage.objects;rollback;`)).toThrow('permission denied');
 });

@@ -16,6 +16,7 @@ export interface StoreSnapshot {
 }
 export interface StoreTransport {
   load(): Promise<{ state: StoreState; version: number }>;
+  getVersion?(): Promise<number>;
   save(
     state: StoreState,
     version: number,
@@ -38,6 +39,7 @@ export class StoreEngine {
     | undefined;
   private epoch = 0;
   private batchState: StoreState | undefined;
+  private refreshInFlight: Promise<void> | undefined;
   constructor(
     private transport: StoreTransport,
     private preserve: (state: StoreState) => void = () => {},
@@ -190,7 +192,15 @@ export class StoreEngine {
       });
     }
   }
-  async refresh() {
+  refresh(): Promise<void> {
+    if (this.refreshInFlight) return this.refreshInFlight;
+    const pending = this.refreshOnce().finally(() => {
+      if (this.refreshInFlight === pending) this.refreshInFlight = undefined;
+    });
+    this.refreshInFlight = pending;
+    return pending;
+  }
+  private async refreshOnce() {
     if (
       this.snapshot.status === 'signed-out' ||
       this.snapshot.status === 'loading' ||
@@ -199,6 +209,11 @@ export class StoreEngine {
       return;
     const epoch = this.epoch;
     try {
+      if (this.transport.getVersion) {
+        const version = await this.transport.getVersion();
+        if (!Number.isSafeInteger(version) || version < 0) throw new Error('لم يصل إصدار تحديث صالح');
+        if (epoch !== this.epoch || version <= this.snapshot.version) return;
+      }
       const remote = await this.transport.load();
       if (epoch !== this.epoch || remote.version <= this.snapshot.version)
         return;

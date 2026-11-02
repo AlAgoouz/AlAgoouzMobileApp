@@ -1,0 +1,54 @@
+{
+  "label": "current",
+  "conditions": {
+    "invoices": 10000,
+    "cpuSlowdown": 6,
+    "downloadKbps": 400,
+    "uploadKbps": 200,
+    "latencyMs": 400,
+    "viewport": "360x740",
+    "sampleLimitMs": 90000,
+    "physicalPhoneTest": false
+  },
+  "samples": [
+    {
+      "homeReadyMs": 10980.595281,
+      "invoiceReadyMs": 2039.3139630000005,
+      "nodes": 1641,
+      "renderedInvoices": 50,
+      "lcpMs": 10696,
+      "refreshWireBytes": 99,
+      "phase": "complete",
+      "timedOut": false
+    },
+    {
+      "homeReadyMs": 10995.908911999999,
+      "invoiceReadyMs": 2021.0267779999995,
+      "nodes": 1641,
+      "renderedInvoices": 50,
+      "lcpMs": 10720,
+      "refreshWireBytes": 99,
+      "phase": "complete",
+      "timedOut": false
+    },
+    {
+      "homeReadyMs": 10984.210815999999,
+      "invoiceReadyMs": 1990.6284279999963,
+      "nodes": 1641,
+      "renderedInvoices": 50,
+      "lcpMs": 10704,
+      "refreshWireBytes": 99,
+      "phase": "complete",
+      "timedOut": false
+    }
+  ],
+  "median": {
+    "homeReadyMs": 10984.210815999999,
+    "invoiceReadyMs": 2021.0267779999995,
+    "nodes": 1641,
+    "renderedInvoices": 50,
+    "lcpMs": 10704,
+    "refreshWireBytes": 99
+  },
+  "evidenceRun": "https://github.com/AlAgoouz/AlAgoouzMobileApp/actions/runs/41386693624"
+}
