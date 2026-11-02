@@ -2935,13 +2935,15 @@ export default function App() {
               }
             }}
             onRestoreBackupJson={(data) => {
-              safeAction(() => {
+              try {
                 const restored = parseBackup(data);
                 engine.restore(restored);
                 showToast(
                   "تم التحقق من النسخة واسترجاعها؛ تابع تأكيد الحفظ أعلى الشاشة.",
                 );
-              });
+              } catch (error) {
+                showToast(error instanceof Error ? error.message : 'تعذر استرجاع النسخة');
+              }
             }}
             onLogout={handleLogout}
             onNavigate={(sc) => setActiveScreen(sc)}

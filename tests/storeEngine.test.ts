@@ -7,6 +7,8 @@ it('keeps owner restore mode and operation ID when retrying an uncertain save', 
   const { engine, transport } = setup();
   await engine.load();
   transport.save = vi.fn().mockRejectedValueOnce(new Error('network')).mockResolvedValue(2);
+  expect(() => engine.transaction(() => engine.restore(emptyStore))).toThrow();
+  expect(engine.hasPending).toBe(false);
   engine.restore(structuredClone(emptyStore));
   expect(() => engine.restore(emptyStore)).toThrow();
   await engine.flush();
