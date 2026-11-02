@@ -1,4 +1,5 @@
 node_modules/
+.agouz-recovery-temp/
 dist/
 .env
 .env.local
