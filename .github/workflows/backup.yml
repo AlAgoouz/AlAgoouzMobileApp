@@ -25,6 +25,10 @@ jobs:
           AGOUZ_DATABASE_URL: ${{ secrets.AGOUZ_DATABASE_URL }}
           AGOUZ_BACKUP_KEY: ${{ secrets.AGOUZ_BACKUP_KEY }}
           AGOUZ_DRIVE_CONFIG: ${{ secrets.AGOUZ_DRIVE_CONFIG }}
+          AGOUZ_STORAGE_READER_JSON: ${{ secrets.AGOUZ_STORAGE_READER_JSON }}
+          AGOUZ_SETTINGS_READ_TOKEN: ${{ secrets.AGOUZ_SETTINGS_READ_TOKEN }}
+          AGOUZ_RECOVERY_CONFIG_JSON: ${{ secrets.AGOUZ_RECOVERY_CONFIG_JSON }}
+          AGOUZ_REQUIRE_PROVIDER_SETTINGS: "true"
           AGOUZ_BACKUP_ROOT: ${{ runner.temp }}/agouz-backup
           AGOUZ_PG_BIN: /usr/lib/postgresql/18/bin
           AGOUZ_RCLONE: ${{ runner.temp }}/rclone/rclone-v1.75.2-linux-amd64/rclone
