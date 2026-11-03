@@ -1,3 +1,4 @@
+import {canView,canWrite} from './lib/userAccess';
 import {SectionsHub} from './components/SectionsHub';
 import type {QueuedCashierReport} from './components/CashierDayScreen';
 import {attachCashierReport,approveCashierDay,salesForReports} from './lib/cashierDays';
@@ -78,6 +79,8 @@ import {
   exportFullStoreExcel,
 } from "./lib/backupExport";
 
+const UsersScreen=React.lazy(()=>import('./components/UsersScreen').then(m=>({default:m.UsersScreen})));
+const CashierUploadScreen=React.lazy(()=>import('./components/CashierUploadScreen').then(m=>({default:m.CashierUploadScreen})));
 const WholesaleInvoiceScreen=React.lazy(()=>import('./components/WholesaleInvoiceScreen').then(m=>({default:m.WholesaleInvoiceScreen})));
 const CashierDayScreen=React.lazy(()=>import('./components/CashierDayScreen').then(m=>({default:m.CashierDayScreen})));
 
@@ -200,8 +203,10 @@ export default function App() {
     null,
   );
 
+  const [selectedFinancialPartnerId,setSelectedFinancialPartnerId]=useState('');
   const cloud = useErpStore();
   const { engine, member } = cloud;
+  useEffect(()=>setSelectedFinancialPartnerId(''),[member?.userId,member?.partnerId]);
   const confirmSave=async()=>{await engine.flush();if(engine.snapshot.status!=='ready')throw Error(engine.snapshot.error||'لم يصل تأكيد اعتماد العملية؛ راجع حالة الحفظ');};
   const loggedPartnerId = member?.partnerId ?? null;
   const {
@@ -221,8 +226,10 @@ export default function App() {
     accountPayments,
   } = cloud.state;
   const reportSales=useMemo(()=>salesForReports({salesInvoices,cashierDays}),[salesInvoices,cashierDays]);
-  const currentPartner =
-    partners.find((p) => p.id === loggedPartnerId) || unloadedPartner;
+  const linkedFinancialPartner=partners.find(p=>p.id===loggedPartnerId);
+  const financialPartner=partners.find(p=>p.id===(selectedFinancialPartnerId||loggedPartnerId));
+  const currentPartner={...(linkedFinancialPartner??unloadedPartner),id:linkedFinancialPartner?.id??'user:'+member?.userId,name:member?.displayName||linkedFinancialPartner?.name||'مستخدم',username:member?.username??'',role:member?.isOwner?'مالك النظام':'مستخدم النظام'};
+  const requireFinancialPartner=()=>{if(!financialPartner)throw Error('اختر حساب الشريك المالي للحركة؛ حساب المستخدم لا ينشئ حصة مالية');return financialPartner;};
   const safeAction = (action: () => void) => {
     try {
       engine.transaction(action);
@@ -758,7 +765,7 @@ export default function App() {
 
   // 6. تسجيل حركة للعامل (سلفة، يومية حضور، خصم/عجز، مكافأة، صرف راتب)
   const handleRecordEmployeeAction = (employeeId:string,type:EmployeeTransaction['type'],amount:number,notes:string,paidFrom?:EmployeeTransaction['paidFrom']) => {
-    engine.replace(recordEmployeeAction(engine.state,employeeId,type,amount,notes,currentPartner.id,paidFrom));
+    engine.replace(recordEmployeeAction(engine.state,employeeId,type,amount,notes,requireFinancialPartner().id,paidFrom));
     addAuditLog('شؤون عمال', `${type} للعامل: ${employeeId} — ${notes}`,amount);
     showToast('تم تسجيل حركة العامل وربط الصرف بمصروفه؛ تابع تأكيد الحفظ.');
   };
@@ -959,7 +966,7 @@ export default function App() {
       </div>
     );
   if (cloud.passwordRecovery) return <PasswordRecoveryScreen passwordUpdated={cloud.recoveryPasswordUpdated} onUpdatePassword={cloud.updateRecoveredPassword} onCancel={cloud.cancelPasswordRecovery} />;
-  if (!loggedPartnerId)
+  if (!member)
     return (
       <LoginScreen
         onSignIn={cloud.signIn}
@@ -968,9 +975,9 @@ export default function App() {
         authError={cloud.authError}
       />
     );
-  const blocked =
-    !["ready", "dirty"].includes(cloud.status) ||
-    !partners.some((p) => p.id === loggedPartnerId);
+  if(member.role==='cashier')return <CashierUploadScreen name={member.displayName} onLogout={handleLogout}/>;
+  if(!canView(member))return <main dir="rtl" className="agouz-login"><section className="login-panel p-6 space-y-4"><h1 className="font-black">الحساب غير مخوّل لعرض بيانات المحل</h1><p>اطلب من المالك تحديد صلاحياتك ثم سجّل الدخول مجددًا.</p><button className="login-submit w-full" onClick={handleLogout}>تسجيل الخروج</button></section></main>;
+  const blocked = !["ready", "dirty"].includes(cloud.status);
   const statusText =
     cloud.status === "saving"
       ? "جارٍ الحفظ على السحابة…"
@@ -1699,11 +1706,12 @@ export default function App() {
         {activeScreen === "sections" && <SectionsHub
           counts={{products:items.length,inventory:items.length,purchase:purchaseInvoices.length,sales_invoices:salesInvoices.length+cashierDays.filter(d=>d.status==='approved').length,customers:customers.length,suppliers:suppliers.length,staff_payroll:employees.length,shortages:shortagesCount}}
           onNavigate={(screen)=>{
-            if(screen==='expenses'||screen==='data_control'){setMoreInitialTab(screen);setActiveScreen('more');}
+            if(screen==='expenses'||screen==='data_control'||screen==='partners'){setMoreInitialTab(screen);setActiveScreen('more');}
             else setActiveScreen(screen);
           }}
         />}
 
+        {activeScreen==='users'&&<UsersScreen access={member} partners={partners} onBack={()=>setActiveScreen('sections')}/>}
         {/* ================= الشاشات الفرعية ================= */}
         {activeScreen === "purchase" && (
           <PurchaseScreen
@@ -2200,7 +2208,7 @@ export default function App() {
           <StocktakingScreen
             items={items}
             auditRecords={stocktakingRecords}
-            employees={employees}
+            employees={canWrite(member,'staff')?employees:[]}
             currentPartnerName={currentPartner.name}
             onCommitStocktaking={(...args) =>
               safeAction(() => handleCommitStocktaking(...args))
@@ -2209,7 +2217,8 @@ export default function App() {
           />
         )}
 
-        {activeScreen === "staff_payroll" && (
+        {activeScreen === "staff_payroll" && (<>
+          <label className="block m-4 text-xs font-bold">حساب الشريك المالي للحركة<select aria-label="حساب الشريك المالي للحركة" className="block w-full border rounded-xl p-3 mt-2" value={financialPartner?.id??''} onChange={e=>setSelectedFinancialPartnerId(e.target.value)}><option value="">اختر الحساب المالي</option>{partners.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
           <StaffAndPayrollScreen
             employees={employees}
             transactions={employeeTransactions}
@@ -2220,7 +2229,7 @@ export default function App() {
             })}
             onClosePayrollPeriod={(id)=>safeAction(()=>{
               if(engine.hasPending) throw new Error('انتظر اكتمال حفظ التعديلات قبل إقفال شهر آخر');
-              engine.replace(closePayrollPeriod(engine.state,id,currentPartner.id));
+              engine.replace(closePayrollPeriod(engine.state,id,requireFinancialPartner().id));
               addAuditLog('شؤون عمال',`إقفال شهر العامل ${id} وترحيل المستحقات`);
             })}
             onRecordEmployeeAction={(...args) =>
@@ -2270,7 +2279,7 @@ export default function App() {
             }}
             onBack={() => setActiveScreen("home")}
           />
-        )}
+        </>)}
 
         {activeScreen === "more" && (
           <MoreMenuScreen
@@ -2278,12 +2287,17 @@ export default function App() {
             partners={partners}
             auditLogs={auditLogs}
             currentPartner={currentPartner}
+            canManageData={member.isOwner}
+            canEditPartners={canWrite(member,'partners')}
+            onSavePartners={(next)=>safeAction(()=>{engine.field('partners',next);})}
+            selectedFinancialPartnerId={financialPartner?.id??''}
+            onSelectFinancialPartnerId={setSelectedFinancialPartnerId}
             initialSubPage={moreInitialTab}
             showDemoTools={getSupabaseCredentials().url.startsWith("http://127.0.0.1:")}
             onAddExpense={(exp) =>
               safeAction(() => {
                 engine.replace(
-                  recordExpense(engine.snapshot.state, exp, currentPartner.id),
+                  recordExpense(engine.snapshot.state, {...exp,partnerName:requireFinancialPartner().name}, requireFinancialPartner().id),
                 );
                 addAuditLog("مصروف", exp.title, exp.amount);
                 showToast(
@@ -2363,6 +2377,7 @@ export default function App() {
             }}
             onRestoreBackupJson={(data) => {
               try {
+                if(!member.isOwner)throw Error('استعادة البيانات متاحة للمالك الرئيسي فقط');
                 const restored = parseBackup(data);
                 engine.restore(restored);
                 showToast(

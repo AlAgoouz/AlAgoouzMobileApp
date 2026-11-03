@@ -14,6 +14,48 @@ import type {SalesInvoice,InventoryItem} from '../src/types/erp';
 const active=!!process.env.AGOUZ_TEST_PG_CONTAINER;
 const owner='11111111-1111-4111-8111-111111111111';
 const state={...emptyStore,partners:[{...INITIAL_PARTNERS[0],id:'p1',sharePercent:100,totalPaidFromPocket:0,totalWithdrawals:0}]};
+function asUser(id:string,query:string){return sql(`begin;select set_config('request.jwt.claim.sub','${id}',true);set local role authenticated;${query};rollback;`);}
+function userAccessFixture(id:string,permissions:Record<string,boolean>,role='partner',disabled=false){
+ sql(`insert into auth.users values('${id}','user-${id}@local.test',now());`);
+ sql(`begin;select set_config('request.jwt.claim.sub','${owner}',true);set local role authenticated;select public.bon_erp_set_user_access('${id}','user_${id.slice(-4)}','Employee','${role}',null,${literal(permissions)},${disabled},false);commit;`);
+}
+it.skipIf(!active)('creates an unlinked login membership without adding or changing financial partners',()=>{
+ const id='22222222-2222-4222-8222-222222220001';const before=sql("select partners::text from public.bon_elagouz_store where id='main_store'");
+ userAccessFixture(id,{view:true,sales:true});
+ expect(sql("select partners::text from public.bon_elagouz_store where id='main_store'")).toBe(before);
+ const access=asUser(id,"select public.bon_erp_my_access()");expect(access).toContain('"partner_id": null');expect(access).toContain('"is_owner": false');
+ expect(sql(`select count(*) from bon_erp_private.user_access_events where actor_id='${owner}' and target_id='${id}'`)).toBe('1');
+});
+it.skipIf(!active)('protects the master against direct deletion, disabling and permission reduction',()=>{
+ for(const statement of [`delete from auth.users where id='${owner}'`,`delete from public.erp_members where user_id='${owner}'`,`update public.erp_members set disabled_at=now() where user_id='${owner}'`,`update public.erp_members set access_permissions='{}' where user_id='${owner}'`])expect(()=>sql(statement)).toThrow('MASTER_ACCOUNT_PROTECTED');
+});
+it.skipIf(!active)('keeps a read-only unlinked account out of writes and account administration',()=>{
+ const id='22222222-2222-4222-8222-222222220002';userAccessFixture(id,{view:true});
+ expect(asUser(id,"select count(*) from public.bon_elagouz_store").split('\n').at(-1)).toBe('1');
+ expect(()=>asUser(id,`select public.bon_erp_save_store(0,${literal(toCloud(state))},'${crypto.randomUUID()}')`)).toThrow('USER_PERMISSION_DENIED');
+ expect(()=>asUser(id,'select public.bon_erp_list_users()')).toThrow('OWNER_REQUIRED');
+ expect(()=>asUser(id,`select public.bon_erp_set_user_access('${id}','self_admin','Self','partner',null,'{"view":true,"partners":true}',false,false)`)).toThrow('OWNER_REQUIRED');
+});
+it.skipIf(!active)('enforces section permissions in the database even when the client is bypassed',()=>{
+ const salesId='22222222-2222-4222-8222-222222220003',catalogId='22222222-2222-4222-8222-222222220004';
+ userAccessFixture(salesId,{view:true,sales:true});userAccessFixture(catalogId,{view:true,catalog:true});
+ const before=stockState();seed(before);const next={...before,items:[{...bean,name:'Renamed by catalog editor'}]};
+ expect(()=>asUser(salesId,`select public.bon_erp_save_store(0,${literal(toCloud(next))},'${crypto.randomUUID()}')`)).toThrow('USER_PERMISSION_DENIED');
+ expect(()=>asUser(catalogId,`select public.bon_erp_save_store(0,${literal(toCloud(next))},'${crypto.randomUUID()}')`)).not.toThrow();
+});
+it.skipIf(!active)('keeps cashier accounts upload-only and revokes upload immediately when disabled',()=>{
+ const id='22222222-2222-4222-8222-222222220005';userAccessFixture(id,{},'cashier');
+ expect(asUser(id,'select count(*) from public.bon_elagouz_store').split('\n').at(-1)).toBe('0');
+ const upload=`select public.bon_erp_enqueue_export('cashier.csv','2026-11-03','[{"Name":"Coffee","Quantity":1}]','${'c'.repeat(64)}')`;
+ expect(()=>asUser(id,upload)).not.toThrow();
+ sql(`update public.erp_members set disabled_at=now() where user_id='${id}'`);
+ expect(asUser(id,'select public.bon_erp_my_access() is null').split('\n').at(-1)).toBe('t');
+ expect(()=>asUser(id,upload)).toThrow('USER_PERMISSION_DENIED');
+});
+it.skipIf(!active)('allows the master to unlink its financial profile while keeping its system identity',()=>{
+ const query=`select public.bon_erp_set_user_access('${owner}','owner','Owner','partner',null,'{"view":true,"catalog":true,"purchases":true,"sales":true,"cashier":true,"production":true,"stocktaking":true,"contacts":true,"collections":true,"staff":true,"expenses":true,"partners":true}',false,false);select public.bon_erp_my_access()`;
+ const result=asUser(owner,query);expect(result).toContain('"partner_id": null');expect(result).toContain('"is_owner": true');
+});
 beforeAll(()=>{if(active){setup();sql(`insert into auth.users values('${owner}','test@local.test',now());insert into public.erp_members(user_id,username,partner_id,role)values('${owner}','owner','p1','partner');insert into bon_erp_private.owner_config(id,email)values(true,'test@local.test');`);}},120000);
 function seed(store:StoreState){
   const fields=Object.entries(toCloud(store));

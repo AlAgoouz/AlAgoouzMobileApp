@@ -40,7 +40,7 @@ export async function verifyDesign(){
       await page.setViewportSize({width,height:800});await limit(page,`sections-${width}`);evidence.widths.push(width);
     }
     await page.setViewportSize({width:360,height:800});
-    const titles=await page.locator('.section-tile-title').allTextContents();assert.equal(titles.length,15);
+    const titles=await page.locator('.section-tile-title').allTextContents();assert.equal(titles.length,17);
     for(const title of titles){
       await page.locator('.section-tile').filter({has:page.locator('.section-tile-title',{hasText:title})}).click();
       await page.locator('.sections-hub').waitFor({state:'hidden'});

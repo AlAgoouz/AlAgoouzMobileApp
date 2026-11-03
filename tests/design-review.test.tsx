@@ -57,7 +57,7 @@ it('prevents concurrent recovery requests and mode changes until a response arri
 });
 it('routes every section and searches Arabic section names with a useful empty state',()=>{
  const navigate=vi.fn();render(<SectionsHub counts={{shortages:3}} onNavigate={navigate}/>);
- expect(screen.getAllByRole('button').length).toBe(16);
+ expect(screen.getAllByRole('button').length).toBe(18);
  fireEvent.click(screen.getByRole('button',{name:/المصاريف/}));expect(navigate).toHaveBeenLastCalledWith('expenses');
  fireEvent.click(screen.getByRole('button',{name:/النواقص/}));expect(navigate).toHaveBeenLastCalledWith('shortages');
  fireEvent.change(screen.getByRole('textbox',{name:'ابحث في الأقسام'}),{target:{value:'انتاج'}});
@@ -65,5 +65,5 @@ it('routes every section and searches Arabic section names with a useful empty s
  expect(screen.queryByRole('button',{name:/فواتير الجملة/})).toBeNull();
  fireEvent.change(screen.getByRole('textbox',{name:'ابحث في الأقسام'}),{target:{value:'missing'}});
  expect(screen.getByRole('status').textContent).toContain('مفيش قسم');
- fireEvent.click(screen.getByRole('button',{name:'عرض كل الأقسام'}));expect(screen.getAllByRole('button').length).toBe(16);
+ fireEvent.click(screen.getByRole('button',{name:'عرض كل الأقسام'}));expect(screen.getAllByRole('button').length).toBe(18);
 });

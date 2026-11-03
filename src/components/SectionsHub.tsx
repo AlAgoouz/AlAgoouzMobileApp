@@ -14,6 +14,8 @@ const links: SectionLink[] = [
   {id:'customers',title:'عملاء الجملة',description:'بيانات العملاء والمديونيات والتحصيل',icon:Users,group:'الحسابات والإدارة',tone:'blue'},
   {id:'suppliers',title:'الموردين',description:'المشتريات ومقارنة أسعار الموردين',icon:Truck,group:'الحسابات والإدارة',tone:'green'},
   {id:'staff_payroll',title:'العمال والرواتب',description:'المستحقات والسلف وحركات العاملين',icon:UserCheck,group:'الحسابات والإدارة',tone:'gold'},
+  {id:'users',title:'المستخدمين',description:'حساب المالك وحسابات الدخول والصلاحيات',icon:UserCheck,group:'الحسابات والإدارة',tone:'blue'},
+  {id:'partners',title:'الشركاء والحصص',description:'نسب الملكية والمساهمات والمسحوبات',icon:Users,group:'الحسابات والإدارة',tone:'gold'},
   {id:'sales_invoices',title:'فواتير البيع',description:'سجل الجملة وأيام الكاشير',icon:FileText,group:'الحسابات والإدارة',tone:'blue'},
   {id:'expenses',title:'المصاريف',description:'المصروفات اليومية والشهرية الثابتة',icon:Wallet,group:'الحسابات والإدارة',tone:'rose'},
   {id:'reports',title:'التقارير والأرباح',description:'النتائج المالية ونصيب الشركاء',icon:BarChart3,group:'الحسابات والإدارة',tone:'green'},
