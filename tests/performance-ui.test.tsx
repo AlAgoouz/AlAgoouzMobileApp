@@ -21,11 +21,11 @@ it('keeps a large invoice history searchable and actionable while rendering only
 it('keeps report totals over the complete history when its invoice list is paginated and searched',()=>{
  const data=fixture(1000);
  render(<ProfitReportsScreen items={data.items} salesInvoices={data.sales_invoices} expenses={[]} partners={data.partners} onBack={()=>{}}/>);
- expect(screen.getAllByText('10000.00 ج.م')).toHaveLength(2);
+ expect(screen.getByLabelText('صافي ربح الفترة').textContent).toBe('10000.00 ج.م');
  fireEvent.click(screen.getByRole('button',{name:'الفواتير',exact:true}));
  expect(screen.getAllByText(/#INV-/)).toHaveLength(50);
  fireEvent.change(screen.getByRole('textbox',{name:'بحث في كل فواتير التقرير'}),{target:{value:'INV-00999'}});
  expect(screen.getAllByText(/#INV-/)).toHaveLength(1);
  fireEvent.click(screen.getByRole('button',{name:'الملخص',exact:true}));
- expect(screen.getAllByText('10000.00 ج.م')).toHaveLength(2);
+ expect(screen.getByLabelText('صافي ربح الفترة').textContent).toBe('10000.00 ج.م');
 });

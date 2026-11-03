@@ -5,11 +5,14 @@ import fs from 'node:fs';
 export async function verifyDesign(){
   assert.equal(process.env.CI,'true','DESIGN_REVIEW_REQUIRES_ISOLATED_CI');
   const browser=await chromium.launch({headless:true});
-  const evidence={login:false,recovery:false,resend:false,recoveredPasswordForm:false,sections:[],widths:[],workspaceWidths:[],accountHasNoSectionMenu:false,reportTabsAccessible:false,pageErrors:[],layoutErrors:[]};
+  const evidence={login:false,recovery:false,resend:false,recoveredPasswordForm:false,sections:[],widths:[],workspaceWidths:[],accountHasNoSectionMenu:false,reportTabsAccessible:false,periods:false,reducedMotion:false,pageErrors:[],layoutErrors:[]};
   const origin='http://127.0.0.1:5284';
   const limit=async (page,stage)=>{
+    // Viewport updates are acknowledged before responsive styles reach the
+    // compositor. Measure the settled layout, not the previous desktop frame.
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     const layout=await page.evaluate(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width&& (r.right>innerWidth+1||r.left< -1);}).slice(0,12).map(e=>({tag:e.tagName,classes:e.className,text:e.textContent?.slice(0,90)}))}));
-    if(layout.scrollWidth>layout.width+1){evidence.layoutErrors.push({stage,...layout});console.log('Layout overflow',stage,JSON.stringify(layout));}
+    if(layout.scrollWidth>layout.width+1){const debug=await page.evaluate(()=>({scrollX,roots:[...document.querySelectorAll('html,body,#root,.agouz-app,.app-workspace,.screen-stage,.account-content,.account-access')].map(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {node:e.tagName,classes:e.className,x:r.x,width:r.width,right:r.right,display:s.display,columns:s.gridTemplateColumns,minWidth:s.minWidth,margin:s.margin,padding:s.padding};}),elements:[...document.querySelectorAll('h1,.account-access span')].slice(0,15).map(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {text:e.textContent?.slice(0,40),x:r.x,width:r.width,right:r.right,font:s.font,position:s.position,transform:s.transform};})}));evidence.layoutErrors.push({stage,...layout,debug});console.log('Layout overflow',stage,JSON.stringify({...layout,debug}));}
   };
   try {
     const context=await browser.newContext({viewport:{width:360,height:800},reducedMotion:'reduce'});
@@ -35,19 +38,28 @@ export async function verifyDesign(){
     await page.reload();await page.getByText('ملخص الإحصائيات والأرباح المباشر',{exact:true}).waitFor();
     assert.equal(await page.getByRole('button',{name:'الأقسام',exact:true}).count(),1,'Home must not duplicate the section directory');
     assert.equal(await page.getByRole('button',{name:'المزيد',exact:true}).count(),0);
+    await page.getByRole('button',{name:'كل السجل',exact:true}).click();
+    await page.getByRole('button',{name:'اليوم',exact:true}).click();
+    await page.getByRole('button',{name:'فترة محددة',exact:true}).click();
+    await page.getByLabel('بداية الفترة').fill('2026-11-04');await page.getByLabel('نهاية الفترة').fill('2026-11-03');
+    assert.equal(await page.getByRole('button',{name:'تطبيق',exact:true}).isDisabled(),true);
+    await page.getByLabel('بداية الفترة').fill('2026-11-01');await page.getByRole('button',{name:'تطبيق',exact:true}).click();
+    await page.getByRole('button',{name:'كل السجل',exact:true}).click();evidence.periods=true;
+    assert.equal(await page.locator('.screen-stage').evaluate(e=>getComputedStyle(e).animationName),'none');evidence.reducedMotion=true;
     for(const width of [320,360,430,768,1024,1440]){
       await page.setViewportSize({width,height:900});await limit(page,`home-${width}`);
       const used=await page.locator('.app-workspace').evaluate(e=>e.getBoundingClientRect().width);evidence.workspaceWidths.push({viewport:width,used});
-      if(width>=768)assert.ok(used>=Math.min(width,1280)-2,'Workspace must use the available desktop/tablet width');
+      if(width>=768)assert.ok(used>=Math.min(width-(width>=1100?252:0),1440)-2,'Workspace must use the available desktop/tablet width');
+      assert.equal(await page.locator('.agouz-app').evaluate(e=>getComputedStyle(e).paddingInlineStart),width>=1100?'252px':'0px','Sidebar space must reset after changing viewport');
     }
     await page.screenshot({path:'design-home-desktop-mobile.png',fullPage:true});
     await page.getByRole('button',{name:'حسابي',exact:true}).click();await page.getByRole('heading',{name:'حسابي',exact:true}).waitFor();
     assert.equal(await page.locator('.section-tile').count(),0);
-    assert.equal(await page.getByRole('button',{name:/قسم الإنتاج|شؤون العمال|المستخدمين|الشركاء والحصص/}).count(),0);
+    assert.equal(await page.locator('.account-content').getByRole('button',{name:/قسم الإنتاج|شؤون العمال|المستخدمين|الشركاء والحصص/}).count(),0);
     await page.getByRole('heading',{name:'صلاحيات حسابك',exact:true}).waitFor();
     evidence.accountHasNoSectionMenu=true;await limit(page,'account-desktop');
     await page.screenshot({path:'design-account-desktop-mobile.png',fullPage:true});
-    await page.setViewportSize({width:360,height:800});await limit(page,'account-mobile');
+    await page.setViewportSize({width:360,height:800});await limit(page,'account-mobile');await page.screenshot({path:'design-account-mobile.png',fullPage:true});
     await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
     await page.getByRole('heading',{name:'كل شغلك، بخطوة واحدة'}).waitFor();
     await page.screenshot({path:'design-sections-mobile.png',fullPage:true});
@@ -76,6 +88,12 @@ export async function verifyDesign(){
           const rect=await button.boundingBox();assert.ok(rect&&rect.y<450,'Report tabs must be reachable above the primary navigation');
         }
         evidence.reportTabsAccessible=true;
+        await page.getByRole('button',{name:'تحليلات المحل والتنبيهات',exact:true}).click();
+        await page.getByRole('heading',{name:'تحليلات وذكاء بُن العجوز',exact:true}).waitFor();
+        assert.equal(await page.getByRole('button',{name:'كل السجل',exact:true}).getAttribute('aria-pressed'),'true','Insights must retain the selected report range');
+        await limit(page,'insights-mobile');
+        await page.getByRole('button',{name:'التقارير',exact:true}).click();
+        await page.getByRole('heading',{name:'تقارير الأرباح وحصص الشركاء',exact:true}).waitFor();
       }
       evidence.sections.push(title);
       await page.screenshot({path:`design-section-${evidence.sections.length}-mobile.png`,fullPage:true});

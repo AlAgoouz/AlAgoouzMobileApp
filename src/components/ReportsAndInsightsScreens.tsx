@@ -1,6 +1,8 @@
+import {initialPeriod,reportRange,inReportRange,buildReport,type PeriodSelection} from '../lib/reporting';
+import {PeriodSelector} from './PeriodSelector';
+import {TrendChart} from './FinancialCharts';
 import {isStockItem} from '../lib/itemPolicy';
 import { operatingExpenses } from '../lib/ledger';
-import { isInPeriod } from '../lib/dates';
 import React, { useState, useMemo } from 'react';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import {
@@ -28,6 +30,7 @@ import {
 } from '../types/erp';
 
 interface SmartInsightsProps {
+  period?:PeriodSelection;onPeriod?:(next:PeriodSelection)=>void;
   items: InventoryItem[];
   salesInvoices: SalesInvoice[];
   customers: Customer[];
@@ -36,21 +39,21 @@ interface SmartInsightsProps {
 }
 
 export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
+  period,onPeriod,
   items,
   salesInvoices,
   customers,
   onNavigate,
   onBack,
 }) => {
-  const [period, setPeriod] = useState<'today' | '7days' | '30days' | 'all'>(
-    '30days',
-  );
+  const [localPeriod,setLocalPeriod]=useState(initialPeriod);
+  const selection=period??localPeriod,range=reportRange(selection);
 
   // حسابات حقيقية 100% من بيانات المتجر
   const activeInvoices = useMemo(
     () =>
-      salesInvoices.filter((i) => !i.isReturned && isInPeriod(i.date, period)),
-    [salesInvoices, period],
+      salesInvoices.filter((i) => !i.isReturned && inReportRange(i.date,range)),
+    [salesInvoices, range.from,range.to,range.valid],
   );
 
   const totalSales = useMemo(
@@ -84,10 +87,8 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
     [items],
   );
 
-  const expectedStockProfit = Math.max(
-    0,
-    totalExpectedRetailValue - totalInventoryValue,
-  );
+  const expectedStockProfit = totalExpectedRetailValue-totalInventoryValue;
+  const estimateAvailable=!items.some(i=>isStockItem(i)&&(i.stock<0||i.stock>0&&i.retailPrice<=0));
 
   const totalCustomerDebts = useMemo(
     () => customers.reduce((sum, c) => sum + c.balance, 0),
@@ -135,29 +136,8 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
       </div>
 
       <div className="p-4 space-y-4">
-        {/* أزرار الفلتر باللون الفاتح والذهبي */}
-        <div className="flex items-center justify-center gap-2 overflow-x-auto py-1">
-          {(
-            [
-              { id: 'today', label: 'اليوم' },
-              { id: '7days', label: 'آخر 7 أيام' },
-              { id: '30days', label: 'آخر 30 يوم' },
-              { id: 'all', label: 'كل الفترات' },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setPeriod(tab.id)}
-              className={`px-4 py-2 rounded-full text-xs font-extrabold transition shrink-0 border ${
-                period === tab.id
-                  ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27] shadow-sm'
-                  : 'bg-white text-[#5C4B3E] border-[#E6DEC8] hover:border-[#C59B27]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <PeriodSelector value={selection} onChange={onPeriod??setLocalPeriod}/>
+        <p className="report-period-note">المبيعات ومجمل الربح للفترة المختارة. المخزون ومديونيات العملاء أرصدة حالية؛ مجمل الربح هنا قبل المصروفات.</p>
 
         {/* كارت التوصية الذكية الذهبي والداكن */}
         <div className="rounded-3xl bg-gradient-to-br from-[#231914] via-[#1C1410] to-[#2E2119] text-white p-5 shadow-lg border border-[#C59B27]/50 space-y-4">
@@ -176,7 +156,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
               </div>
             </div>
             <span className="bg-[#C59B27] text-[#1E1612] text-xs font-black px-3 py-1 rounded-full">
-              هامش ربح {profitMarginPercent.toFixed(1)}%
+              {totalSales>0?`هامش مجمل الربح ${profitMarginPercent.toFixed(1)}%`:'الهامش غير متاح دون مبيعات'}
             </span>
           </div>
 
@@ -208,10 +188,10 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
               </div>
               <div>
                 <div className="text-sm font-extrabold text-[#1E1612]">
-                  تحليل رأس المال والأرباح الكامنة بالمخزن
+                  المخزون ومستحقات العملاء
                 </div>
                 <div className="text-[11px] text-[#7A6855]">
-                  حساب حي من أرصدة البن والتوليفات ومديونيات الجملة
+                  أرصدة حالية منفصلة عن فترة المبيعات
                 </div>
               </div>
             </div>
@@ -223,7 +203,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
                 totalInventoryValue + totalCustomerDebts,
               ).toLocaleString('ar-EG')}{' '}
               <span className="text-sm font-bold text-[#9E7918]">
-                ج.م إجمالي الأصول
+                ج.م مخزون ومديونيات عملاء
               </span>
             </div>
           </div>
@@ -231,7 +211,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
           <div className="bg-[#FAF8F4] rounded-2xl p-3.5 space-y-2.5 text-xs border border-[#EAE2D3]">
             <div className="flex items-center justify-between">
               <span className="text-[#5C4B3E] font-semibold">
-                • تكلفة البضاعة الموجودة بالمخزن حالياً (WAC):
+                • تكلفة البضاعة الموجودة بالمخزن حاليًا:
               </span>
               <span className="font-black text-[#1E1612]">
                 {Math.round(totalInventoryValue).toLocaleString('ar-EG')} ج.م
@@ -239,10 +219,10 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[#5C4B3E] font-semibold">
-                • الأرباح المتوقعة عند بيع رصيد المخزن الحالي:
+                • فارق أسعار البيع المسجلة عن تكلفة المخزون:
               </span>
-              <span className="font-black text-emerald-700">
-                +{Math.round(expectedStockProfit).toLocaleString('ar-EG')} ج.م
+              <span className={estimateAvailable&&expectedStockProfit<0?'font-black value-negative':'font-black text-[#80673e]'}>
+                {estimateAvailable?Math.round(expectedStockProfit).toLocaleString('ar-EG')+' ج.م':'غير متاح: أسعار ناقصة أو رصيد سالب'}
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -295,7 +275,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
               {Math.round(grossProfit).toLocaleString('ar-EG')} ج.م
             </div>
             <div className="text-[11px] font-bold text-[#7A6855]">
-              هامش {profitMarginPercent.toFixed(1)}%
+              {totalSales>0?`هامش ${profitMarginPercent.toFixed(1)}%`:'غير متاح دون مبيعات'}
             </div>
           </div>
 
@@ -342,6 +322,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
 // شاشة تقارير الأرباح وتوزيع الشركاء الأربعة (ProfitReportsScreen)
 // ============================================================================
 interface ProfitReportsProps {
+  period?:PeriodSelection;onPeriod?:(next:PeriodSelection)=>void;
   onInsights?:()=>void;
   items: InventoryItem[];
   salesInvoices: SalesInvoice[];
@@ -351,6 +332,7 @@ interface ProfitReportsProps {
 }
 
 export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
+  period,onPeriod,
   onInsights,
   items,
   salesInvoices,
@@ -361,66 +343,20 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
   const [bottomTab, setBottomTab] = useState<
     'summary' | 'partners_share' | 'products' | 'invoices'
   >('summary');
+  const [localPeriod,setLocalPeriod]=useState<PeriodSelection>(()=>({...initialPeriod(),kind:'all'}));
+  const selection=period??localPeriod,range=reportRange(selection);
+  const periodReport=useMemo(()=>buildReport(salesInvoices,expenses,range),[salesInvoices,expenses,range.from,range.to,range.valid]);
   const [invoiceSearch,setInvoiceSearch]=useState('');
   const matchingInvoices=useMemo(()=>{
     const q=invoiceSearch.trim().toLocaleLowerCase();
-    return q?salesInvoices.filter(inv=>[inv.invoiceNumber,inv.customerName,inv.date].some(text=>text.toLocaleLowerCase().includes(q))):salesInvoices;
-  },[salesInvoices,invoiceSearch]);
-  const invoicePage=useRecordPage(matchingInvoices,invoiceSearch);
-
-  const activeInvoices = useMemo(
-    () => salesInvoices.filter((i) => !i.isReturned),
-    [salesInvoices],
-  );
-
-  // إجماليات حقيقية 100% من الفواتير والمصروفات المسجلة
-  const stats = useMemo(() => {
-    const sales = activeInvoices.reduce((s, i) => s + i.totalAmount, 0);
-    const cost = activeInvoices.reduce((s, i) => s + i.totalCost, 0);
-    const grossProfit = activeInvoices.reduce((s, i) => s + i.netProfit, 0);
-    const totalExpenses = operatingExpenses(expenses);
-    const netProfit = grossProfit - totalExpenses;
-
-    const cashierSales = activeInvoices
-      .filter((i) => i.saleType === 'cashier_sync' || i.saleType === 'retail')
-      .reduce((s, i) => s + i.totalAmount, 0);
-    const wholesaleSales = activeInvoices
-      .filter((i) => i.saleType === 'wholesale')
-      .reduce((s, i) => s + i.totalAmount, 0);
-
-    return {
-      sales,
-      cost,
-      grossProfit,
-      expenses: totalExpenses,
-      netProfit,
-      marginPercent: sales > 0 ? (grossProfit / sales) * 100 : 0,
-      markupPercent: cost > 0 ? (grossProfit / cost) * 100 : 0,
-      invoicesCount: activeInvoices.length,
-      itemsCount: activeInvoices.reduce((s, i) => s + i.items.length, 0),
-      cashierSales,
-      wholesaleSales,
-    };
-  }, [activeInvoices, expenses]);
-
-  // تجميع الأرباح حسب التاريخ للرسم البياني
-  const dailyChartData = useMemo(() => {
-    const grouped = new Map<string, number>();
-    for (const inv of activeInvoices) {
-      const label = inv.date;
-      grouped.set(label, (grouped.get(label) || 0) + Math.round(inv.netProfit));
-    }
-    const entries = Array.from(grouped.entries()).map(([date, value]) => ({
-      date,
-      value,
-    }));
-    return entries.sort((a, b) => a.date.localeCompare(b.date));
-  }, [activeInvoices]);
-
-  const maxBarValue = useMemo(
-    () => Math.max(...dailyChartData.map((d) => d.value), 1000),
-    [dailyChartData],
-  );
+    return q?periodReport.invoices.filter(inv=>[inv.invoiceNumber,inv.customerName,inv.date].some(text=>text.toLocaleLowerCase().includes(q))):periodReport.invoices;
+  },[periodReport.invoices,invoiceSearch]);
+  const invoicePage=useRecordPage(matchingInvoices,invoiceSearch+'|'+range.from+'|'+range.to);
+  const stats=useMemo(()=>({sales:periodReport.revenue,cost:periodReport.cost,grossProfit:periodReport.gross,expenses:periodReport.spent,netProfit:periodReport.net,
+    marginPercent:periodReport.revenue?periodReport.gross/periodReport.revenue*100:0,markupPercent:periodReport.cost?periodReport.gross/periodReport.cost*100:0,
+    invoicesCount:periodReport.active.length,itemsCount:periodReport.active.reduce((s,i)=>s+i.items.length,0),
+    cashierSales:periodReport.active.filter(i=>i.saleType!=='wholesale').reduce((s,i)=>s+i.totalAmount,0),wholesaleSales:periodReport.active.filter(i=>i.saleType==='wholesale').reduce((s,i)=>s+i.totalAmount,0)}),[periodReport]);
+  const cumulativeNet=useMemo(()=>salesInvoices.filter(i=>!i.isReturned).reduce((sum,i)=>sum+i.netProfit,0)-operatingExpenses(expenses),[salesInvoices,expenses]);
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24 flex flex-col">
@@ -490,7 +426,8 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
           <span className="text-[11px]">الفواتير</span>
         </button>
       </div>
-      <div className="p-4 space-y-4 flex-1">
+      <div className="report-period"><PeriodSelector value={selection} onChange={onPeriod??setLocalPeriod}/><p className="report-period-note">الفترة تطبّق على الملخص والفواتير والرسم الزمني. تسوية الشركاء تراكمية، وربحية سعر الصنف مبنية على الأسعار الحالية.</p></div>
+      <div className={`report-content p-4 space-y-4 flex-1 ${bottomTab==='summary'?'report-summary':''}`}>
         {onInsights&&<button type="button" onClick={onInsights} className="text-xs border border-[#E6DEC8] bg-white rounded-xl px-4 py-3 flex items-center gap-2"><Sparkles size={16}/>تحليلات المحل والتنبيهات</button>}
         {bottomTab === 'summary' && (
           <>
@@ -502,12 +439,12 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                     <TrendingUp className="w-4 h-4" />
                     <span>صافي الربح النهائي (بعد خصم المصروفات)</span>
                   </div>
-                  <div className="text-3xl font-black text-[#FBF5B7] tracking-tight">
+                  <output aria-label="صافي ربح الفترة" className={`block text-3xl font-black tracking-tight ${stats.netProfit<0?'text-rose-300':'text-[#FBF5B7]'}`}>
                     {stats.netProfit.toFixed(2)} ج.م
-                  </div>
+                  </output>
                   <div className="text-xs text-stone-300 font-semibold">
-                    هامش الربح: {stats.marginPercent.toFixed(1)}% • العائد على
-                    التكلفة: {stats.markupPercent.toFixed(1)}%
+                    هامش مجمل الربح: {stats.sales>0?stats.marginPercent.toFixed(1)+'%':'غير متاح'} • العائد على
+                    التكلفة: {stats.cost>0?stats.markupPercent.toFixed(1)+'%':'غير متاح'}
                   </div>
                 </div>
               </div>
@@ -530,7 +467,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                     مجمل الربح (قبل المصروفات)
                   </div>
                   <div className="text-base font-black text-emerald-400">
-                    +{stats.grossProfit.toFixed(2)} ج.م
+                    {stats.grossProfit.toFixed(2)} ج.م
                   </div>
                 </div>
                 <div className="text-left">
@@ -575,43 +512,8 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
             </div>
 
             {/* كارت الرسم البياني اليومي */}
-            <div className="bg-white rounded-3xl p-4 shadow-sm border border-[#E6DEC8] space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-extrabold text-[#1E1612] flex items-center gap-1.5">
-                  <BarChart3 className="w-4 h-4 text-[#B38728]" />
-                  تطور الأرباح اليومية
-                </h3>
-                <span className="text-[11px] text-[#7A6855]">
-                  بالجنيه المصري
-                </span>
-              </div>
+            <TrendChart points={periodReport.points}/>
 
-              <div className="h-48 flex items-end justify-between gap-2 pt-6 px-2 overflow-x-auto">
-                {dailyChartData.map((bar, idx) => {
-                  const heightPercent = Math.max(
-                    14,
-                    Math.round((bar.value / maxBarValue) * 100),
-                  );
-                  return (
-                    <div
-                      key={idx}
-                      className="flex flex-col items-center flex-1 min-w-[36px] h-full justify-end group"
-                    >
-                      <span className="text-[10px] font-extrabold text-[#1E1612] mb-1">
-                        {bar.value}
-                      </span>
-                      <div
-                        style={{ height: `${heightPercent}%` }}
-                        className="w-full max-w-[28px] rounded-t-xl bg-gradient-to-t from-[#1E1612] via-[#8F6D19] to-[#D4AF37] shadow-sm transition-all"
-                      />
-                      <span className="text-[10px] text-[#7A6855] font-bold mt-1.5">
-                        {bar.date}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           </>
         )}
 
@@ -620,15 +522,15 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
           <div className="space-y-3">
             <div className="bg-[#FDF8EB] border border-[#E8D8A8] rounded-2xl p-3.5 text-xs text-[#5C4B3E] leading-relaxed">
               <b className="text-[#1E1612] block mb-1">
-                جدول تصفية حسابات الشركاء الأربعة المالكين:
+                تسوية تراكمية لحسابات الشركاء — كل السجل:
               </b>
-              يتم احتساب حصة كل شريك من صافي الربح ({stats.netProfit.toFixed(2)}{' '}
+              يتم احتساب حصة كل شريك من صافي الربح ({cumulativeNet.toFixed(2)}{' '}
               ج.م)، ثم يُضاف إليها ما دفعه الشريك من جيبه للمحل، ويُخصم منها
               مسحوباته الشخصية.
             </div>
 
             {partners.map((p) => {
-              const profitShare = (stats.netProfit * p.sharePercent) / 100;
+              const profitShare = (cumulativeNet * p.sharePercent) / 100;
               const finalEntitlement =
                 profitShare + p.totalPaidFromPocket - p.totalWithdrawals;
 
@@ -647,7 +549,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                           {p.name}
                         </div>
                         <div className="text-[11px] text-[#7A6855]">
-                          حساب: @{p.username} • حصة الشراكة: {p.sharePercent}%
+                          حصة الشراكة: {p.sharePercent}%
                         </div>
                       </div>
                     </div>
@@ -655,7 +557,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                       <div className="text-[10px] text-[#7A6855]">
                         الصافي المستحق له
                       </div>
-                      <div className="text-sm font-black text-emerald-700">
+                      <div className={`text-sm font-black ${finalEntitlement<0?'value-negative':'value-positive'}`}>
                         {finalEntitlement.toFixed(2)} ج.م
                       </div>
                     </div>
@@ -693,7 +595,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
 
         {/* تبويب ربحية المنتجات */}
         {bottomTab === 'products' && (
-          <div className="space-y-2.5">
+          <div className="space-y-2.5"><p className="operation-note">هامش السعر الحالي للصنف؛ ليس الربح المحقق خلال الفترة. تكلفة وصفة المشروب تُراجع مع مكوناتها.</p>
             {items
               .filter((i) => i.canSellDirectly)
               .map((item) => {
@@ -732,7 +634,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                           ربح القطاعي
                         </div>
                         <div className="font-black text-emerald-700">
-                          +{unitProfitRetail.toFixed(2)} ج.م
+                          {unitProfitRetail.toFixed(2)} ج.م
                         </div>
                       </div>
                       <div>
@@ -740,7 +642,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                           ربح الجملة
                         </div>
                         <div className="font-black text-[#9E7918]">
-                          +{unitProfitWholesale.toFixed(2)} ج.م
+                          {unitProfitWholesale.toFixed(2)} ج.م
                         </div>
                       </div>
                     </div>
@@ -789,7 +691,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                   <div>
                     <div className="text-[10px] text-[#7A6855]">صافي الربح</div>
                     <div className="font-black text-emerald-700">
-                      +{inv.netProfit.toFixed(1)} ج.م
+                      {inv.netProfit.toFixed(1)} ج.م
                     </div>
                   </div>
                 </div>
