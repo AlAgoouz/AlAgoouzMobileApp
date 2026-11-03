@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, BarChart3, Calculator, ChevronLeft, FileText, Flame, FolderSync, Package, RotateCcw, Scale, Search, ShoppingBag, Tag, Truck, UserCheck, Users, Wallet } from 'lucide-react';
 
 interface SectionLink { id: string; title: string; description: string; icon: typeof Package; group: string; tone: string; }
-const links: SectionLink[] = [
+export const sectionLinks: SectionLink[] = [
   {id:'products',title:'المنتجات والتسعير',description:'الأصناف والوصفات وأسعار البيع',icon:Tag,group:'التشغيل اليومي',tone:'gold'},
   {id:'sales_pos',title:'فواتير الجملة',description:'فاتورة جديدة لعميلك بسعر متفق عليه',icon:Calculator,group:'التشغيل اليومي',tone:'green'},
   {id:'cashier_sync',title:'تقارير يوم الكاشير',description:'التقرير المالي والأصناف المباعة',icon:FolderSync,group:'التشغيل اليومي',tone:'blue'},
@@ -25,7 +25,7 @@ const groups = ['التشغيل اليومي', 'المخزون والمشتري�
 const normalize = (value: string) => value.normalize('NFKC').replace(/[أإآ]/g,'ا').replace(/[\u064B-\u065F\u0640]/g,'').trim().toLowerCase();
 export function SectionsHub({onNavigate, counts}: {onNavigate:(id:string)=>void; counts:Record<string,number>}) {
   const [query, setQuery] = useState('');
-  const filtered = links.filter(link => normalize(`${link.title} ${link.description} ${link.group}`).includes(normalize(query)));
+  const filtered = sectionLinks.filter(link => normalize(`${link.title} ${link.description} ${link.group}`).includes(normalize(query)));
   return <section className="sections-hub" aria-labelledby="sections-title">
     <header className="sections-hero">
       <div className="sections-hero-mark" aria-hidden="true"><img src="/logo.png" alt="" width="88" height="88" /></div>

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 export async function verifyDesign(){
   assert.equal(process.env.CI,'true','DESIGN_REVIEW_REQUIRES_ISOLATED_CI');
   const browser=await chromium.launch({headless:true});
-  const evidence={login:false,recovery:false,resend:false,recoveredPasswordForm:false,sections:[],widths:[],workspaceWidths:[],accountHasNoSectionMenu:false,reportTabsAccessible:false,pageErrors:[],layoutErrors:[]};
+  const evidence={login:false,recovery:false,resend:false,recoveredPasswordForm:false,sections:[],widths:[],workspaceWidths:[],accountHasNoSectionMenu:false,reportTabsAccessible:false,periods:false,reducedMotion:false,pageErrors:[],layoutErrors:[]};
   const origin='http://127.0.0.1:5284';
   const limit=async (page,stage)=>{
     const layout=await page.evaluate(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width&& (r.right>innerWidth+1||r.left< -1);}).slice(0,12).map(e=>({tag:e.tagName,classes:e.className,text:e.textContent?.slice(0,90)}))}));
@@ -35,15 +35,23 @@ export async function verifyDesign(){
     await page.reload();await page.getByText('ملخص الإحصائيات والأرباح المباشر',{exact:true}).waitFor();
     assert.equal(await page.getByRole('button',{name:'الأقسام',exact:true}).count(),1,'Home must not duplicate the section directory');
     assert.equal(await page.getByRole('button',{name:'المزيد',exact:true}).count(),0);
+    await page.getByRole('button',{name:'كل السجل',exact:true}).click();
+    await page.getByRole('button',{name:'اليوم',exact:true}).click();
+    await page.getByRole('button',{name:'فترة محددة',exact:true}).click();
+    await page.getByLabel('بداية الفترة').fill('2026-11-04');await page.getByLabel('نهاية الفترة').fill('2026-11-03');
+    assert.equal(await page.getByRole('button',{name:'تطبيق',exact:true}).isDisabled(),true);
+    await page.getByLabel('بداية الفترة').fill('2026-11-01');await page.getByRole('button',{name:'تطبيق',exact:true}).click();
+    await page.getByRole('button',{name:'كل السجل',exact:true}).click();evidence.periods=true;
+    assert.equal(await page.locator('.screen-stage').evaluate(e=>getComputedStyle(e).animationName),'none');evidence.reducedMotion=true;
     for(const width of [320,360,430,768,1024,1440]){
       await page.setViewportSize({width,height:900});await limit(page,`home-${width}`);
       const used=await page.locator('.app-workspace').evaluate(e=>e.getBoundingClientRect().width);evidence.workspaceWidths.push({viewport:width,used});
-      if(width>=768)assert.ok(used>=Math.min(width,1280)-2,'Workspace must use the available desktop/tablet width');
+      if(width>=768)assert.ok(used>=Math.min(width-(width>=1100?252:0),1440)-2,'Workspace must use the available desktop/tablet width');
     }
     await page.screenshot({path:'design-home-desktop-mobile.png',fullPage:true});
     await page.getByRole('button',{name:'حسابي',exact:true}).click();await page.getByRole('heading',{name:'حسابي',exact:true}).waitFor();
     assert.equal(await page.locator('.section-tile').count(),0);
-    assert.equal(await page.getByRole('button',{name:/قسم الإنتاج|شؤون العمال|المستخدمين|الشركاء والحصص/}).count(),0);
+    assert.equal(await page.locator('.account-content').getByRole('button',{name:/قسم الإنتاج|شؤون العمال|المستخدمين|الشركاء والحصص/}).count(),0);
     await page.getByRole('heading',{name:'صلاحيات حسابك',exact:true}).waitFor();
     evidence.accountHasNoSectionMenu=true;await limit(page,'account-desktop');
     await page.screenshot({path:'design-account-desktop-mobile.png',fullPage:true});
