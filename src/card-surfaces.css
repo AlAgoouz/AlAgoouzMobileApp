@@ -1,0 +1,213 @@
+/* The rim, inner highlight and two shadow levels stay visible on touch screens.
+   Only actionable tiles lift; read-only figures keep their stable geometry. */
+:root {
+  --surface-radius: 24px;
+  --surface-shadow: 0 12px 28px -15px #49331e38, 0 3px 7px -3px #49331e16;
+  --surface-highlight: inset 0 1px 0 #ffffffed, inset 0 -1px 0 #6d51290b;
+}
+
+.agouz-app {
+  background: radial-gradient(ellipse at 8% 0, #dfcba728, transparent 48%), #f4f0e8;
+}
+.app-workspace { background: transparent; }
+
+.metric-card,
+.visual-card,
+.attention-card,
+.section-tile,
+.screen-stage .bg-white.border.rounded-2xl,
+.screen-stage .bg-white.border.rounded-3xl {
+  border-color: #daccb7;
+  border-radius: var(--surface-radius);
+  background: linear-gradient(145deg, #fffefa 12%, #fdfaf3 80%, #f6efe1);
+  box-shadow: var(--surface-highlight), var(--surface-shadow);
+}
+
+.metric-card {
+  --card-accent: #a67f35;
+  --card-rgb: 166, 127, 53;
+  padding-top: 22px;
+  transition: border-color .22s ease, box-shadow .22s ease;
+  animation: metricArrival .42s ease-out both;
+}
+.metric-card:nth-child(2) { animation-delay: .05s; }
+.metric-card:nth-child(3) { animation-delay: .1s; }
+.metric-card:nth-child(4) { animation-delay: .15s; }
+.metric-card > * { position: relative; z-index: 1; }
+.metric-card::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 24px;
+  height: 2px;
+  border-radius: 0 0 8px 8px;
+  background: linear-gradient(90deg, transparent, rgba(var(--card-rgb), .7), transparent);
+  pointer-events: none;
+}
+.metric-card::after {
+  content: '';
+  position: absolute;
+  width: 112px;
+  height: 112px;
+  inset-inline-end: -50px;
+  top: -48px;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--card-rgb), .12);
+  box-shadow: 0 0 0 15px rgba(var(--card-rgb), .025), 0 0 0 32px rgba(var(--card-rgb), .02);
+  pointer-events: none;
+}
+.metric-card > strong { font-size: clamp(23px, 3vw, 32px); letter-spacing: -.5px; }
+.metric-card > p { color: #685944; }
+.metric-detail { padding-top: 10px; border-top: 1px solid rgba(var(--card-rgb), .1); }
+.metric-icon,
+.card-icon,
+.attention-icon,
+.section-icon {
+  border: 1px solid #e2d3b9;
+  background: linear-gradient(145deg, #fffdf6, #eee1c7);
+  box-shadow: inset 0 1px 0 #ffffffef, 0 5px 9px -6px #68481e45;
+}
+.metric-icon { width: 43px; height: 43px; border-radius: 14px; }
+
+.metric-card.metric-gold {
+  --card-rgb: 223, 185, 113;
+  background: radial-gradient(ellipse at 0 0, #70542d55, transparent 75%), linear-gradient(145deg, #3e3020, #211a13);
+  border-color: #9f7a3e;
+  box-shadow: inset 0 1px 0 #f4d7973b, inset 0 -1px 0 #120d0a, 0 15px 26px -14px #36251778, 0 3px 7px #36251712;
+}
+.metric-gold > p { color: #e4cfab; }
+.metric-gold > strong { color: #fff2cf; }
+.metric-gold > strong small,
+.metric-gold .metric-detail { color: #d2c0a1; }
+.metric-gold .metric-icon {
+  background: linear-gradient(145deg, #bc9653, #866125);
+  color: #fff2cb;
+  border-color: #d7b571;
+  box-shadow: inset 0 1px 0 #ffe3a47a, 0 5px 10px #130f0b33;
+}
+.metric-card.metric-positive {
+  --card-rgb: 51, 116, 84;
+  background: linear-gradient(145deg, #fcfff9, #f0f7ef);
+  border-color: #c5d8c8;
+}
+.metric-positive .metric-icon {
+  background: linear-gradient(145deg, #f9fff7, #dfeede);
+  border-color: #c9dfce;
+}
+.metric-card.metric-negative {
+  --card-rgb: 177, 65, 51;
+  background: linear-gradient(145deg, #fffdfa, #fbefeb);
+  border-color: #e8c3b9;
+}
+.metric-negative .metric-icon { background: linear-gradient(145deg, #fff9f5, #f0d9d2); }
+.metric-card.metric-amber { --card-rgb: 174, 120, 44; }
+.metric-card.metric-neutral { --card-rgb: 116, 99, 72; }
+
+.visual-card { border-radius: 26px; transition: border-color .22s ease, box-shadow .22s ease; }
+.card-heading { border-bottom: 1px solid #e8dfcf; padding-bottom: 16px; }
+.card-heading h2 { color: #3c2d1c; }
+.card-icon { border-radius: 13px; }
+.chart-empty {
+  background: radial-gradient(ellipse at 50% 0, #ddc69b1a, transparent 72%), linear-gradient(145deg, #fffefa, #f7f2e8);
+  border-color: #dfd0b5;
+  border-radius: 17px;
+  box-shadow: inset 0 1px 0 #fff;
+}
+.comparison-track,
+.ranking-track,
+.channel-track {
+  box-shadow: inset 0 1px 2px #4c351516, 0 1px 0 #fff;
+  background-color: #eee8dd;
+}
+.comparison-fill { box-shadow: inset 0 1px 0 #ffffff35; }
+.chart-detail { background: #f8f3e9; border: 1px solid #e9dfcf; border-radius: 13px; padding: 12px; }
+.product-ranking em { background: linear-gradient(145deg, #fffaf0, #eee0c2); border: 1px solid #e5d5b5; }
+
+.attention-card {
+  position: relative;
+  border-radius: 19px;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.screen-stage .attention-card,
+.screen-stage .section-tile {
+  transition: transform .22s cubic-bezier(.2,.65,.3,1), border-color .22s ease, box-shadow .22s ease;
+}
+.attention-card > svg {
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border-radius: 50%;
+  background: #f7efdf;
+  border: 1px solid #e9dcc4;
+}
+.attention-warning { background: linear-gradient(145deg, #fffdf6, #fbefdb); border-color: #d9bc82; }
+.section-tile { position: relative; overflow: hidden; border-radius: 23px; animation-fill-mode: backwards; }
+.section-tile::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline-start: 22px;
+  width: 40px;
+  height: 2px;
+  background: var(--tile-accent);
+  opacity: .65;
+  border-radius: 0 0 3px 3px;
+  pointer-events: none;
+}
+.section-icon { color: var(--tile-accent); background: linear-gradient(145deg, #fffefa, var(--tile-tint)); }
+.section-tile-arrow { background: #faf5eb; border: 1px solid #e9dfce; border-radius: 50%; width: 25px; height: 25px; padding: 5px; bottom: 14px; }
+.section-count { background: #f8f1e4; border: 1px solid #eadcc3; }
+.section-tile-description { padding-inline-end: 20px; }
+
+.period-picker,
+.dashboard-search {
+  background: linear-gradient(145deg, #fffefa, #faf6ee);
+  border-color: #dcd0bb;
+  border-radius: 18px;
+  box-shadow: inset 0 1px 0 #fff, 0 4px 10px -8px #49331e32;
+}
+.period-options button[aria-pressed=true] {
+  background: linear-gradient(145deg, #554027, #2c2116);
+  border-color: #8c6a38;
+  box-shadow: inset 0 1px 0 #d6b06c40, 0 4px 8px -5px #3b2b1a66;
+}
+.workspace-nav { box-shadow: 0 8px 28px #49331e16, inset 0 1px 0 #fff; }
+
+@keyframes metricArrival {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (hover:hover) and (pointer:fine) {
+  .metric-card:hover,
+  .visual-card:hover { border-color: #b99a65; box-shadow: var(--surface-highlight), 0 15px 32px -17px #49331e48, 0 3px 8px -3px #49331e20; }
+  .metric-card.metric-gold:hover { border-color: #d5b374; box-shadow: inset 0 1px 0 #ffe2a040, 0 18px 30px -14px #3625178c; }
+  .screen-stage .attention-card:hover:not(:disabled),
+  .screen-stage .section-tile:hover:not(:disabled) { transform: translateY(-4px); border-color: #b9975b; box-shadow: inset 0 1px 0 #fff, 0 17px 28px -16px #49331e55, 0 3px 7px -3px #49331e20; }
+  .screen-stage .attention-card:active:not(:disabled),
+  .screen-stage .section-tile:active:not(:disabled) { transform: translateY(1px) scale(.99); box-shadow: inset 0 2px 4px #49331e18, 0 2px 4px #49331e0a; }
+}
+@media (max-width:359px) {
+  .metric-card { padding-top: 18px; border-radius: 20px; }
+  .metric-card > strong { font-size: 23px; }
+  .metric-icon { width: 39px; height: 39px; }
+  .visual-card { border-radius: 22px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .metric-card { animation: none!important; }
+  .metric-card,
+  .visual-card,
+  .attention-card,
+  .section-tile { transition: none!important; transform: none!important; }
+}
+@media print {
+  .metric-card,
+  .visual-card,
+  .attention-card,
+  .section-tile { background: #fff!important; box-shadow: none!important; border-color: #ccc!important; animation: none!important; transform: none!important; }
+  .metric-card::before,
+  .metric-card::after { display: none; }
+  .metric-card > p,
+  .metric-card > strong,
+  .metric-card > strong small,
+  .metric-card .metric-detail { color: #222!important; }
+}

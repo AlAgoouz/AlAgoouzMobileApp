@@ -4,6 +4,7 @@ import App from "./App";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import "./index.css";
 import "./visual-system.css";
+import "./card-surfaces.css";
 import {ScreenLoading} from './components/ScreenLoading';
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
