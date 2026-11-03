@@ -51,8 +51,8 @@ begin
     if exists(select 1 from jsonb_array_elements(o->'cashier_days') x where x->>'id'=d->>'id' and x->>'status'='approved') then continue;end if;
     if exists(
       with expected as (
-        select c.item_id,sum(c.quantity) q from jsonb_array_elements(d->'itemsReport'->'lines') l cross join lateral bon_erp_private.consume_item(o->'items',l->>'itemId',(l->>'normalizedQtyInBaseUnit')::numeric) c group by c.item_id
-      ), actual as (select l->>'itemId' item_id,sum((l->>'quantity')::numeric) q from jsonb_array_elements(d->'consumption') l group by l->>'itemId')
+        select c.item_id,sum(c.quantity) q from jsonb_array_elements(d->'itemsReport'->'lines') sale_line cross join lateral bon_erp_private.consume_item(o->'items',sale_line->>'itemId',(sale_line->>'normalizedQtyInBaseUnit')::numeric) c group by c.item_id
+      ), actual as (select consumption_line->>'itemId' item_id,sum((consumption_line->>'quantity')::numeric) q from jsonb_array_elements(d->'consumption') consumption_line group by consumption_line->>'itemId')
       select 1 from expected full join actual using(item_id) where expected.q is null or actual.q is null or abs(expected.q-actual.q)>0.000011
     )then raise exception 'CASHIER_CONSUMPTION_MISMATCH';end if;
     if (select count(*) from jsonb_array_elements(d->'consumption'))<>(select count(distinct x->>'itemId') from jsonb_array_elements(d->'consumption') x) then raise exception 'DUPLICATE_CONSUMPTION';end if;
@@ -64,8 +64,8 @@ begin
     end loop;
     if abs(costs-(d->>'totalCost')::numeric)>0.011 then raise exception 'CASHIER_TOTAL_COST_MISMATCH';end if;
     if exists(
-      with expected as (select i->>'id' item_id,-(i->>'stock')::numeric q from jsonb_array_elements(s->'items') i where (i->>'stock')::numeric<0 and exists(select 1 from jsonb_array_elements(d->'consumption') l where l->>'itemId'=i->>'id')),
-      actual as (select l->>'itemId' item_id,(l->>'shortage')::numeric q from jsonb_array_elements(d->'shortages') l)
+      with expected as (select stock_item->>'id' item_id,-(stock_item->>'stock')::numeric q from jsonb_array_elements(s->'items') stock_item where (stock_item->>'stock')::numeric<0 and exists(select 1 from jsonb_array_elements(d->'consumption') consumption_line where consumption_line->>'itemId'=stock_item->>'id')),
+      actual as (select shortage_line->>'itemId' item_id,(shortage_line->>'shortage')::numeric q from jsonb_array_elements(d->'shortages') shortage_line)
       select 1 from expected full join actual using(item_id) where expected.q is null or actual.q is null or abs(expected.q-actual.q)>0.000011
     ) then raise exception 'CASHIER_SHORTAGE_MISMATCH';end if;
   end loop;
@@ -82,11 +82,11 @@ begin
     if p is null and (i->>'stock')::numeric<0 then raise exception 'NEGATIVE_OPENING_STOCK';end if;
     if (p is null or p->>'category' is distinct from i->>'category' or p->'recipe' is distinct from i->'recipe') and i->>'category' in ('manufactured_blend','drink_recipe','seasoning_recipe') and (not (i->>'hasRecipe')::boolean or jsonb_array_length(coalesce(i->'recipe','[]'))=0) then raise exception 'RECIPE_REQUIRED_ON_CREATION';end if;
     if i->>'category'='seasoning_recipe' and (i->>'stock')::numeric<>0 then raise exception 'SEASONING_HAS_NO_READY_STOCK';end if;
-    if p is not null and exists(select 1 from jsonb_array_elements(o->'cashier_days') d cross join lateral jsonb_array_elements(coalesce(d->'itemsReport'->'lines','[]')) l where l->>'itemId'=i->>'id') and (p->>'category' is distinct from i->>'category' or p->>'baseUnit' is distinct from i->>'baseUnit') then raise exception 'HISTORICAL_ITEM_UNIT_IMMUTABLE';end if;
-    if p is not null and not exists(select 1 from jsonb_array_elements(s->'purchase_invoices') r where coalesce((r->>'isCancelled')::boolean,false) and exists(select 1 from jsonb_array_elements(o->'purchase_invoices') old_r where old_r->>'id'=r->>'id' and not coalesce((old_r->>'isCancelled')::boolean,false)) and exists(select 1 from jsonb_array_elements(coalesce(r->'inventoryBefore','[]')) snap where snap->>'id'=i->>'id')) then
+    if p is not null and exists(select 1 from jsonb_array_elements(o->'cashier_days') history_day cross join lateral jsonb_array_elements(coalesce(history_day->'itemsReport'->'lines','[]')) history_line where history_line->>'itemId'=i->>'id') and (p->>'category' is distinct from i->>'category' or p->>'baseUnit' is distinct from i->>'baseUnit') then raise exception 'HISTORICAL_ITEM_UNIT_IMMUTABLE';end if;
+    if p is not null and not exists(select 1 from jsonb_array_elements(s->'purchase_invoices') purchase_doc where coalesce((purchase_doc->>'isCancelled')::boolean,false) and exists(select 1 from jsonb_array_elements(o->'purchase_invoices') old_r where old_r->>'id'=purchase_doc->>'id' and not coalesce((old_r->>'isCancelled')::boolean,false)) and exists(select 1 from jsonb_array_elements(coalesce(purchase_doc->'inventoryBefore','[]')) snap where snap->>'id'=i->>'id')) then
       if p->>'costingVersion'='2' and i->>'costingVersion' is distinct from '2' then raise exception 'COST_HISTORY_IMMUTABLE';end if;
       if exists(select 1 from jsonb_array_elements(coalesce(p->'costHistory','[]')) with ordinality old_h(value,position) where old_h.value is distinct from i->'costHistory'->(old_h.position::int-1)) then raise exception 'COST_HISTORY_IMMUTABLE';end if;
-      if p->>'costingVersion'='2' and p->'costPrice' is distinct from i->'costPrice' and not exists(select 1 from jsonb_array_elements(s->'purchase_invoices') r cross join lateral jsonb_array_elements(r->'items') line where line->>'itemId'=i->>'id' and not exists(select 1 from jsonb_array_elements(o->'purchase_invoices') old_r where old_r->>'id'=r->>'id')) and not exists(select 1 from jsonb_array_elements(s->'production_batches') r where r->>'blendId'=i->>'id' and not exists(select 1 from jsonb_array_elements(o->'production_batches') old_r where old_r->>'id'=r->>'id')) then raise exception 'COST_FROM_DOCUMENT_REQUIRED';end if;
+      if p->>'costingVersion'='2' and p->'costPrice' is distinct from i->'costPrice' and not exists(select 1 from jsonb_array_elements(s->'purchase_invoices') purchase_doc cross join lateral jsonb_array_elements(purchase_doc->'items') line where line->>'itemId'=i->>'id' and not exists(select 1 from jsonb_array_elements(o->'purchase_invoices') old_r where old_r->>'id'=purchase_doc->>'id')) and not exists(select 1 from jsonb_array_elements(s->'production_batches') production_doc where production_doc->>'blendId'=i->>'id' and not exists(select 1 from jsonb_array_elements(o->'production_batches') old_r where old_r->>'id'=production_doc->>'id')) then raise exception 'COST_FROM_DOCUMENT_REQUIRED';end if;
     end if;
   end loop;
   for r in select value from jsonb_array_elements(s->'purchase_invoices') loop
@@ -115,12 +115,11 @@ begin
       if raw is null or raw->>'category'<>'manufactured_blend' then raise exception 'WHOLESALE_BLENDS_ONLY';end if;
       if abs((l->>'unitCost')::numeric-(raw->>'costPrice')::numeric)>0.001 or abs((l->>'quantity')::numeric-(l->>'normalizedQtyInBaseUnit')::numeric)>0.000001 then raise exception 'WHOLESALE_COST_OR_QUANTITY_MISMATCH';end if;
     end loop;
-    if exists(select 1 from jsonb_array_elements(r->'items') l join jsonb_array_elements(o->'items') raw on raw->>'id'=l->>'itemId' where raw->>'category'<>'manufactured_blend') then raise exception 'WHOLESALE_BLENDS_ONLY';end if;
-    if exists(select 1 from jsonb_array_elements(r->'items') l join jsonb_array_elements(o->'items') raw on raw->>'id'=l->>'itemId' group by raw->>'id',raw->>'stock' having sum((l->>'normalizedQtyInBaseUnit')::numeric)>(raw->>'stock')::numeric+0.000001) then raise exception 'WHOLESALE_INSUFFICIENT_STOCK';end if;
+    if exists(select 1 from jsonb_array_elements(r->'items') sale_line join jsonb_array_elements(o->'items') stock_item on stock_item->>'id'=sale_line->>'itemId' group by stock_item->>'id',stock_item->>'stock' having sum((sale_line->>'normalizedQtyInBaseUnit')::numeric)>(stock_item->>'stock')::numeric+0.000001) then raise exception 'WHOLESALE_INSUFFICIENT_STOCK';end if;
   end loop;
   for r in select value from jsonb_array_elements(s->'production_batches') loop
     if exists(select 1 from jsonb_array_elements(o->'production_batches') x where x->>'id'=r->>'id') then continue;end if;
-    if exists(select 1 from jsonb_array_elements(r->'ingredientsConsumed') l join jsonb_array_elements(o->'items') raw on raw->>'id'=l->>'ingredientId' group by raw->>'id',raw->>'stock' having sum((l->>'quantityUsed')::numeric)>(raw->>'stock')::numeric+0.000001) then raise exception 'PRODUCTION_INSUFFICIENT_STOCK';end if;
+    if exists(select 1 from jsonb_array_elements(r->'ingredientsConsumed') input_line join jsonb_array_elements(o->'items') stock_item on stock_item->>'id'=input_line->>'ingredientId' group by stock_item->>'id',stock_item->>'stock' having sum((input_line->>'quantityUsed')::numeric)>(stock_item->>'stock')::numeric+0.000001) then raise exception 'PRODUCTION_INSUFFICIENT_STOCK';end if;
     select x into old_raw from jsonb_array_elements(o->'items') x where x->>'id'=r->>'blendId';
     select x into raw from jsonb_array_elements(s->'items') x where x->>'id'=r->>'blendId';
     if old_raw is null then raise exception 'DEFINE_BLEND_BEFORE_PRODUCTION';end if;
@@ -131,9 +130,9 @@ begin
   end loop;
   if exists(
     with strict_needs as (
-      select l->>'itemId' item_id,(l->>'normalizedQtyInBaseUnit')::numeric q from jsonb_array_elements(s->'sales_invoices') r cross join lateral jsonb_array_elements(r->'items') l where not exists(select 1 from jsonb_array_elements(o->'sales_invoices') p where p->>'id'=r->>'id')
-      union all select l->>'ingredientId',(l->>'quantityUsed')::numeric from jsonb_array_elements(s->'production_batches') r cross join lateral jsonb_array_elements(r->'ingredientsConsumed') l where not exists(select 1 from jsonb_array_elements(o->'production_batches') p where p->>'id'=r->>'id')
-    ) select 1 from strict_needs n left join jsonb_array_elements(o->'items') raw on raw->>'id'=n.item_id group by n.item_id,raw->>'stock' having raw->>'stock' is null or sum(n.q)>(raw->>'stock')::numeric+0.000001
+      select sale_line->>'itemId' item_id,(sale_line->>'normalizedQtyInBaseUnit')::numeric q from jsonb_array_elements(s->'sales_invoices') sales_doc cross join lateral jsonb_array_elements(sales_doc->'items') sale_line where not exists(select 1 from jsonb_array_elements(o->'sales_invoices') previous_doc where previous_doc->>'id'=sales_doc->>'id')
+      union all select input_line->>'ingredientId',(input_line->>'quantityUsed')::numeric from jsonb_array_elements(s->'production_batches') production_doc cross join lateral jsonb_array_elements(production_doc->'ingredientsConsumed') input_line where not exists(select 1 from jsonb_array_elements(o->'production_batches') previous_doc where previous_doc->>'id'=production_doc->>'id')
+    ) select 1 from strict_needs n left join jsonb_array_elements(o->'items') stock_item on stock_item->>'id'=n.item_id group by n.item_id,stock_item->>'stock' having stock_item->>'stock' is null or sum(n.q)>(stock_item->>'stock')::numeric+0.000001
   ) then raise exception 'INSUFFICIENT_STOCK_FOR_WHOLESALE_OR_PRODUCTION';end if;
 end $$;
 revoke all on function bon_erp_private.consume_item(jsonb,text,numeric,text[]),bon_erp_private.validate_section_changes(jsonb,jsonb) from public,anon,authenticated;
