@@ -128,6 +128,10 @@
   border-radius: 19px;
   transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
+.screen-stage .attention-card,
+.screen-stage .section-tile {
+  transition: transform .22s cubic-bezier(.2,.65,.3,1), border-color .22s ease, box-shadow .22s ease;
+}
 .attention-card > svg {
   width: 28px;
   height: 28px;
@@ -179,8 +183,8 @@
   .metric-card.metric-gold:hover { border-color: #d5b374; box-shadow: inset 0 1px 0 #ffe2a040, 0 18px 30px -14px #3625178c; }
   .screen-stage .attention-card:hover:not(:disabled),
   .screen-stage .section-tile:hover:not(:disabled) { transform: translateY(-4px); border-color: #b9975b; box-shadow: inset 0 1px 0 #fff, 0 17px 28px -16px #49331e55, 0 3px 7px -3px #49331e20; }
-  .screen-stage .attention-card:active,
-  .screen-stage .section-tile:active { transform: translateY(1px) scale(.99); }
+  .screen-stage .attention-card:active:not(:disabled),
+  .screen-stage .section-tile:active:not(:disabled) { transform: translateY(1px) scale(.99); box-shadow: inset 0 2px 4px #49331e18, 0 2px 4px #49331e0a; }
 }
 @media (max-width:359px) {
   .metric-card { padding-top: 18px; border-radius: 20px; }
