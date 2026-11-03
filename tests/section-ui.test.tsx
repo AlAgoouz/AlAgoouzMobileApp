@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
+import {webcrypto} from 'node:crypto';
 import {afterEach,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {ItemDefinitionModal} from '../src/components/ItemDefinitionModal';
@@ -9,7 +10,36 @@ import {PurchaseScreen} from '../src/components/PurchaseScreen';
 import {INITIAL_ITEMS,INITIAL_CUSTOMERS,INITIAL_SUPPLIERS} from '../src/data/initialData';
 import {approveCashierDay,attachCashierReport} from '../src/lib/cashierDays';
 import {emptyStore} from '../src/lib/storeState';
-afterEach(cleanup);
+import {salesForReports} from '../src/lib/cashierDays';
+afterEach(()=>{cleanup();vi.unstubAllGlobals();});
+it('uploads both real CSV reports, posts one day with a stock shortage, and rejects a duplicate date',async()=>{
+ vi.stubGlobal('crypto',webcrypto);
+ let live={...emptyStore,items:[{...raw,stock:1}]};
+ const attach=vi.fn(async(date,report)=>{live=attachCashierReport(live,date,report);redraw();});
+ const approve=vi.fn(async(id)=>{live=approveCashierDay(live,id,'Owner');redraw();});
+ const view=()=> <CashierDayScreen items={live.items} days={live.cashierDays} onAttach={attach} onApprove={approve} onBack={()=>{}}/>;
+ const {rerender}=render(view());const redraw=()=>rerender(view());
+ const upload=async(name:string,csv:string)=>{
+  const file=new File([csv],name,{type:'text/csv'});file.arrayBuffer=async()=>new TextEncoder().encode(csv).buffer;
+  fireEvent.change(screen.getByLabelText('ملف التقرير'),{target:{files:[file]}});
+  await screen.findByText('مراجعة '+name);
+ };
+ await upload('financial.csv','total\n500');
+ fireEvent.change(screen.getByLabelText('عمود إيراد اليوم'),{target:{value:'total'}});
+ fireEvent.click(screen.getByRole('button',{name:'حفظ التقرير لهذا اليوم'}));await waitFor(()=>expect(attach).toHaveBeenCalledTimes(1));
+ expect(live.items[0].stock).toBe(1);expect(salesForReports(live)).toHaveLength(0);
+ fireEvent.change(screen.getByLabelText('نوع التقرير'),{target:{value:'items'}});
+ await upload('items.csv','code,quantity,unit\nR1,2000,gram');
+ fireEvent.click(screen.getByRole('button',{name:'حفظ التقرير لهذا اليوم'}));await waitFor(()=>expect(attach).toHaveBeenCalledTimes(2));
+ fireEvent.click(screen.getByRole('button',{name:'اعتماد اليوم وخصم الأصناف'}));await waitFor(()=>expect(approve).toHaveBeenCalledOnce());
+ expect(live.items[0].stock).toBe(-1);expect(live.cashierDays[0].totalCost).toBe(200);
+ expect(live.cashierDays[0].shortages).toEqual([{itemId:'raw',shortage:1}]);
+ expect(salesForReports(live).reduce((sum,i)=>sum+i.totalAmount,0)).toBe(500);
+ fireEvent.change(screen.getByLabelText('نوع التقرير'),{target:{value:'financial'}});
+ await upload('duplicate.csv','total\n600');fireEvent.change(screen.getByLabelText('عمود إيراد اليوم'),{target:{value:'total'}});
+ fireEvent.click(screen.getByRole('button',{name:'حفظ التقرير لهذا اليوم'}));await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain('معتمد بالفعل'));
+ expect(live.cashierDays).toHaveLength(1);expect(live.items[0].stock).toBe(-1);expect(salesForReports(live)[0].totalAmount).toBe(500);
+});
 const raw={...INITIAL_ITEMS.find(i=>i.category==='raw_bean')!,id:'raw',code:'R1',name:'Raw bean',stock:10,costPrice:100,lastPurchasePrice:100};
 const blend={...raw,id:'blend',code:'BL1',name:'Blend',category:'manufactured_blend' as const,hasRecipe:true,recipe:[{ingredientId:raw.id,ingredientName:raw.name,quantity:1000,unit:'gram' as const}]};
 const customer={...INITIAL_CUSTOMERS[0],id:'customer',name:'Customer',phone:'01012345678',area:'Cairo'};

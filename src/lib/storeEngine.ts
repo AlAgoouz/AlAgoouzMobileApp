@@ -15,7 +15,7 @@ export interface StoreSnapshot {
   error: string;
 }
 export interface StoreTransport {
-  load(): Promise<{ state: StoreState; version: number }>;
+  load(): Promise<{ state: unknown; version: number }>;
   getVersion?(): Promise<number>;
   save(
     state: StoreState,

@@ -476,15 +476,17 @@ export function validateStore(value: unknown): StoreState {
       );
   return parsed as unknown as StoreState;
 }
-export function fromCloud(row: Record<string, unknown>): StoreState {
-  return validateStore(
-    Object.fromEntries(
+// The engine validates this untrusted input before publishing any state.
+export function cloudStoreInput(row: Record<string, unknown>): unknown {
+  return Object.fromEntries(
       Object.entries(cloudFields).map(([local, cloud]) => [
         local,
         row[cloud] ?? [],
       ]),
-    ),
-  );
+    );
+}
+export function fromCloud(row: Record<string, unknown>): StoreState {
+  return validateStore(cloudStoreInput(row));
 }
 export function toCloud(state: StoreState) {
   return Object.fromEntries(

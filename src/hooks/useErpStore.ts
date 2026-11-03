@@ -2,7 +2,7 @@ import {assertUserChanges,canView,type UserAccess} from '../lib/userAccess';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { getSupabaseClient } from '../lib/supabaseSync';
 import { StoreEngine } from '../lib/storeEngine';
-import { fromCloud, toCloud } from '../lib/storeState';
+import { cloudStoreInput, toCloud } from '../lib/storeState';
 import { scrubLegacyPasswords } from '../lib/legacyCache';
 import { authErrorMessage } from '../lib/authErrors';
 import { storeWriteError } from '../lib/storeErrors';
@@ -51,7 +51,7 @@ export function useErpStore() {
             throw new Error(
               'يلزم تطبيق ترقية الحفظ الآمن على قاعدة البيانات قبل التشغيل.',
             );
-          return { state: fromCloud(data), version: Number(data.version) };
+          return { state: cloudStoreInput(data), version: Number(data.version) };
         },
         async save(state, version, operationId, queueId, restore) {
           const sb = getSupabaseClient();
