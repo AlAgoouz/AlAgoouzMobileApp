@@ -37,7 +37,7 @@ export function ItemDefinitionModal({items,onSave,onClose,allowedCategories}: {
    const finalCode=code.trim()||nextItemCode(items,'IT',1);
    if(items.some(i=>i.code.trim().toUpperCase()===finalCode.toUpperCase()))throw Error('كود الصنف مستخدم');
    const costPrice=needsRecipe?calculateRecipeTotalCost(recipe,items):Number(cost);
-   const accepted=onSave({code:finalCode,name:name.trim(),category,baseUnit:actualUnit,stock:onUse?0:Number(stock),openingStock:onUse?0:Number(stock),minStock:onUse?0:Number(minimum),costPrice,lastPurchasePrice:needsRecipe?0:costPrice,retailPrice:Number(retail),wholesalePrice:0,canSellDirectly:true,hasRecipe:needsRecipe,recipe:needsRecipe?recipe:[],recipeYield:needsRecipe?1:undefined,supplierPrices:[]});
+   const accepted=onSave({code:finalCode,name:name.trim(),category,baseUnit:actualUnit,stock:onUse?0:Number(stock),openingStock:onUse?0:Number(stock),minStock:onUse?0:Number(minimum),costPrice,costingVersion:category==='manufactured_blend'?2:undefined,lastPurchasePrice:needsRecipe?0:costPrice,retailPrice:Number(retail),wholesalePrice:0,canSellDirectly:true,hasRecipe:needsRecipe,recipe:needsRecipe?recipe:[],recipeYield:needsRecipe?1:undefined,supplierPrices:[]});
    if(accepted===false)throw Error('لم يتم حفظ الصنف؛ راجع البيانات والتنبيه');
    onClose();
   }catch(e){setError((e as Error).message);}

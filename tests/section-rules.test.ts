@@ -6,6 +6,7 @@ import {attachCashierReport,approveCashierDay,salesForReports} from '../src/lib/
 import {checkPurchase} from '../src/lib/operationChecks';
 import {supplierPurchaseHistory} from '../src/lib/supplierPurchases';
 import {adjustCatalogItem} from '../src/lib/catalogAdjustments';
+import {recalculateRecipeCosts} from '../src/lib/itemCosts';
 import {checkCustomerDetails,checkSupplierDetails,whatsAppNumber} from '../src/lib/contactDetails';
 import type {InventoryItem,PurchaseInvoice} from '../src/types/erp';
 const raw:InventoryItem={id:'raw',code:'R1',name:'بن خام',category:'raw_bean',baseUnit:'kg',stock:1,openingStock:1,minStock:0,costPrice:100,lastPurchasePrice:100,retailPrice:200,wholesalePrice:0,hasRecipe:false,canSellDirectly:true,supplierPrices:[]};
@@ -47,6 +48,12 @@ it('adds receipts to the signed stock and values only physically available stock
 it('keeps batch cost controlled by documents after the first purchase',()=>{
  const received=receiveStock(raw,2,200,{id:'P1',date:'2026-11-03',type:'purchase'});
  expect(()=>adjustCatalogItem({...emptyStore,items:[received]},raw.id,{costPrice:1},'Owner')).toThrow('لا تعدلها يدويًا');
+});
+it('keeps an opening finished-blend valuation when its raw ingredients later change price',()=>{
+ const opening={...raw,id:'opening-blend',code:'OB1',category:'manufactured_blend' as const,costingVersion:2 as const,hasRecipe:true,stock:4,openingStock:4,costPrice:100,recipe:[{ingredientId:raw.id,ingredientName:raw.name,quantity:1000,unit:'gram' as const}]};
+ const result=recalculateRecipeCosts([{...raw,costPrice:200},opening]);
+ expect(result.find(i=>i.id===opening.id)?.costPrice).toBe(100);
+ expect(result.find(i=>i.id===opening.id)?.stock).toBe(4);
 });
 const purchase:PurchaseInvoice={id:'purchase',invoiceNumber:'P1',date:'2026-11-03',supplierId:'supplier',supplierName:'مورد',items:[{itemId:'raw',itemName:raw.name,quantity:2,unit:'kg',purchasePrice:100,previousLastPrice:100,previousWacCost:100,cheapestSupplierPrice:100,cheapestSupplierName:'مورد',updateProductCost:true}],netAmount:200,taxAmount:28,totalAmount:228,paidAmount:228,remainingAmount:0,paymentMethod:'نقدي',accountingVersion:2,partnerName:'Owner'};
 it('validates separate purchase tax and rejects new unpaid purchases or a seasoning bought as finished stock',()=>{

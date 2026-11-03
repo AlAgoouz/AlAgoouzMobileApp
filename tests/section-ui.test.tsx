@@ -22,7 +22,7 @@ it('shows exactly seven categories and saves the recipe with the new blend',()=>
  fireEvent.change(screen.getByLabelText('المكون'),{target:{value:raw.id}});
  fireEvent.change(screen.getByLabelText('كمية المكون'),{target:{value:'1000'}});
  fireEvent.click(screen.getByRole('button',{name:'إضافة المكون'}));fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف والوصفة'}));
- expect(save).toHaveBeenCalledWith(expect.objectContaining({category:'manufactured_blend',hasRecipe:true,recipe:[expect.objectContaining({ingredientId:raw.id,quantity:1000})]}));
+ expect(save).toHaveBeenCalledWith(expect.objectContaining({category:'manufactured_blend',costingVersion:2,hasRecipe:true,recipe:[expect.objectContaining({ingredientId:raw.id,quantity:1000})]}));
 });
 it('requires a customer and offers only blends with a manual invoice selling price',async()=>{
  const save=vi.fn(async()=>true);render(<WholesaleInvoiceScreen items={[raw,blend]} customers={[customer]} currentPartnerName="Owner" onSaveSale={save} onBack={()=>{}}/>);
