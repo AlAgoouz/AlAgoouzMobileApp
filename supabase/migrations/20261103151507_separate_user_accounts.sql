@@ -12,7 +12,7 @@ alter table public.erp_members alter column access_permissions set default '{}':
 
 create or replace function bon_erp_private.is_master(p_user_id uuid) returns boolean
 language sql stable security definer set search_path='' as $$
- select p_user_id is not null and exists(select 1 from bon_erp_private.owner_config c join auth.users u on u.id=p_user_id where u.email_confirmed_at is not null and (c.owner_user_id=p_user_id or c.owner_user_id is null and lower(c.email)=lower(u.email)))
+ select p_user_id is not null and exists(select 1 from bon_erp_private.owner_config c join auth.users u on u.id=p_user_id where c.owner_user_id=p_user_id or c.owner_user_id is null and u.email_confirmed_at is not null and lower(c.email)=lower(u.email))
 $$;
 revoke all on function bon_erp_private.is_master(uuid) from public,anon,authenticated;
 create or replace function bon_erp_private.assert_owner() returns void language plpgsql security definer set search_path='' as $$

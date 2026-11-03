@@ -56,7 +56,11 @@ it.skipIf(!active)('allows the master to unlink its financial profile while keep
  const query=`select public.bon_erp_set_user_access('${owner}','owner','Owner','partner',null,'{"view":true,"catalog":true,"purchases":true,"sales":true,"cashier":true,"production":true,"stocktaking":true,"contacts":true,"collections":true,"staff":true,"expenses":true,"partners":true}',false,false);select public.bon_erp_my_access()`;
  const result=asUser(owner,query);expect(result).toContain('"partner_id": null');expect(result).toContain('"is_owner": true');
 });
-beforeAll(()=>{if(active){setup();sql(`insert into auth.users values('${owner}','test@local.test',now());insert into public.erp_members(user_id,username,partner_id,role)values('${owner}','owner','p1','partner');insert into bon_erp_private.owner_config(id,email)values(true,'test@local.test');`);}},120000);
+it.skipIf(!active)('keeps master protection bound to identity across email changes and rejects old-email impersonation',()=>{
+ const other='22222222-2222-4222-8222-222222220006';userAccessFixture(other,{view:true});
+ expect(sql(`begin;update auth.users set email='changed@local.test',email_confirmed_at=null where id='${owner}';update auth.users set email='test@local.test' where id='${other}';select bon_erp_private.is_master('${owner}'),bon_erp_private.is_master('${other}');rollback;`)).toBe('t|f');
+});
+beforeAll(()=>{if(active){setup();sql(`insert into auth.users values('${owner}','test@local.test',now());insert into public.erp_members(user_id,username,partner_id,role)values('${owner}','owner','p1','partner');insert into bon_erp_private.owner_config(id,email,owner_user_id)values(true,'test@local.test','${owner}');`);}},120000);
 function seed(store:StoreState){
   const fields=Object.entries(toCloud(store));
   sql(`delete from public.bon_elagouz_store;insert into public.bon_elagouz_store(id,version,${fields.map(([name])=>name).join(',')})values('main_store',0,${fields.map(([,value])=>literal(value)).join(',')});`);
