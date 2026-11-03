@@ -1,3 +1,4 @@
+import {FinancialPartnersScreen} from './FinancialPartnersScreen';
 import {CashierDayHistory} from './CashierDayHistory';
 import type {CashierDay} from '../types/erp';
 import {SupplierPurchasePanels} from './SupplierPurchasePanels';
@@ -1679,10 +1680,15 @@ interface MoreMenuProps {
     | "cloud";
   onAddExpense: (exp: Omit<Expense, "id">) => void | boolean;
   showDemoTools?: boolean;
+  canManageData?:boolean;
+  canEditPartners?:boolean;
+  onSavePartners?:(next:Partner[])=>boolean;
+  selectedFinancialPartnerId?:string;
+  onSelectFinancialPartnerId?:(id:string)=>void;
   onDeleteExpense: (id: string) => void;
   onUpdatePartnerAccount: (
     id: string,
-    patch: Partial<Pick<Partner, "name" | "username" | "phone">>,
+    patch: Partial<Pick<Partner, "name" | "phone">>,
   ) => void;
   onClearAllDemoData: () => void;
   onClearTransactionsKeepCatalog: () => void;
@@ -1702,6 +1708,8 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   currentPartner,
   initialSubPage = "menu",
   showDemoTools = false,
+  canManageData=true,canEditPartners=false,onSavePartners,
+  selectedFinancialPartnerId,onSelectFinancialPartnerId,
   onAddExpense,
   onDeleteExpense,
   onUpdatePartnerAccount,
@@ -1735,6 +1743,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   const [savedCloudMsg, setSavedCloudMsg] = useState(false);
 
   // صفحة التحكم في البيانات وحذف الداتا التجريبية
+  if ((subPage==='data_control'||subPage==='cloud')&&!canManageData)return <div className="p-6 space-y-4"><p>إدارة البيانات متاحة للمالك الرئيسي فقط.</p><button onClick={()=>setSubPage('menu')}>رجوع</button></div>;
   if (subPage === "data_control") {
     return (
       <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
@@ -1900,6 +1909,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
             <div className="text-xs font-extrabold text-[#9E7918]">
               + تسجيل مصروف جديد
             </div>
+            {onSelectFinancialPartnerId&&<label className="block text-xs font-bold">حساب الشريك المالي للحركة<select aria-label="حساب الشريك المالي للحركة" className="block w-full border rounded-xl p-3 mt-2" value={selectedFinancialPartnerId??''} onChange={e=>onSelectFinancialPartnerId(e.target.value)}><option value="">اختر الحساب المالي</option>{partners.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
             <input
               type="text"
               value={expTitle}
@@ -2035,69 +2045,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
     );
   }
 
-  if (subPage === "partners") {
-    return (
-      <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
-        <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
-          <button
-            onClick={() => setSubPage("menu")}
-            className="p-1.5 text-[#D4AF37]"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </button>
-          <h1 className="text-base font-extrabold">حسابات الملاك والشركاء</h1>
-          <div className="w-8" />
-        </div>
-        <div className="p-4 space-y-3.5">
-          {partners.map((p) => (
-            <div
-              key={p.id}
-              className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] shadow-sm space-y-2.5"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#1E1612] border border-[#C59B27] text-[#FBF5B7] font-black flex items-center justify-center">
-                  {p.avatarLetter}
-                </div>
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={p.name}
-                    onChange={(e) =>
-                      onUpdatePartnerAccount(p.id, { name: e.target.value })
-                    }
-                    className="bg-transparent text-sm font-extrabold text-[#1E1612] border-b border-dashed border-[#C59B27] focus:outline-none w-full"
-                  />
-                  <div className="text-[11px] text-[#7A6855]">
-                    {p.role} • {p.sharePercent}%
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 bg-[#FAF8F4] p-2 rounded-xl border border-[#EDE6D8] text-xs">
-                <div>
-                  <label className="text-[10px] text-[#7A6855] block">
-                    اسم المستخدم:
-                  </label>
-                  <input
-                    type="text"
-                    value={p.username}
-                    onChange={(e) =>
-                      onUpdatePartnerAccount(p.id, { username: e.target.value })
-                    }
-                    className="w-full bg-white border border-[#DFD7C6] rounded-lg px-2 py-1 font-extrabold"
-                  />
-                </div>
-                <p className="text-xs text-stone-600">
-                  كلمات المرور تُدار من الحساب الموثق ولا تُحفظ ضمن بيانات
-                  المحل.
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  if(subPage==='partners')return <FinancialPartnersScreen partners={partners} canEdit={canEditPartners&&!!onSavePartners} onSave={onSavePartners??(()=>false)} onBack={()=>setSubPage('menu')} onReports={()=>onNavigate('reports')}/>;
 
   if (subPage === "cloud") {
     return (
@@ -2169,12 +2117,13 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
     },
     {
       id: "partners",
-      title: "حسابات الملاك والشركاء",
-      subtitle: "تعديل الأسماء وكلمات السر",
+      title: "الشركاء والحصص",
+      subtitle: "الملكية والمساهمات والمسحوبات",
       icon: Shield,
       iconBg: "bg-[#1E1612] text-[#FBF5B7]",
       action: () => setSubPage("partners"),
     },
+    {id:'users',title:'المستخدمين',subtitle:'حساب المالك وحسابات الدخول والصلاحيات',icon:UserCheck,iconBg:'bg-blue-50 text-blue-700',action:()=>onNavigate('users')},
     {
       id: "stocktaking",
       title: "الجرد الفعلي بالميزان",
@@ -2264,11 +2213,11 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
             </div>
           </div>
           <span className="bg-[#C59B27]/20 text-[#FBF5B7] border border-[#C59B27] text-xs font-black px-2.5 py-1 rounded-xl">
-            {currentPartner.sharePercent}%
+            حساب دخول
           </span>
         </div>
 
-        {menuItems.map((item) => {
+        {menuItems.filter(item=>canManageData||!['data_control','cloud'].includes(item.id)).map((item) => {
           const IconComponent = item.icon;
           return (
             <button

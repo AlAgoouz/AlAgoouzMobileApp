@@ -227,7 +227,7 @@ export interface Expense {
 
 export interface Partner {
   id: string;
-  username: string;                   // اسم المستخدم للدخول (مثلاً owner1)
+  username: string;                   // معرف تاريخي للملف المالي؛ حسابات الدخول مستقلة في erp_members
   name: string;                       // الاسم الكامل للشريك المالك
   role: string;                       // المسمى والاختصاص
   avatarLetter: string;

@@ -1,3 +1,4 @@
+import {assertUserChanges,canView,type UserAccess} from '../lib/userAccess';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { getSupabaseClient } from '../lib/supabaseSync';
 import { StoreEngine } from '../lib/storeEngine';
@@ -11,10 +12,8 @@ export function useErpStore() {
   const [passwordRecovery, setPasswordRecovery] = useState(recoveryFlow.current);
   const passwordUpdated = useRef(false);
   const [recoveryPasswordUpdated, setRecoveryPasswordUpdated] = useState(false);
-  const [member, setMember] = useState<{
-    userId: string;
-    partnerId: string;
-  } | null>(null);
+  const [member, setMember] = useState<UserAccess|null>(null);
+  const accessRef = useRef<UserAccess|null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState(() => {
     const code = new URLSearchParams(window.location.hash.slice(1)).get('error_code');
@@ -76,6 +75,7 @@ export function useErpStore() {
           JSON.stringify({ savedAt: new Date().toISOString(), state }),
         );
       },
+      (before,after)=>assertUserChanges(before,after,accessRef.current),
     );
   }
   const engine = engineRef.current;
@@ -105,6 +105,7 @@ export function useErpStore() {
       if (disposed || run !== generation.current) return;
       if (error || !user) {
         activeUser.current = null;
+        accessRef.current = null;
         setMember(null);
         engine.logout();
         setAuthReady(true);
@@ -114,40 +115,23 @@ export function useErpStore() {
         setAuthReady(true);
         return;
       }
-      if (
-        activeUser.current === user.id &&
-        engine.snapshot.status !== 'signed-out'
-      ) {
-        setAuthReady(true);
-        return;
+      let {data:profile,error:profileError}=await sb.rpc('bon_erp_my_access');
+      if(!profile && !profileError){
+        const setup=await sb.rpc('bon_erp_bootstrap_owner');
+        if(!setup.error){const result=await sb.rpc('bon_erp_my_access');profile=result.data;profileError=result.error;}
       }
-      let { data: profile, error: profileError } = await sb
-        .from('erp_members')
-        .select('partner_id,role')
-        .eq('user_id', user.id)
-        .single();
-      if (profileError || !profile) {
-        const setup = await sb.rpc('bon_erp_bootstrap_owner');
-        if (!setup.error) {
-          const result = await sb
-            .from('erp_members')
-            .select('partner_id,role')
-            .eq('user_id', user.id)
-            .single();
-          profile = result.data;
-          profileError = result.error;
-        }
-      }
-      if (disposed || run !== generation.current) return;
-      if (profileError || profile?.role !== 'partner' || !profile.partner_id) {
-        setAuthError('الحساب غير مخوّل للدخول كشريك');
-        setMember(null);
-        engine.logout();
-      } else {
-        activeUser.current = user.id;
-        setAuthError('');
-        setMember({ userId: user.id, partnerId: profile.partner_id });
-        await engine.load();
+      if(disposed||run!==generation.current)return;
+      if(profileError||!profile||!['partner','cashier'].includes(profile.role)){
+        accessRef.current=null;activeUser.current=null;
+        setAuthError('الحساب غير مخوّل للدخول أو تم تعطيله؛ راجع المالك');
+        setMember(null);engine.logout();
+      }else{
+        const access:UserAccess={userId:user.id,partnerId:profile.partner_id??null,username:profile.username,displayName:profile.display_name||profile.username,role:profile.role,isOwner:profile.is_owner===true,permissions:profile.permissions??{}};
+        const alreadyLoaded=activeUser.current===user.id&&engine.snapshot.status!=='signed-out';
+        accessRef.current=access;activeUser.current=user.id;setAuthError('');
+        setMember(previous=>JSON.stringify(previous)===JSON.stringify(access)?previous:access);
+        if(access.role==='partner'&&canView(access)){if(!alreadyLoaded)await engine.load();}
+        else engine.logout();
       }
       if (!disposed) setAuthReady(true);
       } catch (failure) {
@@ -158,12 +142,14 @@ export function useErpStore() {
       }
     };
     void resolveUser();
+    const accessTimer=setInterval(()=>{if(document.visibilityState!=='hidden'&&navigator.onLine)void resolveUser();},15000);
     const {
       data: { subscription },
     } = sb.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         ++generation.current;
         activeUser.current = null;
+        accessRef.current = null;
         recoveryFlow.current = true;
         passwordUpdated.current = false;
         setRecoveryPasswordUpdated(false);
@@ -174,9 +160,10 @@ export function useErpStore() {
       } else if (event === 'SIGNED_OUT') {
         ++generation.current;
         activeUser.current = null;
+        accessRef.current = null;
         setMember(null);
         engine.logout();
-      } else if (event === 'SIGNED_IN')
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')
         setTimeout(() => {
           void resolveUser();
         }, 0);
@@ -184,11 +171,12 @@ export function useErpStore() {
     return () => {
       disposed = true;
       ++generation.current;
+      clearInterval(accessTimer);
       subscription.unsubscribe();
     };
   }, [engine]);
   useEffect(() => {
-    if (!member) return;
+    if (!member || !canView(member) || member.role==='cashier') return;
     const sb = getSupabaseClient();
     if (!sb) return;
     const channel = sb
@@ -232,7 +220,7 @@ export function useErpStore() {
       document.removeEventListener('visibilitychange', refresh);
       window.removeEventListener('beforeunload', beforeUnload);
     };
-  }, [engine, member?.userId]);
+  }, [engine, member?.userId, member?.role, member?.permissions.view]);
   async function signIn(email: string, password: string, remember: boolean) {
     const sb = getSupabaseClient();
     if (!sb) throw new Error('إعداد الاتصال غير صالح');

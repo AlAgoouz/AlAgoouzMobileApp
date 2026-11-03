@@ -32,6 +32,7 @@ function client(role = 'partner', user: any = { id: 'user1' }) {
         return { data: { subscription: { unsubscribe: vi.fn() } } };
       }),
     },
+    rpc:vi.fn(async(name:string)=>({data:name==='bon_erp_my_access'?{partner_id:role==='partner'?'p1':null,role,username:'owner',display_name:'Test user',is_owner:role==='partner',permissions:role==='partner'?{view:true}:{} }:null,error:null})),
     from: vi.fn((table: string) => ({
       select: () => ({
         eq: () => ({
@@ -122,15 +123,35 @@ it('stops an existing business session when a recovery event arrives',async()=>{
   expect(result.current.member).toBeNull();
   expect(result.current.status).toBe('signed-out');
 });
-it('requires membership before loading store data', async () => {
+it('keeps a cashier upload account separate from store data', async () => {
   const { sb } = client('cashier');
   const { result } = renderHook(() => useErpStore());
   await waitFor(() => expect(result.current.authReady).toBe(true));
-  expect(result.current.member).toBeNull();
-  expect(result.current.authError).toContain('غير مخوّل');
+  expect(result.current.member?.role).toBe('cashier');
+  expect(result.current.member?.partnerId).toBeNull();
+  expect(result.current.authError).toBe('');
   expect(
     sb.from.mock.calls.some((call) => call[0] === 'bon_elagouz_store'),
   ).toBe(false);
+});
+it('loads an unlinked dashboard user without requiring a financial partner',async()=>{
+  const {sb}=client();
+  sb.rpc.mockResolvedValue({data:{partner_id:null,role:'partner',username:'employee',display_name:'Employee',is_owner:false,permissions:{view:true}},error:null});
+  const {result}=renderHook(()=>useErpStore());
+  await waitFor(()=>expect(result.current.status).toBe('ready'));
+  expect(result.current.member?.partnerId).toBeNull();
+  expect(result.current.member?.isOwner).toBe(false);
+  expect(()=>result.current.engine.field('partners',[])).toThrow('للعرض فقط');
+  expect(result.current.status).toBe('ready');
+  expect(localStorage.getItem('bon_elagouz_recovery_draft_v4')).toBeNull();
+});
+it('clears shop data when current access is revoked on a refreshed session',async()=>{
+  const {sb,event}=client();const {result}=renderHook(()=>useErpStore());
+  await waitFor(()=>expect(result.current.status).toBe('ready'));
+  sb.rpc.mockResolvedValue({data:null,error:{message:'access revoked'}});
+  act(()=>event('TOKEN_REFRESHED'));
+  await waitFor(()=>expect(result.current.member).toBeNull());
+  expect(result.current.status).toBe('signed-out');
 });
 it('loads an authenticated partner and signs out through Supabase', async () => {
   const { sb } = client();

@@ -1,4 +1,5 @@
 export function storeWriteError(message:string):string {
+  if(/USER_PERMISSION_DENIED/.test(message))return 'ليس لديك تصريح لتنفيذ هذه العملية أو تغيرت صلاحياتك؛ راجع المالك ثم حدّث بيانات الدخول.';
   if(/CONTACT_DETAILS_REQUIRED/.test(message))return 'أكمل رقم التليفون والمنطقة للعميل، أو العنوان واسم المندوب للمورد، قبل إنشاء الفاتورة.';
   if(/CLIENT_UPGRADE_REQUIRED|INVALID_STATE: cashier_days/.test(message))return 'تم تحديث قواعد التشغيل؛ أعد تحميل الصفحة قبل تسجيل عملية جديدة.';
   if(/NEW_PURCHASE_FULL_PAYMENT/.test(message))return 'المشتريات الجديدة مدفوعة بالكامل، ويجب أن يشمل المدفوع الضريبة.';

@@ -44,6 +44,7 @@ export class StoreEngine {
   constructor(
     private transport: StoreTransport,
     private preserve: (state: StoreState) => void = () => {},
+    private authorize: (before:StoreState,after:StoreState)=>void = ()=>{},
   ) {}
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -102,6 +103,7 @@ export class StoreEngine {
       this.batchState = state;
       return;
     }
+    this.authorize(this.snapshot.state,state);
     const validated = validateStore(state);
     this.preserve(validated); // Failing local recovery storage must be visible, not ignored.
     this.pending = {
