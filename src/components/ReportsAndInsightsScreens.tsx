@@ -118,7 +118,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
         </h1>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => onNavigate('more')}
+            onClick={() => onNavigate('partners')}
             className="p-1.5 rounded-xl hover:bg-white/10 text-[#D4AF37]"
             title="الشركاء"
           >
@@ -342,6 +342,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
 // شاشة تقارير الأرباح وتوزيع الشركاء الأربعة (ProfitReportsScreen)
 // ============================================================================
 interface ProfitReportsProps {
+  onInsights?:()=>void;
   items: InventoryItem[];
   salesInvoices: SalesInvoice[];
   expenses: Expense[];
@@ -350,6 +351,7 @@ interface ProfitReportsProps {
 }
 
 export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
+  onInsights,
   items,
   salesInvoices,
   expenses,
@@ -442,7 +444,54 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
         </button>
       </div>
 
+      <div className="report-tabs bg-white border-b border-[#E6DEC8] py-2 px-3 grid grid-cols-4" aria-label="أقسام التقرير">
+        <button
+          onClick={() => setBottomTab('summary')} aria-pressed={bottomTab==='summary'}
+          className={`flex flex-col items-center gap-1 py-1 ${
+            bottomTab === 'summary'
+              ? 'text-[#1E1612] font-black'
+              : 'text-[#9C8B7A]'
+          }`}
+        >
+          <LayoutGrid className="w-5 h-5 text-[#C59B27]" />
+          <span className="text-[11px]">الملخص</span>
+        </button>
+        <button
+          onClick={() => setBottomTab('partners_share')} aria-pressed={bottomTab==='partners_share'}
+          className={`flex flex-col items-center gap-1 py-1 ${
+            bottomTab === 'partners_share'
+              ? 'text-[#1E1612] font-black'
+              : 'text-[#9C8B7A]'
+          }`}
+        >
+          <Users className="w-5 h-5 text-[#C59B27]" />
+          <span className="text-[11px]">حصص الشركاء</span>
+        </button>
+        <button
+          onClick={() => setBottomTab('products')} aria-pressed={bottomTab==='products'}
+          className={`flex flex-col items-center gap-1 py-1 ${
+            bottomTab === 'products'
+              ? 'text-[#1E1612] font-black'
+              : 'text-[#9C8B7A]'
+          }`}
+        >
+          <Package className="w-5 h-5 text-[#C59B27]" />
+          <span className="text-[11px]">ربحية الأصناف</span>
+        </button>
+        <button
+          onClick={() => setBottomTab('invoices')} aria-pressed={bottomTab==='invoices'}
+          className={`flex flex-col items-center gap-1 py-1 ${
+            bottomTab === 'invoices'
+              ? 'text-[#1E1612] font-black'
+              : 'text-[#9C8B7A]'
+          }`}
+        >
+          <FileText className="w-5 h-5 text-[#C59B27]" />
+          <span className="text-[11px]">الفواتير</span>
+        </button>
+      </div>
       <div className="p-4 space-y-4 flex-1">
+        {onInsights&&<button type="button" onClick={onInsights} className="text-xs border border-[#E6DEC8] bg-white rounded-xl px-4 py-3 flex items-center gap-2"><Sparkles size={16}/>تحليلات المحل والتنبيهات</button>}
         {bottomTab === 'summary' && (
           <>
             {/* كارت صافي الربح الرئيسي بهوية بُن العجوز (إسبريسو وذهبي وأخضر زمردي) */}
@@ -751,53 +800,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
         )}
       </div>
 
-      {/* شريط التنقل السفلي داخل التقارير */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#E6DEC8] py-2 px-3 grid grid-cols-4 z-30 max-w-md mx-auto">
-        <button
-          onClick={() => setBottomTab('summary')}
-          className={`flex flex-col items-center gap-1 py-1 ${
-            bottomTab === 'summary'
-              ? 'text-[#1E1612] font-black'
-              : 'text-[#9C8B7A]'
-          }`}
-        >
-          <LayoutGrid className="w-5 h-5 text-[#C59B27]" />
-          <span className="text-[11px]">الملخص</span>
-        </button>
-        <button
-          onClick={() => setBottomTab('partners_share')}
-          className={`flex flex-col items-center gap-1 py-1 ${
-            bottomTab === 'partners_share'
-              ? 'text-[#1E1612] font-black'
-              : 'text-[#9C8B7A]'
-          }`}
-        >
-          <Users className="w-5 h-5 text-[#C59B27]" />
-          <span className="text-[11px]">حصص الشركاء</span>
-        </button>
-        <button
-          onClick={() => setBottomTab('products')}
-          className={`flex flex-col items-center gap-1 py-1 ${
-            bottomTab === 'products'
-              ? 'text-[#1E1612] font-black'
-              : 'text-[#9C8B7A]'
-          }`}
-        >
-          <Package className="w-5 h-5 text-[#C59B27]" />
-          <span className="text-[11px]">ربحية الأصناف</span>
-        </button>
-        <button
-          onClick={() => setBottomTab('invoices')}
-          className={`flex flex-col items-center gap-1 py-1 ${
-            bottomTab === 'invoices'
-              ? 'text-[#1E1612] font-black'
-              : 'text-[#9C8B7A]'
-          }`}
-        >
-          <FileText className="w-5 h-5 text-[#C59B27]" />
-          <span className="text-[11px]">الفواتير</span>
-        </button>
-      </div>
+
     </div>
   );
 };

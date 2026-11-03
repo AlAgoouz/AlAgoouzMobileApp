@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, ArrowUpLeft, BarChart3, Calculator, ChevronLeft, FileText, Flame, FolderSync, Package, RotateCcw, Scale, Search, ShoppingBag, Tag, Truck, UserCheck, Users, Wallet } from 'lucide-react';
+import { AlertTriangle, BarChart3, Calculator, ChevronLeft, FileText, Flame, FolderSync, Package, RotateCcw, Scale, Search, ShoppingBag, Tag, Truck, UserCheck, Users, Wallet } from 'lucide-react';
 
 interface SectionLink { id: string; title: string; description: string; icon: typeof Package; group: string; tone: string; }
 const links: SectionLink[] = [
@@ -31,7 +31,6 @@ export function SectionsHub({onNavigate, counts}: {onNavigate:(id:string)=>void;
       <div className="sections-hero-mark" aria-hidden="true"><img src="/logo.png" alt="" width="88" height="88" /></div>
       <p className="sections-eyebrow">مساحة العمل</p><h1 id="sections-title">كل شغلك، بخطوة واحدة</h1>
       <p>من أول حبة بن، لآخر حساب في اليوم.</p>
-      <button type="button" onClick={() => onNavigate('home')}>نظرة على أداء المحل <ArrowUpLeft size={16} aria-hidden="true" /></button>
     </header>
     <div className="sections-search"><Search size={20} aria-hidden="true" /><input aria-label="ابحث في الأقسام" placeholder="عايز تروح فين؟ ابحث عن قسم…" value={query} onChange={e => setQuery(e.target.value)} />{query && <button type="button" onClick={() => setQuery('')}>مسح</button>}</div>
     {groups.map(group => {

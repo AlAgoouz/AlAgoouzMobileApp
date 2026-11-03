@@ -1058,7 +1058,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
           </section>
 
           {/* شريط حفظ الفاتورة السفلي */}
-          <div className="fixed bottom-[58px] left-0 right-0 bg-white border-t border-[#E6DEC8] p-3 flex items-center gap-2.5 z-30 max-w-[445px] mx-auto shadow-md">
+          <div className="workspace-actions fixed left-0 right-0 bg-white border-t border-[#E6DEC8] p-3 flex items-center gap-2.5 z-30 mx-auto shadow-md">
             <button
               onClick={handleSave}
               disabled={cart.length === 0}
