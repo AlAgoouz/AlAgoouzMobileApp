@@ -5,7 +5,7 @@ import fs from 'node:fs';
 export async function verifyDesign(){
   assert.equal(process.env.CI,'true','DESIGN_REVIEW_REQUIRES_ISOLATED_CI');
   const browser=await chromium.launch({headless:true});
-  const evidence={login:false,recovery:false,resend:false,sections:[],widths:[],pageErrors:[],layoutErrors:[]};
+  const evidence={login:false,recovery:false,resend:false,recoveredPasswordForm:false,sections:[],widths:[],pageErrors:[],layoutErrors:[]};
   const origin='http://127.0.0.1:5284';
   const limit=async (page,stage)=>{
     const layout=await page.evaluate(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width&& (r.right>innerWidth+1||r.left< -1);}).slice(0,12).map(e=>({tag:e.tagName,classes:e.className,text:e.textContent?.slice(0,90)}))}));
@@ -17,6 +17,7 @@ export async function verifyDesign(){
     const page=await context.newPage();page.on('pageerror',e=>evidence.pageErrors.push(e.message));
     await page.goto(origin);await page.getByRole('heading',{name:'أهلًا برجوعك'}).waitFor();
     assert.equal(await page.getByText(/بوابة الدخول الآمن|إنشاء حساب المالك/).count(),0);
+    await page.locator('.login-brand img').evaluate(img=>img.decode());
     await limit(page,'login');await page.screenshot({path:'design-login-mobile.png',fullPage:true});evidence.login=true;
     await page.getByRole('button',{name:'نسيت كلمة المرور؟'}).click();
     await page.getByRole('heading',{name:'استعادة كلمة المرور'}).waitFor();
@@ -51,6 +52,12 @@ export async function verifyDesign(){
       await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
       await page.getByRole('heading',{name:'كل شغلك، بخطوة واحدة'}).waitFor();
     }
+    await page.goto(origin+'/#type=recovery');
+    await page.getByRole('heading',{name:'اختر كلمة مرور جديدة'}).waitFor();
+    await page.locator('.login-brand img').evaluate(img=>img.decode());
+    await limit(page,'recovered-password-form');
+    await page.screenshot({path:'design-new-password-mobile.png',fullPage:true});
+    evidence.recoveredPasswordForm=true;
     assert.deepEqual(evidence.pageErrors,[]);
     assert.deepEqual(evidence.layoutErrors,[],'Every section must fit the mobile viewport');
   } finally { await browser.close();fs.writeFileSync('design-review-performance.json',JSON.stringify(evidence,null,2)); }

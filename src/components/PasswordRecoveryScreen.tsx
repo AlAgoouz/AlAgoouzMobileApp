@@ -15,15 +15,17 @@ export function PasswordRecoveryScreen({onUpdatePassword,onCancel,passwordUpdate
     catch (failure) { setError(failure instanceof Error ? failure.message : 'تعذر تحديث كلمة المرور'); }
     finally { setBusy(false); }
   };
-  return <main dir="rtl" className="min-h-screen bg-[#1E1612] p-5 flex items-center justify-center">
-    <form onSubmit={submit} className="bg-white rounded-3xl p-6 max-w-md w-full space-y-4">
+  return <main dir="rtl" className="agouz-login">
+    <section className="login-panel"><header className="login-brand"><img src="/logo.png" alt="بُن العجوز - أصل المزاج" width="88" height="88"/><span className="login-wordmark">بُن العجوز</span><p>استعادة الدخول لحسابك</p></header>
+    <form onSubmit={submit} className="login-form">
       <h1 className="text-xl font-bold">{passwordUpdated ? 'تم تحديث كلمة المرور' : 'اختر كلمة مرور جديدة'}</h1>
-      <p>{passwordUpdated ? 'أكمل إنهاء الجلسات للعودة إلى تسجيل الدخول.' : '12 حرفًا على الأقل. بعد التحديث ستعود لتسجيل الدخول بكلمة المرور الجديدة.'}</p>
-      {error && <p role="alert" className="text-red-700">{error}</p>}
-      {!passwordUpdated && <><label className="block">كلمة المرور الجديدة<input required minLength={12} type="password" autoComplete="new-password" value={password} onChange={(event)=>setPassword(event.target.value)} className="block w-full border rounded-xl p-3" /></label>
-      <label className="block">تأكيد كلمة المرور الجديدة<input required minLength={12} type="password" autoComplete="new-password" value={confirm} onChange={(event)=>setConfirm(event.target.value)} className="block w-full border rounded-xl p-3" /></label></>}
-      <button disabled={busy} className="w-full rounded-xl bg-[#1E1612] text-[#FBF5B7] p-3 font-bold">{busy ? 'جارٍ التحديث…' : passwordUpdated ? 'إنهاء الجلسات والعودة للدخول' : 'تأكيد كلمة المرور الجديدة'}</button>
-      {onCancel && <button type="button" disabled={busy} className="underline text-sm" onClick={async()=>{setBusy(true);try{await onCancel();}catch(failure){setError((failure as Error).message);}finally{setBusy(false);}}}>العودة لطلب رابط جديد</button>}
+      <p className="login-intro">{passwordUpdated ? 'أكمل إنهاء الجلسات للعودة إلى تسجيل الدخول.' : '12 حرفًا على الأقل. بعد التحديث ستعود لتسجيل الدخول بكلمة المرور الجديدة.'}</p>
+      {error && <p role="alert" className="login-error">{error}</p>}
+      {!passwordUpdated && <><label className="login-label">كلمة المرور الجديدة<input disabled={busy} required minLength={12} type="password" autoComplete="new-password" value={password} onChange={(event)=>setPassword(event.target.value)} className="block mt-2 w-full border border-[#DFD5C7] rounded-xl p-3" /></label>
+      <label className="login-label">تأكيد كلمة المرور الجديدة<input disabled={busy} required minLength={12} type="password" autoComplete="new-password" value={confirm} onChange={(event)=>setConfirm(event.target.value)} className="block mt-2 w-full border border-[#DFD5C7] rounded-xl p-3" /></label></>}
+      <button disabled={busy} className="login-submit">{busy ? 'جارٍ التحديث…' : passwordUpdated ? 'إنهاء الجلسات والعودة للدخول' : 'تأكيد كلمة المرور الجديدة'}</button>
+      {onCancel && <button type="button" disabled={busy} className="login-back" onClick={async()=>{setBusy(true);try{await onCancel();}catch(failure){setError((failure as Error).message);}finally{setBusy(false);}}}>العودة لطلب رابط جديد</button>}
     </form>
+    </section>
   </main>;
 }
