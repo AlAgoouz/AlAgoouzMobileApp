@@ -4,6 +4,8 @@ import {it,expect,vi,afterEach} from 'vitest';
 import {render,screen,fireEvent,cleanup} from '@testing-library/react';
 import {PeriodSelector} from '../src/components/PeriodSelector';
 import {ComparisonChart,TrendChart} from '../src/components/FinancialCharts';
+import {SmartInsightsScreen} from '../src/components/ReportsAndInsightsScreens';
+import {fixture} from './performance/fixture.mjs';
 afterEach(cleanup);
 it('retains the applied range until valid custom dates are explicitly applied',()=>{
  const change=vi.fn();render(<PeriodSelector value={{kind:'custom',from:'2026-11-01',to:'2026-11-03'}} onChange={change}/>);
@@ -27,4 +29,11 @@ it('breaks the trend at missing records and provides touch/keyboard-readable det
 it('conceals profit values and their plotted points when privacy is enabled',()=>{
  const {container}=render(<TrendChart hide points={[{date:'2026-11-01',sales:10,profit:-5,recorded:true}]}/>);
  expect(container.querySelector('.trend-profit')).toBeNull();expect(container.querySelector('.point-negative')).toBeNull();expect(screen.queryByTitle(/الصافي/)).toBeNull();
+});
+it('keeps insights within the shared period and distinguishes unpriced stock from a zero profit estimate',()=>{
+ const data=fixture(2),from='2099-01-01',to='2099-01-02';
+ render(<SmartInsightsScreen period={{kind:'custom',from,to}} onPeriod={vi.fn()} items={[{...data.items[0],stock:10,costPrice:100,retailPrice:0}]} salesInvoices={data.sales_invoices} customers={[]} onNavigate={vi.fn()} onBack={vi.fn()}/>);
+ expect(screen.getByRole('heading',{name:/إجمالي المبيعات/}).textContent).toContain('٠');
+ expect(screen.getByText('غير متاح: أسعار ناقصة أو رصيد سالب')).toBeTruthy();
+ expect((screen.getByLabelText('بداية الفترة') as HTMLInputElement).value).toBe(from);
 });

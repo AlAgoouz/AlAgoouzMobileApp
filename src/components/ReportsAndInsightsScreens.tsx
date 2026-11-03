@@ -1,9 +1,8 @@
-import {initialPeriod,reportRange,buildReport,type PeriodSelection} from '../lib/reporting';
+import {initialPeriod,reportRange,inReportRange,buildReport,type PeriodSelection} from '../lib/reporting';
 import {PeriodSelector} from './PeriodSelector';
 import {TrendChart} from './FinancialCharts';
 import {isStockItem} from '../lib/itemPolicy';
 import { operatingExpenses } from '../lib/ledger';
-import { isInPeriod } from '../lib/dates';
 import React, { useState, useMemo } from 'react';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import {
@@ -31,6 +30,7 @@ import {
 } from '../types/erp';
 
 interface SmartInsightsProps {
+  period?:PeriodSelection;onPeriod?:(next:PeriodSelection)=>void;
   items: InventoryItem[];
   salesInvoices: SalesInvoice[];
   customers: Customer[];
@@ -39,21 +39,21 @@ interface SmartInsightsProps {
 }
 
 export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
+  period,onPeriod,
   items,
   salesInvoices,
   customers,
   onNavigate,
   onBack,
 }) => {
-  const [period, setPeriod] = useState<'today' | '7days' | '30days' | 'all'>(
-    '30days',
-  );
+  const [localPeriod,setLocalPeriod]=useState(initialPeriod);
+  const selection=period??localPeriod,range=reportRange(selection);
 
   // حسابات حقيقية 100% من بيانات المتجر
   const activeInvoices = useMemo(
     () =>
-      salesInvoices.filter((i) => !i.isReturned && isInPeriod(i.date, period)),
-    [salesInvoices, period],
+      salesInvoices.filter((i) => !i.isReturned && inReportRange(i.date,range)),
+    [salesInvoices, range.from,range.to,range.valid],
   );
 
   const totalSales = useMemo(
@@ -87,10 +87,8 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
     [items],
   );
 
-  const expectedStockProfit = Math.max(
-    0,
-    totalExpectedRetailValue - totalInventoryValue,
-  );
+  const expectedStockProfit = totalExpectedRetailValue-totalInventoryValue;
+  const estimateAvailable=!items.some(i=>isStockItem(i)&&(i.stock<0||i.stock>0&&i.retailPrice<=0));
 
   const totalCustomerDebts = useMemo(
     () => customers.reduce((sum, c) => sum + c.balance, 0),
@@ -138,29 +136,8 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
       </div>
 
       <div className="p-4 space-y-4">
-        {/* أزرار الفلتر باللون الفاتح والذهبي */}
-        <div className="flex items-center justify-center gap-2 overflow-x-auto py-1">
-          {(
-            [
-              { id: 'today', label: 'اليوم' },
-              { id: '7days', label: 'آخر 7 أيام' },
-              { id: '30days', label: 'آخر 30 يوم' },
-              { id: 'all', label: 'كل الفترات' },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setPeriod(tab.id)}
-              className={`px-4 py-2 rounded-full text-xs font-extrabold transition shrink-0 border ${
-                period === tab.id
-                  ? 'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27] shadow-sm'
-                  : 'bg-white text-[#5C4B3E] border-[#E6DEC8] hover:border-[#C59B27]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <PeriodSelector value={selection} onChange={onPeriod??setLocalPeriod}/>
+        <p className="report-period-note">المبيعات ومجمل الربح للفترة المختارة. المخزون ومديونيات العملاء أرصدة حالية؛ مجمل الربح هنا قبل المصروفات.</p>
 
         {/* كارت التوصية الذكية الذهبي والداكن */}
         <div className="rounded-3xl bg-gradient-to-br from-[#231914] via-[#1C1410] to-[#2E2119] text-white p-5 shadow-lg border border-[#C59B27]/50 space-y-4">
@@ -179,7 +156,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
               </div>
             </div>
             <span className="bg-[#C59B27] text-[#1E1612] text-xs font-black px-3 py-1 rounded-full">
-              هامش ربح {profitMarginPercent.toFixed(1)}%
+              {totalSales>0?`هامش مجمل الربح ${profitMarginPercent.toFixed(1)}%`:'الهامش غير متاح دون مبيعات'}
             </span>
           </div>
 
@@ -211,10 +188,10 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
               </div>
               <div>
                 <div className="text-sm font-extrabold text-[#1E1612]">
-                  تحليل رأس المال والأرباح الكامنة بالمخزن
+                  المخزون ومستحقات العملاء
                 </div>
                 <div className="text-[11px] text-[#7A6855]">
-                  حساب حي من أرصدة البن والتوليفات ومديونيات الجملة
+                  أرصدة حالية منفصلة عن فترة المبيعات
                 </div>
               </div>
             </div>
@@ -226,7 +203,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
                 totalInventoryValue + totalCustomerDebts,
               ).toLocaleString('ar-EG')}{' '}
               <span className="text-sm font-bold text-[#9E7918]">
-                ج.م إجمالي الأصول
+                ج.م مخزون ومديونيات عملاء
               </span>
             </div>
           </div>
@@ -234,7 +211,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
           <div className="bg-[#FAF8F4] rounded-2xl p-3.5 space-y-2.5 text-xs border border-[#EAE2D3]">
             <div className="flex items-center justify-between">
               <span className="text-[#5C4B3E] font-semibold">
-                • تكلفة البضاعة الموجودة بالمخزن حالياً (WAC):
+                • تكلفة البضاعة الموجودة بالمخزن حاليًا:
               </span>
               <span className="font-black text-[#1E1612]">
                 {Math.round(totalInventoryValue).toLocaleString('ar-EG')} ج.م
@@ -242,10 +219,10 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[#5C4B3E] font-semibold">
-                • الأرباح المتوقعة عند بيع رصيد المخزن الحالي:
+                • فارق أسعار البيع المسجلة عن تكلفة المخزون:
               </span>
-              <span className="font-black text-emerald-700">
-                +{Math.round(expectedStockProfit).toLocaleString('ar-EG')} ج.م
+              <span className={estimateAvailable&&expectedStockProfit<0?'font-black value-negative':'font-black text-[#80673e]'}>
+                {estimateAvailable?Math.round(expectedStockProfit).toLocaleString('ar-EG')+' ج.م':'غير متاح: أسعار ناقصة أو رصيد سالب'}
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -298,7 +275,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
               {Math.round(grossProfit).toLocaleString('ar-EG')} ج.م
             </div>
             <div className="text-[11px] font-bold text-[#7A6855]">
-              هامش {profitMarginPercent.toFixed(1)}%
+              {totalSales>0?`هامش ${profitMarginPercent.toFixed(1)}%`:'غير متاح دون مبيعات'}
             </div>
           </div>
 

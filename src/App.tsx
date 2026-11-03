@@ -1479,6 +1479,7 @@ export default function App() {
 
         {activeScreen === "insights" && (
           <SmartInsightsScreen
+            period={reportPeriod} onPeriod={setReportPeriod}
             items={items}
             salesInvoices={reportSales}
             customers={customers}

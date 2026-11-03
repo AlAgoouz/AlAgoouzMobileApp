@@ -88,6 +88,12 @@ export async function verifyDesign(){
           const rect=await button.boundingBox();assert.ok(rect&&rect.y<450,'Report tabs must be reachable above the primary navigation');
         }
         evidence.reportTabsAccessible=true;
+        await page.getByRole('button',{name:'تحليلات المحل والتنبيهات',exact:true}).click();
+        await page.getByRole('heading',{name:'تحليلات وذكاء بُن العجوز',exact:true}).waitFor();
+        assert.equal(await page.getByRole('button',{name:'كل السجل',exact:true}).getAttribute('aria-pressed'),'true','Insights must retain the selected report range');
+        await limit(page,'insights-mobile');
+        await page.getByRole('button',{name:'التقارير',exact:true}).click();
+        await page.getByRole('heading',{name:'تقارير الأرباح وحصص الشركاء',exact:true}).waitFor();
       }
       evidence.sections.push(title);
       await page.screenshot({path:`design-section-${evidence.sections.length}-mobile.png`,fullPage:true});
