@@ -1,0 +1,40 @@
+name: Agouz focused visual review
+on:
+  pull_request:
+    paths: ['src/**', 'tests/performance/**', '.github/workflows/visual-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  visual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Build isolated fixture interface
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:5284
+          VITE_SUPABASE_PUBLISHABLE_KEY: fixture-only-public-key
+        run: npm run build
+      - name: Review layouts and interactions
+        run: |
+          set -euo pipefail
+          node tests/performance/server.mjs dist > visual-server.log 2>&1 &
+          fixture_pid=$!
+          trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do curl -fsS http://127.0.0.1:5284/__perf__/metrics && break || sleep 1; done
+          node --input-type=module -e "await (await import('./tests/performance/design-review.mjs')).verifyDesign()"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agouz-focused-visual-review
+          path: |
+            design-*-mobile.png
+            design-review-performance.json
+          if-no-files-found: error
