@@ -9,7 +9,7 @@ export async function verifyDesign(){
   const origin='http://127.0.0.1:5284';
   const limit=async (page,stage)=>{
     const layout=await page.evaluate(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width&& (r.right>innerWidth+1||r.left< -1);}).slice(0,12).map(e=>({tag:e.tagName,classes:e.className,text:e.textContent?.slice(0,90)}))}));
-    if(layout.scrollWidth>layout.width+1){evidence.layoutErrors.push({stage,...layout});console.log('Layout overflow',stage,JSON.stringify(layout));}
+    if(layout.scrollWidth>layout.width+1){const debug=await page.evaluate(()=>({scrollX,roots:[...document.querySelectorAll('html,body,#root,.agouz-app,.app-workspace,.screen-stage,.account-content,.account-access')].map(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {node:e.tagName,classes:e.className,x:r.x,width:r.width,right:r.right,display:s.display,columns:s.gridTemplateColumns,minWidth:s.minWidth,margin:s.margin,padding:s.padding};}),elements:[...document.querySelectorAll('h1,.account-access span')].slice(0,15).map(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {text:e.textContent?.slice(0,40),x:r.x,width:r.width,right:r.right,font:s.font,position:s.position,transform:s.transform};})}));evidence.layoutErrors.push({stage,...layout,debug});console.log('Layout overflow',stage,JSON.stringify({...layout,debug}));}
   };
   try {
     const context=await browser.newContext({viewport:{width:360,height:800},reducedMotion:'reduce'});
@@ -55,7 +55,7 @@ export async function verifyDesign(){
     await page.getByRole('heading',{name:'صلاحيات حسابك',exact:true}).waitFor();
     evidence.accountHasNoSectionMenu=true;await limit(page,'account-desktop');
     await page.screenshot({path:'design-account-desktop-mobile.png',fullPage:true});
-    await page.setViewportSize({width:360,height:800});await limit(page,'account-mobile');
+    await page.setViewportSize({width:360,height:800});await limit(page,'account-mobile');await page.screenshot({path:'design-account-mobile.png',fullPage:true});
     await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
     await page.getByRole('heading',{name:'كل شغلك، بخطوة واحدة'}).waitFor();
     await page.screenshot({path:'design-sections-mobile.png',fullPage:true});
