@@ -1260,8 +1260,10 @@ export default function App() {
               </div>
             </div>
 
+            <div className="home-panels home-full">
+              <div className="home-column">
             {/* الرسم البياني 1: أعمدة مقارنة المبيعات والتكلفة والمصاريف وصافي الربح */}
-            <div className="bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-3">
+            <div className="home-comparison bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-[#1E1612] text-[#FBF5B7] flex items-center justify-center">
@@ -1376,8 +1378,75 @@ export default function App() {
               })()}
             </div>
 
+            {/* الرسم البياني 3: أعلى الأصناف والتوليفات مبيعاً وربحية (Horizontal Bar Chart) */}
+            <div className="home-products bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[#1E1612] text-[#FBF5B7] flex items-center justify-center">
+                    <Flame className="w-4 h-4 text-[#D4AF37]" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-[#1E1612]">
+                      الأعلى مبيعاً وربحية في بُن العجوز
+                    </h3>
+                    <p className="text-[10px] text-[#8C7A6B]">
+                      ترتيب الأصناف والتوليفات حسب قيمة المبيعات
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {dashboardAnalytics.topSellingProducts.length === 0 ? (
+                <div className="text-center py-6 text-xs text-[#8C7A6B]">
+                  لا توجد مبيعات مسجلة حالياً لعرض الرسم البياني
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {dashboardAnalytics.topSellingProducts.map((prod, idx) => {
+                    const widthPct = Math.max(
+                      12,
+                      Math.round(
+                        (prod.revenue / dashboardAnalytics.maxProductRevenue) *
+                          100,
+                      ),
+                    );
+                    return (
+                      <div key={idx} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-1.5 font-extrabold text-[#1E1612]">
+                            <span className="w-5 h-5 rounded-md bg-[#1E1612] text-[#FBF5B7] text-[10px] font-black flex items-center justify-center">
+                              {idx + 1}
+                            </span>
+                            <span>{prod.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-[#1E1612]">
+                              {prod.revenue.toLocaleString("ar-EG")} ج.م
+                            </span>
+                            {!hideProfits && (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                ربح: {prod.profit.toLocaleString("ar-EG")}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="w-full h-2.5 bg-[#FAF8F4] rounded-full overflow-hidden border border-[#EDE6D8]">
+                          <div
+                            style={{ width: `${widthPct}%` }}
+                            className="h-full bg-gradient-to-l from-[#C59B27] to-[#1E1612] rounded-full"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+              </div>
+              <div className="home-column">
             {/* الرسم البياني 2: توزيع المبيعات حسب القنوات (كاشير المحل vs بيع المحل vs الجملة) */}
-            <div className="bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-3">
+            <div className="home-channels bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] flex items-center justify-center">
@@ -1481,73 +1550,8 @@ export default function App() {
               })()}
             </div>
 
-            {/* الرسم البياني 3: أعلى الأصناف والتوليفات مبيعاً وربحية (Horizontal Bar Chart) */}
-            <div className="bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-[#1E1612] text-[#FBF5B7] flex items-center justify-center">
-                    <Flame className="w-4 h-4 text-[#D4AF37]" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-black text-[#1E1612]">
-                      الأعلى مبيعاً وربحية في بُن العجوز
-                    </h3>
-                    <p className="text-[10px] text-[#8C7A6B]">
-                      ترتيب الأصناف والتوليفات حسب قيمة المبيعات
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {dashboardAnalytics.topSellingProducts.length === 0 ? (
-                <div className="text-center py-6 text-xs text-[#8C7A6B]">
-                  لا توجد مبيعات مسجلة حالياً لعرض الرسم البياني
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {dashboardAnalytics.topSellingProducts.map((prod, idx) => {
-                    const widthPct = Math.max(
-                      12,
-                      Math.round(
-                        (prod.revenue / dashboardAnalytics.maxProductRevenue) *
-                          100,
-                      ),
-                    );
-                    return (
-                      <div key={idx} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-1.5 font-extrabold text-[#1E1612]">
-                            <span className="w-5 h-5 rounded-md bg-[#1E1612] text-[#FBF5B7] text-[10px] font-black flex items-center justify-center">
-                              {idx + 1}
-                            </span>
-                            <span>{prod.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-black text-[#1E1612]">
-                              {prod.revenue.toLocaleString("ar-EG")} ج.م
-                            </span>
-                            {!hideProfits && (
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                                ربح: {prod.profit.toLocaleString("ar-EG")}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="w-full h-2.5 bg-[#FAF8F4] rounded-full overflow-hidden border border-[#EDE6D8]">
-                          <div
-                            style={{ width: `${widthPct}%` }}
-                            className="h-full bg-gradient-to-l from-[#C59B27] to-[#1E1612] rounded-full"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
             {/* مؤشرات المخزن والمديونيات السريعة */}
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="home-balances grid grid-cols-2 gap-2.5">
               <button
                 onClick={() => setActiveScreen("customers")}
                 className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm text-right transition"
@@ -1596,7 +1600,7 @@ export default function App() {
             </div>
 
             {/* سجل حركات الشركاء الأربعة المباشر */}
-            <div className="home-full bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-2.5">
+            <div className="home-recent home-full bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-[#9E7918]" />
@@ -1631,6 +1635,8 @@ export default function App() {
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
               </div>
             </div>
           </div>

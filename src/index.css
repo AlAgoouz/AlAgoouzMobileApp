@@ -52,6 +52,8 @@
 .account-content { display:grid; gap:16px; }.account-content>* { min-width:0; }
 .home-workspace { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; }
 .home-workspace>* { min-width:0; }
+.home-panels { display:flex; flex-direction:column; gap:16px; min-width:0; }.home-column { display:contents; }.home-column>* { min-width:0; }
+.home-comparison { order:1; }.home-channels { order:2; }.home-products { order:3; }.home-balances { order:4; }.home-recent { order:5; }
 .home-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 0 8px; flex-wrap:wrap; }
 .home-pending { display:flex; align-items:center; gap:12px; padding:15px; border:1px solid #b4c8ba; border-radius:16px; text-align:start; background:#edf5ef; color:#315f44; }
 .home-pending span { flex:1; }.home-pending b,.home-pending small { display:block; }.home-pending small { font-size:11px; margin-top:5px; }
@@ -101,6 +103,7 @@
   .section-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .home-workspace { grid-template-columns:repeat(2,minmax(0,1fr)); padding:26px 16px 40px; align-items:start; }
   .home-full { grid-column:1/-1; }.home-metrics { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .home-panels { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; }.home-column { display:flex; flex-direction:column; gap:16px; }
   .home-summary { padding:24px; }.home-header h1 { font-size:26px; }
   .sections-hero { padding:20px 24px; }.sections-hub { padding-top:26px; }
   .workspace-actions { bottom:84px; width:calc(100% - 40px); border:1px solid #e6dec8; border-radius:18px; max-width:1000px; }
