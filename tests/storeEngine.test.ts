@@ -197,3 +197,27 @@ it('publishes related changes only after a complete valid transaction', async ()
   });
   expect(observer).toHaveBeenCalledOnce();
 });
+
+it('unlocks a hydrated clean store after a transient version-check failure', async () => {
+  const {engine,transport}=setup(); await engine.load();
+  transport.getVersion=vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(1);
+  await engine.refresh(); expect(engine.snapshot.status).toBe('error');
+  await engine.refresh(); expect(engine.snapshot.status).toBe('ready');
+  expect(engine.snapshot.error).toBe('');
+  expect(transport.load).toHaveBeenCalledTimes(1);
+});
+it('never clears a failed initial load through a same-version probe', async () => {
+  const {engine,transport}=setup();
+  transport.load=vi.fn().mockRejectedValue(new Error('invalid remote state'));
+  transport.getVersion=vi.fn(async()=>0);
+  await engine.load(); await engine.refresh();
+  expect(engine.snapshot.status).toBe('error');
+  expect(()=>engine.replace(emptyStore)).toThrow();
+});
+it('never clears an uncertain save or its draft when a version check succeeds', async () => {
+  vi.useFakeTimers(); const {engine,transport}=setup(); await engine.load();
+  transport.save=vi.fn().mockRejectedValue(new Error('offline'));
+  engine.replace(structuredClone(emptyStore)); await engine.flush();
+  transport.getVersion=vi.fn(async()=>1); await engine.refresh();
+  expect(engine.snapshot.status).toBe('error'); expect(engine.hasPending).toBe(true);
+});

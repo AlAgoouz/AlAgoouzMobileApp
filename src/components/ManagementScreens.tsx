@@ -114,20 +114,15 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
   const [editError, setEditError] = useState("");
 
   const catalogStats = useMemo(() => {
-    const rawAndSpices = items.filter(
-      (i) => i.category === "raw_bean" || i.category === "raw_spice",
-    ).length;
-    const blendsAndDrinks = items.filter(
-      (i) =>
-        i.category === "manufactured_blend" || i.category === "drink_recipe",
-    ).length;
+    const rawAndSpices = items.filter(i=>!requiresRecipe(i.category)).length;
+    const blendsAndDrinks = items.filter(i=>requiresRecipe(i.category)).length;
     const sellable = items.filter((i) => i.retailPrice > 0);
     const avgMargin =
       sellable.length > 0
         ? sellable.reduce(
             (s, i) =>
               s +
-              ((i.retailPrice - i.costPrice) / Math.max(1, i.retailPrice)) *
+              ((i.retailPrice - i.costPrice) / i.retailPrice) *
                 100,
             0,
           ) / sellable.length
@@ -257,14 +252,14 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-2.5">
-              <div className="text-[10px] text-[#D8CBB8]">بن خام وتحويجة</div>
+              <div className="text-[10px] text-[#D8CBB8]">أصناف مباشرة</div>
               <div className="text-sm font-black text-white mt-0.5">
                 {catalogStats.rawAndSpices}{" "}
                 <span className="text-[10px] text-[#D4AF37]">صنف</span>
               </div>
             </div>
             <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-2.5">
-              <div className="text-[10px] text-[#D8CBB8]">توليفات ومشروبات</div>
+              <div className="text-[10px] text-[#D8CBB8]">أصناف لها وصفة</div>
               <div className="text-sm font-black text-[#FBF5B7] mt-0.5">
                 {catalogStats.blendsAndDrinks}{" "}
                 <span className="text-[10px] text-[#D4AF37]">صنف</span>
@@ -312,11 +307,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
         <div className="flex gap-1.5 overflow-x-auto pb-1">
           {[
             { id: "all", label: `كل المنتجات (${items.length})` },
-            { id: "raw_bean", label: "حبوب بن خام" },
-            { id: "manufactured_blend", label: "توليفات البن" },
-            { id: "raw_spice", label: "تحويجة وخامات" },
-            { id: "drink_recipe", label: "مشروبات الكاشير" },
-            { id: "direct_product", label: "بيع مباشر" },
+            ...itemCategories,
           ].map((t) => (
             <button
               key={t.id}

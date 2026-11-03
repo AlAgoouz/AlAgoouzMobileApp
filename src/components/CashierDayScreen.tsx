@@ -1,4 +1,6 @@
 import React,{useState,useMemo} from 'react';
+import {FolderSync} from 'lucide-react';
+import {OperationHeader} from './OperationHeader';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import type {CashierDay,InventoryItem} from '../types/erp';
 import {businessDate} from '../lib/dates';
@@ -38,19 +40,19 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
   }
   setPreview(null);
  };
- const input='w-full border rounded-xl p-3 bg-white';
- return <main dir="rtl" className="min-h-screen bg-[#FAF8F4] p-4 pb-28 space-y-4">
-  <button onClick={onBack}>رجوع</button><h1 className="font-black text-xl">تقارير يوم الكاشير</h1>
-  <p>ارفع تقرير الأرقام المالية وتقرير الأصناف لنفس اليوم. يتسجل الإيراد مرة واحدة، وتُخصم المكونات عند اعتماد اليوم بعد اكتمال التقريرين.</p>
+ const input='w-full min-w-0 max-w-full border rounded-xl p-3 bg-white';
+ return <main dir="rtl" className="operation-screen min-h-screen bg-[#FAF8F4] p-4 pb-28 space-y-4">
+  <OperationHeader title="تقارير يوم الكاشير" description="تقرير مالي + تقرير أصناف، لحساب يومك بدقة." icon={FolderSync} onBack={onBack} busy={busy}/>
+  <p className="operation-note">ارفع التقريرين لنفس اليوم. يتسجل الإيراد مرة واحدة، وتُخصم المكونات عند اعتماد اليوم بعد اكتمال التقريرين.</p>
   {!!queued.length&&<section className="border rounded-xl p-3"><h2 className="font-bold">ملفات وصلت من جهاز الكاشير وتنتظر المراجعة</h2><p>حدد نوع التقرير ثم افتح الملف لمراجعته.</p>{queued.map(q=><button key={q.id} disabled={busy} className="block p-2 underline" onClick={()=>{setDate(q.sale_date);setPreview({name:q.file_name,sha256:q.content_hash,rows:q.raw_rows,sourceQueueId:q.id});setColumn('');setRowIndex('0');}}>{q.sale_date} — {q.file_name}</button>)}</section>}
-  <label className="block">يوم العمل<input className={input} type="date" value={date} onChange={e=>{setDate(e.target.value);setPreview(null);}}/></label>
-  <label className="block">نوع التقرير<select className={input} value={type} onChange={e=>{setType(e.target.value as typeof type);setPreview(null);}}><option value="financial">الأرقام المالية — إيراد اليوم</option><option value="items">الأصناف المباعة — الكميات</option></select></label>
-  <label className="block">ملف التقرير<input type="file" accept=".xlsx,.xls,.csv" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(file)void act(()=>readFile(file));e.target.value='';}}/></label>
+  <label className="block">يوم العمل<input disabled={busy} className={input} type="date" value={date} onChange={e=>{setDate(e.target.value);setPreview(null);}}/></label>
+  <label className="block">نوع التقرير<select disabled={busy} className={input} value={type} onChange={e=>{setType(e.target.value as typeof type);setPreview(null);}}><option value="financial">الأرقام المالية — إيراد اليوم</option><option value="items">الأصناف المباعة — الكميات</option></select></label>
+  <label className="block min-w-0">ملف التقرير<input className="block w-full min-w-0 max-w-full rounded-xl border border-[#E6DEC8] bg-white p-2 text-xs file:me-2 file:rounded-lg file:border-0 file:bg-[#F5EDDD] file:p-2 file:text-[#795D25]" type="file" accept=".xlsx,.xls,.csv" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(file)void act(()=>readFile(file));e.target.value='';}}/></label>
   {preview&&<section className="border rounded-xl p-3 space-y-3"><h2 className="font-bold">مراجعة {preview.name}</h2>
    {type==='financial'?<>
-    <label className="block">رقم صف إجمالي اليوم (من {preview.rows.length} صف)<input className={input} type="number" min="1" max={preview.rows.length} value={Number(rowIndex)+1} onChange={e=>setRowIndex(String(Number(e.target.value)-1))}/></label>
+    <label className="block">رقم صف إجمالي اليوم (من {preview.rows.length} صف)<input disabled={busy} className={input} type="number" min="1" max={preview.rows.length} value={Number(rowIndex)+1} onChange={e=>setRowIndex(String(Number(e.target.value)-1))}/></label>
     <p className="text-sm break-words">الصف المختار: {Object.entries(preview.rows[Number(rowIndex)]??{}).map(([key,value])=>`${key}: ${String(value)}`).join(' — ')||'اختر صفًا داخل الملف'}</p>
-    <label className="block">عمود إيراد اليوم<select className={input} value={column} onChange={e=>setColumn(e.target.value)}><option value="">اختر العمود</option>{Object.keys(preview.rows[Number(rowIndex)]??{}).map(c=><option key={c}>{c}</option>)}</select></label>
+    <label className="block">عمود إيراد اليوم<select disabled={busy} className={input} value={column} onChange={e=>setColumn(e.target.value)}><option value="">اختر العمود</option>{Object.keys(preview.rows[Number(rowIndex)]??{}).map(c=><option key={c}>{c}</option>)}</select></label>
     <p>إيراد اليوم المختار: {revenue===undefined?'غير محدد':revenue.toLocaleString('ar-EG')+' ج.م'}</p><p className="text-sm">اختر إجمالي المبيعات النهائي لليوم؛ لا تجمع صف الإجمالي مع تفاصيله.</p>
    </>:<><p>{parsed.length} صف أصناف؛ {parsed.filter(r=>r.error).length} أخطاء مطابقة.</p>{parsed.slice(0,30).map((r,i)=><p key={i} className={r.error?'text-red-700':''}>{r.matchedItem?.name||r.rawName}: {r.quantity} {r.unitHint} {r.error}</p>)}{parsed.length>30&&<p>معروض أول 30 صفًا؛ تُراجع جميع الصفوف قبل الحفظ.</p>}</>}
    <button disabled={busy} onClick={()=>void act(attach)} className="bg-[#1E1612] text-white rounded-xl p-3">حفظ التقرير لهذا اليوم</button>
