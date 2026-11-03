@@ -23,7 +23,7 @@ export function Modal({title,description,onClose,busy=false,dismissible=true,wid
   if(event.key!=='Tab')return;
   const dialog=ref.current!;
   const controls=Array.from(dialog.querySelectorAll<HTMLElement>('button,input,select,textarea,a[href],[tabindex]')).filter(element=>element.tabIndex>=0&&!element.matches(':disabled')&&element.getClientRects().length>0);
-  const first=controls[0],last=controls.at(-1);
+  const first=controls[0],last=controls[controls.length-1];
   if(!first){event.preventDefault();dialog.focus();return;}
   if(event.shiftKey&&document.activeElement===first){event.preventDefault();last!.focus();}
   else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}

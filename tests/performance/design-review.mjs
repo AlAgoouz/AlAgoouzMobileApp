@@ -17,6 +17,7 @@ export async function verifyDesign(){
   const reviewModal=async(page,trigger,label)=>{
     await trigger.click();
     const dialog=page.getByRole('dialog');await dialog.waitFor();
+    if(await dialog.getByLabel('نوع الحساب',{exact:true}).count())await dialog.getByLabel('نوع الحساب',{exact:true}).selectOption('partner');
     assert.equal(await dialog.evaluate(e=>e.matches(':modal')),true,'Dialogs must use the browser top layer');
     assert.ok((await dialog.getAttribute('aria-labelledby'))?.length,'Every dialog needs a named heading');
     const controls=await dialog.locator('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]').count();
@@ -28,12 +29,14 @@ export async function verifyDesign(){
       await page.setViewportSize({width,height:800});await limit(page,`dialog-${label}-${width}`);
       const bounds=await dialog.boundingBox();assert.ok(bounds&&bounds.x>=0&&bounds.y>=0&&bounds.x+bounds.width<=width+1&&bounds.y+bounds.height<=801,'Dialog must fit the viewport');
       assert.equal(await dialog.getByRole('button',{name:'إغلاق النافذة'}).isVisible(),true);
+      assert.equal(await dialog.evaluate(e=>getComputedStyle(e).animationName),'none','Reduced-motion dialogs must remain stable');
       await page.screenshot({path:`design-dialog-${label}-${width}-mobile.png`,fullPage:true});
     }
     await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
     assert.equal(await trigger.evaluate(e=>e===document.activeElement),true,'Closing a dialog must restore the opening control focus');
     assert.notEqual(await page.locator('body').evaluate(e=>e.style.overflow),'hidden','Closing must unlock page scrolling');
     await page.setViewportSize({width:360,height:800});
+    await trigger.click();await dialog.waitFor();await dialog.getByRole('button',{name:'إغلاق النافذة'}).click();await dialog.waitFor({state:'hidden'});
   };
   try {
     const context=await browser.newContext({viewport:{width:360,height:800},reducedMotion:'reduce'});
