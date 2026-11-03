@@ -5,7 +5,10 @@ export type ItemCategory =
   | 'raw_spice'         // تحويجة وإضافات (حبهان، مستكة، جوزة الطيب، لبن، سكر، أكواب...)
   | 'manufactured_blend'// توليفات بن مصنعة في قسم الإنتاج (لها وصفة ولها رصيد جاهز بالكيلو/جرام)
   | 'drink_recipe'      // مشروبات محضرة بوصفة لحظية (تخصم مكوناتها مباشرة عند البيع بالعدد)
-  | 'direct_product';   // منتجات بيع مباشر بالعدد (مياه معدنية، مشروبات معلبة...)
+  | 'direct_product'
+  | 'direct_drink'
+  | 'seasoning_recipe'
+  | 'snack';
 
 export interface RecipeIngredient {
   ingredientId: string;
@@ -43,6 +46,19 @@ export interface InventoryItem {
   recipe?: RecipeIngredient[];
   supplierPrices: SupplierPriceRecord[];
   lastSoldDate?: string;
+  costingVersion?: 2;
+  costHistory?: ItemCostRecord[];
+}
+
+export interface ItemCostRecord {
+  id:string;
+  date:string;
+  postedAt:string;
+  sourceType:'opening'|'purchase'|'production';
+  sourceId:string;
+  quantity:number;
+  unitCost:number;
+  averageCost:number;
 }
 
 export interface ProductionBatch {
@@ -88,6 +104,9 @@ export interface PurchaseInvoice {
   supplierName: string;
   items: PurchaseInvoiceItem[];
   totalAmount: number;
+  netAmount?: number;
+  taxAmount?: number;
+  accountingVersion?: 2;
   paidAmount: number;
   remainingAmount: number;
   paymentMethod: 'نقدي' | 'آجل' | 'جزئي';
@@ -144,10 +163,31 @@ export interface SalesInvoice {
   returnRefundAmount?: number;
 }
 
+export interface CashierReportFile {
+  fileName: string;
+  sha256: string;
+  uploadedAt: string;
+  sourceQueueId?: string;
+}
+export interface CashierDay {
+  id: string;
+  date: string;
+  status: 'pending'|'approved';
+  financialReport?: CashierReportFile & {totalRevenue:number};
+  itemsReport?: CashierReportFile & {lines:{itemId:string;quantity:number;unitLabel:string;normalizedQtyInBaseUnit:number}[]};
+  consumption?: {itemId:string;quantity:number;unitCost:number;totalCost:number}[];
+  shortages?: {itemId:string;shortage:number}[];
+  totalCost?: number;
+  approvedAt?: string;
+  partnerName?: string;
+}
+
 export interface Supplier {
   id: string;
   name: string;
   phone: string;
+  address?: string;
+  representativeName?: string;
   category: string;
   balance: number;
   totalPurchases: number;
@@ -158,6 +198,7 @@ export interface Customer {
   id: string;
   name: string;
   phone: string;
+  area?: string;
   type: 'جملة - كافيه' | 'جملة - سوبر ماركت' | 'جملة - تاجر' | 'عميل محل';
   balance: number;
   totalSales: number;
@@ -171,6 +212,7 @@ export interface Expense {
   date: string;
   category: 'إيجار' | 'كهرباء ومياه وغاز' | 'رواتب ويوميات' | 'صيانة مطاحن وماكينات' | 'أكياس وتغليف' | 'نقل ومشال' | 'مسحوبات شركاء' | 'نثريات أخرى';
   title: string;
+  frequency?: 'monthly_fixed' | 'daily';
   amount: number;
   partnerName: string;
   paidFrom: 'درج المحل' | 'خزنة الشركة' | 'من جيب الشريك' | 'تسوية مخزون (بدون نقدية)';

@@ -1,3 +1,4 @@
+import {isStockItem} from '../lib/itemPolicy';
 import { operatingExpenses } from '../lib/ledger';
 import { isInPeriod } from '../lib/dates';
 import React, { useState, useMemo } from 'react';
@@ -70,7 +71,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
   const totalInventoryValue = useMemo(
     () =>
       items
-        .filter((i) => i.category !== 'drink_recipe')
+        .filter((i) => isStockItem(i))
         .reduce((sum, i) => sum + i.stock * i.costPrice, 0),
     [items],
   );
@@ -78,7 +79,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
   const totalExpectedRetailValue = useMemo(
     () =>
       items
-        .filter((i) => i.category !== 'drink_recipe')
+        .filter((i) => isStockItem(i))
         .reduce((sum, i) => sum + i.stock * i.retailPrice, 0),
     [items],
   );
@@ -96,7 +97,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
   const lowStockItems = useMemo(
     () =>
       items.filter(
-        (i) => i.category !== 'drink_recipe' && i.stock <= i.minStock,
+        (i) => isStockItem(i) && i.stock <= i.minStock,
       ),
     [items],
   );

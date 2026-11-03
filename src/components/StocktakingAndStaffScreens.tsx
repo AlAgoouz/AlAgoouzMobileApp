@@ -1,3 +1,4 @@
+import {isStockItem} from '../lib/itemPolicy';
 import React, { useState, useMemo } from "react";
 import { payrollBalance, currentPayrollPeriod } from '../lib/payroll';
 import {
@@ -61,7 +62,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
 
   // الأصناف القابلة للجرد الفعلي (كل الأصناف ما عدا وصفات المشروبات اللحظية)
   const auditableItems = useMemo(
-    () => items.filter((i) => i.category !== "drink_recipe"),
+    () => items.filter((i) => isStockItem(i)),
     [items],
   );
 

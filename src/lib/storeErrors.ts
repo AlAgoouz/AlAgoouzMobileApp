@@ -1,4 +1,10 @@
 export function storeWriteError(message:string):string {
+  if(/CONTACT_DETAILS_REQUIRED/.test(message))return 'أكمل رقم التليفون والمنطقة للعميل، أو العنوان واسم المندوب للمورد، قبل إنشاء الفاتورة.';
+  if(/CLIENT_UPGRADE_REQUIRED|INVALID_STATE: cashier_days/.test(message))return 'تم تحديث قواعد التشغيل؛ أعد تحميل الصفحة قبل تسجيل عملية جديدة.';
+  if(/NEW_PURCHASE_FULL_PAYMENT/.test(message))return 'المشتريات الجديدة مدفوعة بالكامل، ويجب أن يشمل المدفوع الضريبة.';
+  if(/WHOLESALE_BLENDS_ONLY|NEW_SALE_WHOLESALE_CUSTOMER/.test(message))return 'اختر عميلًا مسجلًا وتوليفات فقط لفاتورة الجملة.';
+  if(/INSUFFICIENT_STOCK|WHOLESALE_INSUFFICIENT|PRODUCTION_INSUFFICIENT/.test(message))return 'المخزون غير كافٍ لاعتماد الجملة أو الإنتاج؛ راجع الكميات.';
+  if(/CASHIER_REPORT_IMMUTABLE|DUPLICATE_CASHIER|LEGACY_CASHIER_DAY/.test(message))return 'التقرير مسجل بالفعل لهذا اليوم؛ لا يمكن تكراره أو تعديل يوم معتمد.';
   if(/OWNER_REQUIRED/.test(message))return 'استعادة النسخة متاحة لحساب المالك المؤكد فقط.';
   if(/PAYMENT_EXCEEDS_DEBT|PAYMENT_EXCEEDS_INVOICE/.test(message))return 'السداد أكبر من المديونية المستحقة؛ راجع المبلغ والفواتير المفتوحة.';
   if(/PAYROLL_/.test(message))return 'حركة العامل لا تطابق مستحقاته أو سجل الشهر؛ راجع الراتب والشهر ومصدر الصرف.';

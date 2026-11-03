@@ -58,7 +58,7 @@ it("keeps a rejected expense editable and assigns its Cairo business date", () =
       .value,
   ).toBe("Test expense");
 });
-it("creates a valid recipe draft before opening recipe editing", () => {
+it("requires recipe ingredients while creating a new blend", () => {
   const save = vi.fn((item) => {
     validateStore({ ...emptyStore, items: [{ ...item, id: "new-blend" }] });
     return true;
@@ -75,14 +75,10 @@ it("creates a valid recipe draft before opening recipe editing", () => {
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "جديد" }));
-  fireEvent.change(
-    screen.getByPlaceholderText("مثلاً: توليفة بُن العجوز اسبشيال بالبندق"),
-    { target: { value: "New blend" } },
-  );
-  fireEvent.click(screen.getByRole("button", { name: "حفظ وفتح الوصفة" }));
-  expect(save).toHaveBeenCalledOnce();
-  expect(save.mock.calls[0][0].hasRecipe).toBe(false);
-  expect(save.mock.calls[0][0].stock).toBe(0);
+  fireEvent.change(screen.getByLabelText('اسم الصنف'),{target:{value:'New blend'}});
+  fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف والوصفة'}));
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert').textContent).toContain('حدد مكونات الوصفة');
 });
 const bean = {
   ...INITIAL_ITEMS.find((i) => i.category === "raw_bean")!,

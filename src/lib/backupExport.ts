@@ -5,6 +5,7 @@ import type {
   Supplier,
   Customer,
   Expense,
+  CashierDay,
 } from '../types/erp';
 import { businessDate } from './dates';
 export function downloadFullBackupJson(statePayload: Record<string, unknown>) {
@@ -38,6 +39,7 @@ export async function exportFullStoreExcel(
   suppliers: Supplier[],
   customers: Customer[],
   expenses: Expense[],
+  cashierDays:CashierDay[]=[],
 ) {
   const XLSX = await import('xlsx');
   const wb = XLSX.utils.book_new();
@@ -78,6 +80,8 @@ export async function exportFullStoreExcel(
     })),
   );
   XLSX.utils.book_append_sheet(wb, salesSheet, 'فواتير_البيع');
+  const daySheet=XLSX.utils.json_to_sheet(cashierDays.map(d=>({التاريخ:d.date,الحالة:d.status==='approved'?'معتمد':'معلق','ملف الأرقام المالية':d.financialReport?.fileName??'','ملف الأصناف':d.itemsReport?.fileName??'',الإيراد:d.financialReport?.totalRevenue??'',التكلفة:d.totalCost??'لم تعتمد','عدد أصناف العجز':d.shortages?.length??'',المسؤول:d.partnerName??''})));
+  XLSX.utils.book_append_sheet(wb,daySheet,'أيام_الكاشير');
 
   // 3. شيت فواتير الشراء
   const purchaseSheet = XLSX.utils.json_to_sheet(
@@ -85,6 +89,8 @@ export async function exportFullStoreExcel(
       'رقم الفاتورة': p.invoiceNumber,
       التاريخ: p.date,
       المورد: p.supplierName,
+      'قيمة الأصناف قبل الضريبة':p.netAmount??p.totalAmount,
+      الضريبة:p.taxAmount??0,
       الإجمالي: p.totalAmount,
       المدفوع: p.paidAmount,
       المتبقي: p.remainingAmount,
@@ -99,6 +105,8 @@ export async function exportFullStoreExcel(
       النوع: 'مورد',
       الاسم: s.name,
       الموبايل: s.phone,
+      العنوان:s.address??'',
+      المندوب:s.representativeName??'',
       'إجمالي التعامل': s.totalPurchases,
       'الرصيد المتبقي': s.balance,
     })),
@@ -106,6 +114,7 @@ export async function exportFullStoreExcel(
       النوع: 'عميل',
       الاسم: c.name,
       الموبايل: c.phone,
+      المنطقة:c.area??'',
       'إجمالي التعامل': c.totalSales,
       'الرصيد المتبقي': c.balance,
     })),

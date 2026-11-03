@@ -1,5 +1,13 @@
+import {CashierDayHistory} from './CashierDayHistory';
+import type {CashierDay} from '../types/erp';
+import {SupplierPurchasePanels} from './SupplierPurchasePanels';
+import {supplierPurchaseHistory} from '../lib/supplierPurchases';
+import {ContactEditModal} from './ContactEditModal';
+import {ItemDefinitionModal} from './ItemDefinitionModal';
+import {categoryLabel,itemCategories,requiresRecipe,isStockItem,isRecipeOnUse} from '../lib/itemPolicy';
 import React, { useState, useMemo } from "react";
 import {RecordPagination,useRecordPage} from './RecordPagination';
+import {checkCustomerDetails,checkSupplierDetails} from '../lib/contactDetails';
 import {
   ChevronRight,
   ChevronLeft,
@@ -38,7 +46,6 @@ import {
   Expense,
   Partner,
   AuditLogEntry,
-  ShiftRecord,
   ItemCategory,
 } from "../types/erp";
 import {
@@ -76,7 +83,7 @@ function allValidNumbers(values: string[]): boolean {
 // ============================================================================
 interface ProductsCatalogScreenProps {
   items: InventoryItem[];
-  onAddNewItem: (item: Omit<InventoryItem, "id">) => void;
+  onAddNewItem: (item: Omit<InventoryItem, "id">) => void|boolean;
   onUpdateItem: (id: string, patch: Partial<InventoryItem>) => void | boolean;
   onDeleteItem: (id: string) => void;
   onNavigateToProduction: () => void;
@@ -105,21 +112,6 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
   // قيم نصية مؤقتة لحقول الأرقام حتى لا يفقد المستخدم ما يكتبه عند الإدخال الوسيط
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
   const [editError, setEditError] = useState("");
-  const [addError, setAddError] = useState("");
-
-  // حقول تعريف منتج جديد
-  const [newName, setNewName] = useState("");
-  const [newCode, setNewCode] = useState("");
-  const [newCat, setNewCat] = useState<ItemCategory>("raw_bean");
-  const [newRoast, setNewRoast] = useState<
-    "فاتح" | "وسط" | "غامق" | "إسبريسو" | "بدون"
-  >("وسط");
-  const [newUnit, setNewUnit] = useState<"kg" | "piece" | "liter">("kg");
-  const [newStock, setNewStock] = useState("0");
-  const [newMinStock, setNewMinStock] = useState("5");
-  const [newCost, setNewCost] = useState("360");
-  const [newRetail, setNewRetail] = useState("480");
-  const [newWholesale, setNewWholesale] = useState("425");
 
   const catalogStats = useMemo(() => {
     const rawAndSpices = items.filter(
@@ -151,7 +143,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 
   const filtered = useMemo(() => {
     return items.filter((i) => {
-      if (filterCat !== "all" && i.category !== filterCat) return false;
+      if (filterCat !== "all" && (i.category==='raw_spice'?'direct_product':i.category) !== filterCat) return false;
       if (
         search.trim() &&
         !i.name.toLowerCase().includes(search.toLowerCase()) &&
@@ -163,55 +155,9 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
     });
   }, [items, filterCat, search]);
 
-  const getCategoryBadge = (cat: ItemCategory) => {
-    switch (cat) {
-      case "raw_bean":
-        return {
-          label: "حبوب بن خام",
-          cls: "bg-[#FDF8EB] text-[#9E7918] border-[#E8D8A8]",
-        };
-      case "manufactured_blend":
-        return {
-          label: "توليفة مصنعة",
-          cls: "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]",
-        };
-      case "raw_spice":
-        return {
-          label: "تحويجة وخامات",
-          cls: "bg-amber-50 text-amber-800 border-amber-200",
-        };
-      case "drink_recipe":
-        return {
-          label: "مشروب كاشير",
-          cls: "bg-emerald-50 text-emerald-800 border-emerald-200",
-        };
-      default:
-        return {
-          label: "بيع مباشر",
-          cls: "bg-slate-100 text-slate-700 border-slate-200",
-        };
-    }
-  };
+  const getCategoryBadge = (cat:ItemCategory)=>({label:categoryLabel(cat),cls:'bg-[#FDF8EB] text-[#9E7918] border-[#E8D8A8]'});
 
-  const handleOpenAddModal = () => {
-    setNewName("");
-    setNewCode(
-      uniqueCode(
-        items.map((i) => i.code),
-        () => `BN-${Math.floor(110 + Math.random() * 880)}`,
-      ),
-    );
-    setNewCat("raw_bean");
-    setNewRoast("وسط");
-    setNewUnit("kg");
-    setNewStock("0");
-    setNewMinStock("5");
-    setNewCost("360");
-    setNewRetail("480");
-    setNewWholesale("425");
-    setAddError("");
-    setShowAddModal(true);
-  };
+  const handleOpenAddModal=()=>setShowAddModal(true);
 
   // فتح نافذة التعديل: نسخة حيّة من الصنف + مسودة نصية لكل حقل رقمي
   const openEditItem = (item: InventoryItem) => {
@@ -234,7 +180,6 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
         editDraft.costPrice,
         editDraft.retailPrice,
         editDraft.wholesalePrice,
-        editDraft.stock,
         editDraft.minStock,
       ])
     ) {
@@ -242,6 +187,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
       return;
     }
     // نأخذ الاسم من النافذة (التعديل النصي)، مع الرجوع لاسم الكتالوج لو تُرك فارغًا
+    if(!editDraft.stock?.trim()||!Number.isFinite(Number(editDraft.stock))||(Number(editDraft.stock)<0&&Number(editDraft.stock)!==editingOriginal?.stock)){setEditError('الجرد الفعلي لا يقل عن صفر؛ يمكن إبقاء العجز الحالي دون تعديله');return;}
     const live = items.find((i) => i.id === editingItem.id);
     try {
       const patch = itemEditPatch(editingOriginal!, live, {
@@ -262,83 +208,6 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
       return;
     }
     setEditingItem(null);
-  };
-
-  const handleCreateProduct = () => {
-    if (!newName.trim()) {
-      setAddError("أدخل اسم المنتج أولاً");
-      return;
-    }
-    const cost = parseFloat(newCost);
-    const retail = parseFloat(newRetail);
-    const wholesale = parseFloat(newWholesale);
-    if (
-      !Number.isFinite(cost) ||
-      cost < 0 ||
-      !Number.isFinite(retail) ||
-      retail < 0 ||
-      !Number.isFinite(wholesale) ||
-      wholesale < 0
-    ) {
-      setAddError("أدخل أرقامًا صحيحة غير سالبة في التكلفة والأسعار");
-      return;
-    }
-    const isDrink = newCat === "drink_recipe";
-    const isDirect = newCat === "direct_product";
-    const effectiveUnit =
-      isDrink || isDirect
-        ? "piece"
-        : newCat === "manufactured_blend"
-          ? "kg"
-          : newUnit;
-    const stockNum = parseFloat(newStock);
-    const minNum = parseFloat(newMinStock);
-    if (
-      !Number.isFinite(stockNum) ||
-      stockNum < 0 ||
-      !Number.isFinite(minNum) ||
-      minNum < 0
-    ) {
-      setAddError("الرصيد وحد النواقص يجب أن يكونا أرقامًا غير سالبة");
-      return;
-    }
-
-    // منع تكرار الكود مع كتالوج الأصناف الحالي
-    const finalCode =
-      newCode.trim() ||
-      uniqueCode(
-        items.map((i) => i.code),
-        () => `BN-${Math.floor(110 + Math.random() * 880)}`,
-      );
-    if (items.some((i) => i.code === finalCode)) {
-      setAddError(
-        `الكود (${finalCode}) مستخدم بالفعل لعنصر آخر؛ غيّره أو اتركه فارغاً`,
-      );
-      return;
-    }
-
-    onAddNewItem({
-      code: finalCode,
-      name: newName.trim(),
-      category: newCat,
-      roastLevel:
-        newCat === "raw_bean" || newCat === "manufactured_blend"
-          ? newRoast
-          : "بدون",
-      baseUnit: effectiveUnit,
-      stock: isDrink ? 999 : stockNum,
-      minStock: isDrink ? 0 : minNum,
-      costPrice: cost,
-      lastPurchasePrice: cost,
-      retailPrice: retail,
-      wholesalePrice: wholesale,
-      canSellDirectly: true,
-      hasRecipe: false,
-      recipe: [],
-      supplierPrices: [],
-    });
-    setAddError("");
-    setShowAddModal(false);
   };
 
   return (
@@ -614,8 +483,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                       </span>
                     )}
 
-                    {(item.category === "manufactured_blend" ||
-                      item.category === "drink_recipe") && (
+                    {requiresRecipe(item.category) && (
                       <button
                         onClick={onNavigateToProduction}
                         className="text-[10px] font-black text-[#1E1612] bg-[#FAF8F4] border border-[#C59B27] px-2.5 py-1 rounded-lg flex items-center gap-1"
@@ -637,222 +505,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
       </div>
 
       {/* نافذة تعريف وإضافة منتج جديد */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-5 space-y-3.5 shadow-2xl border border-[#C59B27] max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-[#F2ECE1] pb-2.5">
-              <div>
-                <h3 className="text-sm font-black text-[#1E1612]">
-                  تعريف وإضافة منتج جديد
-                </h3>
-                <p className="text-[10px] text-[#8C7A6B]">
-                  يظهر فوراً في المشتريات والإنتاج والمخزن ونقطة البيع
-                </p>
-              </div>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="text-xs font-bold text-[#8C7A6B] px-2 py-1 rounded-lg bg-[#FAF8F4]"
-              >
-                إغلاق
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-black text-[#1E1612] block mb-1">
-                  اسم المنتج
-                </label>
-                <input
-                  type="text"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="مثلاً: بن يمني محمص، توليفة العجوز إكسترا، قهوة بندق..."
-                  className="w-full border border-[#DFD7C6] rounded-xl px-3.5 py-2.5 text-xs font-extrabold focus:border-[#C59B27] focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-xs font-bold text-[#7A6855] block mb-1">
-                    تصنيف المنتج في الدورة
-                  </label>
-                  <select
-                    value={newCat}
-                    onChange={(e) => {
-                      const c = e.target.value as ItemCategory;
-                      setNewCat(c);
-                      if (c === "drink_recipe" || c === "direct_product") {
-                        setNewUnit("piece");
-                      } else {
-                        setNewUnit("kg");
-                      }
-                    }}
-                    className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-[#FAF8F4]"
-                  >
-                    <option value="raw_bean">
-                      1. حبوب بن خام (شراء + بيع + إنتاج)
-                    </option>
-                    <option value="manufactured_blend">
-                      2. توليفة بن مصنعة (إنتاج + بيع)
-                    </option>
-                    <option value="raw_spice">
-                      3. تحويجة وخامات (حبهان/لبن/أكواب)
-                    </option>
-                    <option value="drink_recipe">
-                      4. مشروب كاشير بوصفة (بيع بالكوب)
-                    </option>
-                    <option value="direct_product">
-                      5. منتج بيع مباشر بالقطعة
-                    </option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-[#7A6855] block mb-1">
-                    وحدة القياس الأساسية
-                  </label>
-                  <select
-                    value={newUnit}
-                    onChange={(e) =>
-                      setNewUnit(e.target.value as "kg" | "piece" | "liter")
-                    }
-                    className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-[#FAF8F4]"
-                  >
-                    <option value="kg">
-                      كيلو جرام (يُباع بالجرام والكيلو)
-                    </option>
-                    <option value="piece">قطعة / كوب</option>
-                    <option value="liter">لتر / مل</option>
-                  </select>
-                </div>
-              </div>
-
-              {(newCat === "raw_bean" || newCat === "manufactured_blend") && (
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="text-xs font-bold text-[#7A6855] block mb-1">
-                      درجة التحميص
-                    </label>
-                    <select
-                      value={newRoast}
-                      onChange={(e) =>
-                        setNewRoast(
-                          e.target.value as
-                            | "فاتح"
-                            | "وسط"
-                            | "غامق"
-                            | "إسبريسو"
-                            | "بدون",
-                        )
-                      }
-                      className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-[#FAF8F4]"
-                    >
-                      <option value="فاتح">فاتح</option>
-                      <option value="وسط">وسط</option>
-                      <option value="غامق">غامق</option>
-                      <option value="إسبريسو">إسبريسو</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-[#7A6855] block mb-1">
-                      كود الصنف
-                    </label>
-                    <input
-                      type="text"
-                      value={newCode}
-                      onChange={(e) => setNewCode(e.target.value)}
-                      className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="text-[11px] font-bold text-[#7A6855] block mb-1">
-                    سعر التكلفة (ج.م)
-                  </label>
-                  <input
-                    type="number"
-                    value={newCost}
-                    onChange={(e) => setNewCost(e.target.value)}
-                    className="w-full border border-[#DFD7C6] rounded-xl px-2.5 py-2 text-xs font-black text-center"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-[#7A6855] block mb-1">
-                    بيع قطاعي (ج.م)
-                  </label>
-                  <input
-                    type="number"
-                    value={newRetail}
-                    onChange={(e) => setNewRetail(e.target.value)}
-                    className="w-full border border-[#DFD7C6] rounded-xl px-2.5 py-2 text-xs font-black text-center text-emerald-700"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-[#7A6855] block mb-1">
-                    بيع جملة (ج.م)
-                  </label>
-                  <input
-                    type="number"
-                    value={newWholesale}
-                    onChange={(e) => setNewWholesale(e.target.value)}
-                    className="w-full border border-[#DFD7C6] rounded-xl px-2.5 py-2 text-xs font-black text-center"
-                  />
-                </div>
-              </div>
-
-              {newCat !== "drink_recipe" && (
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="text-[11px] font-bold text-[#7A6855] block mb-1">
-                      الرصيد الافتتاحي بالمخزن
-                    </label>
-                    <input
-                      type="number"
-                      value={newStock}
-                      onChange={(e) => setNewStock(e.target.value)}
-                      className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-[#7A6855] block mb-1">
-                      حد تنبيه النواقص
-                    </label>
-                    <input
-                      type="number"
-                      value={newMinStock}
-                      onChange={(e) => setNewMinStock(e.target.value)}
-                      className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleCreateProduct}
-                className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-black py-3 rounded-xl text-xs shadow"
-              >
-                حفظ المنتج في الكتالوج
-              </button>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-5 py-3 rounded-xl border border-[#DFD7C6] text-[#5C4B3E] font-bold text-xs"
-              >
-                إلغاء
-              </button>
-            </div>
-            {addError && (
-              <p className="text-[11px] font-bold text-red-600 text-center">
-                {addError}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+      {showAddModal && <ItemDefinitionModal items={items} onSave={onAddNewItem} onClose={()=>setShowAddModal(false)}/>}
 
       {/* نافذة تعديل بيانات وتسعير المنتج */}
       {editingItem && (
@@ -880,20 +533,16 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                   تصنيف المنتج
                 </label>
                 <select
-                  value={editingItem.category}
+                  value={editingItem.category==='raw_spice'?'direct_product':editingItem.category}
                   onChange={(e) =>
                     setEditingItem({
                       ...editingItem,
-                      category: e.target.value as ItemCategory,
+                      category: editingItem.category==='raw_spice'&&e.target.value==='direct_product'?'raw_spice':e.target.value as ItemCategory,
                     })
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-[#FAF8F4]"
                 >
-                  <option value="raw_bean">حبوب بن خام</option>
-                  <option value="manufactured_blend">توليفة بن مصنعة</option>
-                  <option value="raw_spice">تحويجة وخامات</option>
-                  <option value="drink_recipe">مشروب كاشير بوصفة</option>
-                  <option value="direct_product">بيع مباشر</option>
+                  {itemCategories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
               <div>
@@ -1032,22 +681,13 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   );
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const [newName, setNewName] = useState("");
-  const [newCat, setNewCat] = useState<ItemCategory>("raw_bean");
-  const [newUnit, setNewUnit] = useState<"kg" | "piece" | "liter">("kg");
-  const [newStock, setNewStock] = useState("10");
-  const [newMinStock, setNewMinStock] = useState("5");
-  const [newCost, setNewCost] = useState("350");
-  const [newRetail, setNewRetail] = useState("480");
-  const [newWholesale, setNewWholesale] = useState("420");
   // مسودة نصية لحقول التعديل الرقمية + رسالة خطأ داخلية
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
   const [editError, setEditError] = useState("");
-  const [addError, setAddError] = useState("");
 
   const filtered = useMemo(() => {
     return items.filter((i) => {
-      if (filterCat !== "all" && i.category !== filterCat) return false;
+      if (filterCat !== "all" && (i.category==='raw_spice'?'direct_product':i.category) !== filterCat) return false;
       if (
         search.trim() &&
         !i.name.toLowerCase().includes(search.toLowerCase()) &&
@@ -1062,59 +702,10 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   const totalInventoryCapital = useMemo(
     () =>
       items
-        .filter((i) => i.category !== "drink_recipe")
+        .filter((i) => isStockItem(i))
         .reduce((s, i) => s + i.stock * i.costPrice, 0),
     [items],
   );
-
-  const handleCreateItem = () => {
-    if (!newName.trim()) {
-      setAddError("أدخل اسم الصنف أولاً");
-      return;
-    }
-    const cost = parseFloat(newCost);
-    const retail = parseFloat(newRetail);
-    const wholesale = parseFloat(newWholesale);
-    const stock = parseFloat(newStock);
-    const minStock = parseFloat(newMinStock);
-    if (
-      !Number.isFinite(cost) ||
-      cost < 0 ||
-      !Number.isFinite(retail) ||
-      retail < 0 ||
-      !Number.isFinite(wholesale) ||
-      wholesale < 0 ||
-      !Number.isFinite(stock) ||
-      stock < 0 ||
-      !Number.isFinite(minStock) ||
-      minStock < 0
-    ) {
-      setAddError("أدخل أرقامًا صحيحة غير سالبة في الرصيد والأسعار");
-      return;
-    }
-    onAddNewItem({
-      code: uniqueCode(
-        items.map((i) => i.code),
-        () => `BN-${Math.floor(110 + Math.random() * 880)}`,
-      ),
-      name: newName.trim(),
-      category: newCat,
-      roastLevel: "وسط",
-      baseUnit: newUnit,
-      stock,
-      minStock,
-      costPrice: cost,
-      lastPurchasePrice: cost,
-      retailPrice: retail,
-      wholesalePrice: wholesale,
-      canSellDirectly: true,
-      hasRecipe: false,
-      supplierPrices: [],
-    });
-    setAddError("");
-    setNewName("");
-    setShowAddModal(false);
-  };
 
   // فتح نافذة التعديل للصنف: نسخة حيّة + مسودة نصية للأرقام
   const openEditItem = (item: InventoryItem) => {
@@ -1134,7 +725,6 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
     if (!editingItem) return;
     if (
       !allValidNumbers([
-        editDraft.stock,
         editDraft.minStock,
         editDraft.costPrice,
         editDraft.retailPrice,
@@ -1144,6 +734,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
       setEditError("أدخل أرقامًا صحيحة غير سالبة؛ لا تعتمد القيمة حتى تكتمل");
       return;
     }
+    if(!editDraft.stock?.trim()||!Number.isFinite(Number(editDraft.stock))||(Number(editDraft.stock)<0&&Number(editDraft.stock)!==editingOriginal?.stock)){setEditError('الجرد الفعلي لا يقل عن صفر؛ يمكن إبقاء العجز الحالي دون تعديله');return;}
     const live = items.find((i) => i.id === editingItem.id);
     try {
       const patch = itemEditPatch(editingOriginal!, live, {
@@ -1195,12 +786,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
         {/* فلاتر الأقسام المختصرة */}
         <div className="flex gap-1.5 overflow-x-auto pb-1">
           {[
-            { id: "all", label: `الكل (${items.length})` },
-            { id: "raw_bean", label: "بن خام" },
-            { id: "manufactured_blend", label: "توليفات" },
-            { id: "raw_spice", label: "خامات وتحويجة" },
-            { id: "drink_recipe", label: "مشروبات" },
-            { id: "direct_product", label: "مباشر" },
+            { id: 'all', label: `الكل (${items.length})` },...itemCategories,
           ].map((t) => (
             <button
               key={t.id}
@@ -1244,7 +830,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
           <div className="space-y-2">
             {filtered.map((item) => {
               const isLow =
-                item.category !== "drink_recipe" && item.stock <= item.minStock;
+                isStockItem(item) && item.stock <= item.minStock;
               const unitLabel =
                 item.baseUnit === "kg"
                   ? "كجم"
@@ -1309,7 +895,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                           isLow ? "text-red-600" : "text-[#1E1612]"
                         }`}
                       >
-                        {item.category === "drink_recipe"
+                        {isRecipeOnUse(item)
                           ? "وصفة"
                           : `${item.stock} ${unitLabel}`}
                       </div>
@@ -1366,20 +952,16 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                   القسم
                 </label>
                 <select
-                  value={editingItem.category}
+                  value={editingItem.category==='raw_spice'?'direct_product':editingItem.category}
                   onChange={(e) =>
                     setEditingItem({
                       ...editingItem,
-                      category: e.target.value as ItemCategory,
+                      category: editingItem.category==='raw_spice'&&e.target.value==='direct_product'?'raw_spice':e.target.value as ItemCategory,
                     })
                   }
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-white"
                 >
-                  <option value="raw_bean">بن خام</option>
-                  <option value="manufactured_blend">توليفة مصنعة</option>
-                  <option value="raw_spice">خامات وتحويجة</option>
-                  <option value="drink_recipe">مشروب بوصفة</option>
-                  <option value="direct_product">بيع مباشر</option>
+                  {itemCategories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
               <div>
@@ -1474,114 +1056,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
       )}
 
       {/* نافذة إضافة صنف جديد */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-5 space-y-3.5 shadow-2xl border border-[#C59B27]">
-            <h3 className="text-base font-extrabold text-[#1E1612]">
-              إضافة صنف جديد
-            </h3>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="اسم الصنف باختصار (مثلاً: بن يمني، حبهان...)"
-              className="w-full border border-[#DFD7C6] rounded-xl px-3.5 py-2.5 text-sm font-bold"
-            />
-            <div className="grid grid-cols-2 gap-2.5">
-              <div>
-                <label className="text-xs font-bold text-[#7A6855] block mb-1">
-                  القسم
-                </label>
-                <select
-                  value={newCat}
-                  onChange={(e) => setNewCat(e.target.value as ItemCategory)}
-                  className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-white"
-                >
-                  <option value="raw_bean">بن خام</option>
-                  <option value="manufactured_blend">توليفة مصنعة</option>
-                  <option value="raw_spice">خامات وتحويجة</option>
-                  <option value="drink_recipe">مشروب بوصفة</option>
-                  <option value="direct_product">بيع مباشر</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-[#7A6855] block mb-1">
-                  الوحدة
-                </label>
-                <select
-                  value={newUnit}
-                  onChange={(e) =>
-                    setNewUnit(e.target.value as "kg" | "piece" | "liter")
-                  }
-                  className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-bold bg-white"
-                >
-                  <option value="kg">كيلو (كجم)</option>
-                  <option value="piece">قطعة / كوب</option>
-                  <option value="liter">لتر</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-[#7A6855] block mb-1">
-                  الرصيد الحالي
-                </label>
-                <input
-                  type="number"
-                  value={newStock}
-                  onChange={(e) => setNewStock(e.target.value)}
-                  className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-[#7A6855] block mb-1">
-                  حد النواقص
-                </label>
-                <input
-                  type="number"
-                  value={newMinStock}
-                  onChange={(e) => setNewMinStock(e.target.value)}
-                  className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-[#7A6855] block mb-1">
-                  التكلفة
-                </label>
-                <input
-                  type="number"
-                  value={newCost}
-                  onChange={(e) => setNewCost(e.target.value)}
-                  className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-[#7A6855] block mb-1">
-                  سعر القطاعي
-                </label>
-                <input
-                  type="number"
-                  value={newRetail}
-                  onChange={(e) => setNewRetail(e.target.value)}
-                  className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleCreateItem}
-                className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl"
-              >
-                حفظ الصنف
-              </button>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-5 py-2.5 rounded-xl border border-[#DFD7C6] text-[#5C4B3E] font-bold"
-              >
-                إلغاء
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {showAddModal && <ItemDefinitionModal items={items} onSave={onAddNewItem} onClose={()=>setShowAddModal(false)}/>}
     </div>
   );
 };
@@ -1596,7 +1071,7 @@ export const ShortagesScreen: React.FC<{
   onBack: () => void;
 }> = ({ items, onNavigateToPurchase, onNavigateToProduction, onBack }) => {
   const lowItems = items.filter(
-    (i) => i.category !== "drink_recipe" && i.stock <= i.minStock,
+    (i) => isStockItem(i) && i.stock <= i.minStock,
   );
 
   return (
@@ -1690,9 +1165,10 @@ export const SuppliersAndCustomersScreen: React.FC<{
     notes?: string,
   ) => boolean;
   onDeletePayment?: (paymentId: string) => void;
-  onAddSupplier: (sup: Omit<Supplier, "id">) => void;
+  onAddSupplier: (sup: Omit<Supplier, "id">) => void|boolean;
+  onUpdateContact?:(mode:'suppliers'|'customers',id:string,details:{name:string;phone:string;area?:string;address?:string;representativeName?:string})=>boolean;
   onDeleteSupplier: (id: string) => void;
-  onAddCustomer: (cust: Omit<Customer, "id">) => void;
+  onAddCustomer: (cust: Omit<Customer, "id">) => void|boolean;
   onDeleteCustomer: (id: string) => void;
   onBack: () => void;
 }> = ({
@@ -1703,6 +1179,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
   salesInvoices,
   accountPayments,
   onPaySupplier,
+  onUpdateContact,
   onCollectCustomer,
   onDeletePayment,
   onAddSupplier,
@@ -1711,6 +1188,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
   onDeleteCustomer,
   onBack,
 }) => {
+  const [editingContact,setEditingContact]=useState<Customer|Supplier|null>(null);
   const [payModalTarget, setPayModalTarget] = useState<{
     id: string;
     name: string;
@@ -1723,6 +1201,9 @@ export const SuppliersAndCustomersScreen: React.FC<{
   const [showAddModal, setShowAddModal] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
+  const [newArea,setNewArea]=useState('');
+  const [newAddress,setNewAddress]=useState('');
+  const [newRepresentative,setNewRepresentative]=useState('');
   const [newCatOrType, setNewCatOrType] = useState("");
   const [newBalance, setNewBalance] = useState("0");
   const [addModalError, setAddModalError] = useState("");
@@ -1737,6 +1218,10 @@ export const SuppliersAndCustomersScreen: React.FC<{
   }, [statementTargetId, mode, suppliers, customers]);
 
   const handleCreate = () => {
+    try {
+      if(mode==='suppliers')checkSupplierDetails({name:newName,phone:newPhone,address:newAddress,representativeName:newRepresentative});
+      else checkCustomerDetails({name:newName,phone:newPhone,area:newArea});
+    }catch(error){setAddModalError((error as Error).message);return;}
     if (!newName.trim()) {
       setAddModalError("أدخل الاسم أولاً");
       return;
@@ -1747,27 +1232,33 @@ export const SuppliersAndCustomersScreen: React.FC<{
       return;
     }
     if (mode === "suppliers") {
-      onAddSupplier({
+      const accepted=onAddSupplier({
         name: newName.trim(),
-        phone: newPhone || "-",
+        phone: newPhone.trim(),
+        address:newAddress.trim(),
+        representativeName:newRepresentative.trim(),
         category: newCatOrType || "مورد بن وخامات",
-        balance,
+        balance:0,
         totalPurchases: 0,
         invoicesCount: 0,
       });
+      if(accepted===false){setAddModalError("لم يتم حفظ المورد؛ راجع التنبيه");return;}
     } else {
-      onAddCustomer({
+      const accepted=onAddCustomer({
         name: newName.trim(),
-        phone: newPhone || "-",
+        phone: newPhone.trim(),
+        area:newArea.trim(),
         type: "جملة - كافيه",
         balance,
         totalSales: 0,
         invoicesCount: 0,
       });
+      if(accepted===false){setAddModalError("لم يتم حفظ العميل؛ راجع التنبيه");return;}
     }
     setAddModalError("");
     setNewName("");
     setNewPhone("");
+    setNewArea('');setNewAddress('');setNewRepresentative('');
     setNewBalance("0");
     setShowAddModal(false);
   };
@@ -1797,66 +1288,15 @@ export const SuppliersAndCustomersScreen: React.FC<{
 
       <div className="p-3.5 space-y-2.5">
         {mode === "suppliers"
-          ? suppliers.map((sup) => (
-              <div
-                key={sup.id}
-                className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] shadow-sm space-y-2"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-extrabold text-[#1E1612]">
-                      {sup.name}
-                    </div>
-                    <div className="text-xs text-[#7A6855]">
-                      {sup.category} • {sup.phone}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-left">
-                      <div className="text-[10px] text-[#7A6855]">له</div>
-                      <div
-                        className={`text-sm font-black ${
-                          sup.balance > 0 ? "text-red-600" : "text-emerald-700"
-                        }`}
-                      >
-                        {sup.balance.toLocaleString("ar-EG")} ج.م
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => onDeleteSupplier(sup.id)}
-                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
-                      title="حذف المورد"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-[#F0EAE0] gap-2">
-                  <button
-                    onClick={() => setStatementTargetId(sup.id)}
-                    className="flex-1 bg-[#FAF8F4] hover:bg-[#FDF8EB] text-[#1E1612] border border-[#DFD7C6] px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-[#9E7918]" />
-                    <span>كشف حساب تفصيلي / واتساب</span>
-                  </button>
-                  {sup.balance > 0 && (
-                    <button
-                      onClick={() => {
-                        setPayModalTarget({
-                          id: sup.id,
-                          name: sup.name,
-                          balance: sup.balance,
-                        });
-                        setAmountInput(String(sup.balance));
-                      }}
-                      className="bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] px-3 py-1.5 rounded-xl text-xs font-extrabold shrink-0"
-                    >
-                      سداد دفعة
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
+          ? suppliers.map(sup=>{
+              const purchases=supplierPurchaseHistory(purchaseInvoices,sup.id);
+              return <article key={sup.id} className="bg-white border rounded-2xl p-4 space-y-3">
+                <h2 className="font-black">{sup.name}</h2><p>{sup.phone} — {sup.address||'العنوان غير مسجل'}</p><p>المندوب: {sup.representativeName||'غير مسجل'}</p>
+                <p>إجمالي الشراء: {purchases.total.toLocaleString('ar-EG')} ج.م — {purchases.purchases.length} فواتير</p>
+                <div className="flex gap-3">{onUpdateContact&&<button onClick={()=>setEditingContact(sup)} className="border rounded-xl p-2">تعديل البيانات</button>}<button onClick={()=>onDeleteSupplier(sup.id)} className="text-red-700 p-2">حذف المورد</button></div>
+                <SupplierPurchasePanels data={purchases}/>
+              </article>;
+            })
           : customers.map((cust) => (
               <div
                 key={cust.id}
@@ -1870,6 +1310,8 @@ export const SuppliersAndCustomersScreen: React.FC<{
                     <div className="text-xs text-[#7A6855]">
                       {cust.type} • {cust.phone}
                     </div>
+                    <div className="text-xs text-[#7A6855]">المنطقة: {cust.area || 'غير مسجلة'}</div>
+                    {onUpdateContact&&<button className="border rounded-xl p-2 mt-2" onClick={()=>setEditingContact(cust)}>تعديل البيانات</button>}
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="text-left">
@@ -1921,6 +1363,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
             ))}
       </div>
 
+      {editingContact&&onUpdateContact&&<ContactEditModal target={editingContact} mode={mode} onSave={(id,details)=>onUpdateContact(mode,id,details)} onClose={()=>setEditingContact(null)}/>}
       {/* نافذة كشف الحساب التفصيلي للمورد أو العميل */}
       {activeStatementEntity && (
         <AccountStatementModal
@@ -2029,13 +1472,18 @@ export const SuppliersAndCustomersScreen: React.FC<{
               placeholder="رقم التليفون..."
               className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
             />
-            <input
+            {mode==='customers' ? <input aria-label="منطقة العميل" value={newArea} onChange={e=>setNewArea(e.target.value)} placeholder="المنطقة" className="w-full border rounded-xl px-3 py-2 text-sm"/> : <>
+              <input aria-label="عنوان المورد" value={newAddress} onChange={e=>setNewAddress(e.target.value)} placeholder="العنوان" className="w-full border rounded-xl px-3 py-2 text-sm"/>
+              <input aria-label="اسم المندوب" value={newRepresentative} onChange={e=>setNewRepresentative(e.target.value)} placeholder="اسم المندوب" className="w-full border rounded-xl px-3 py-2 text-sm"/>
+            </>}
+            {addModalError && <p role="alert" className="text-red-700 text-xs">{addModalError}</p>}
+            {mode==='customers'&&<input
               type="number"
               value={newBalance}
               onChange={(e) => setNewBalance(e.target.value)}
               placeholder="الرصيد الافتتاحي (ج.م)"
               className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
-            />
+            />}
             <div className="flex gap-2 pt-1">
               <button
                 onClick={handleCreate}
@@ -2062,24 +1510,28 @@ export const SuppliersAndCustomersScreen: React.FC<{
 // ============================================================================
 export const SalesInvoicesAndReturnsScreen: React.FC<{
   salesInvoices: SalesInvoice[];
+  cashierDays?:CashierDay[];
   customers: Customer[];
   onReturnInvoice: (invoiceId: string) => void;
   onDeleteInvoice: (invoiceId: string) => void;
   onBack: () => void;
 }> = ({
   salesInvoices,
+  cashierDays=[],
   customers,
   onReturnInvoice,
   onDeleteInvoice,
   onBack,
 }) => {
+  const [historyKind,setHistoryKind]=useState<'wholesale'|'cashier'|'legacy'>(()=>cashierDays.length?'cashier':salesInvoices.some(i=>i.saleType!=='wholesale')?'legacy':'wholesale');
+  const invoiceRecords=useMemo(()=>salesInvoices.filter(i=>historyKind==='wholesale'?i.saleType==='wholesale':i.saleType!=='wholesale'),[salesInvoices,historyKind]);
   const [selectedReceiptInv, setSelectedReceiptInv] =
     useState<SalesInvoice | null>(null);
   const [invoiceSearch,setInvoiceSearch]=useState('');
   const matchingInvoices=useMemo(()=>{
     const q=invoiceSearch.trim().toLocaleLowerCase();
-    return q?salesInvoices.filter(inv=>[inv.invoiceNumber,inv.customerName,inv.date,...inv.items.map(line=>line.itemName)].some(text=>text.toLocaleLowerCase().includes(q))):salesInvoices;
-  },[salesInvoices,invoiceSearch]);
+    return q?invoiceRecords.filter(inv=>[inv.invoiceNumber,inv.customerName,inv.date,...inv.items.map(line=>line.itemName)].some(text=>text.toLocaleLowerCase().includes(q))):invoiceRecords;
+  },[invoiceRecords,invoiceSearch]);
   const invoicePage=useRecordPage(matchingInvoices,invoiceSearch);
 
   return (
@@ -2092,7 +1544,7 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
           <ChevronRight className="w-6 h-6" />
         </button>
         <h1 className="text-base font-extrabold">
-          الفواتير والمرتجعات ({salesInvoices.length})
+          سجل المبيعات ({salesInvoices.length})
         </h1>
         <button
           onClick={() => window.print()}
@@ -2104,6 +1556,8 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
         </button>
       </div>
 
+      <nav aria-label="نوع سجل المبيعات" className="flex gap-2 p-3">{([{id:'wholesale',label:'فواتير الجملة'},{id:'cashier',label:'مبيعات أيام الكاشير'},{id:'legacy',label:'السجل السابق'}] as const).map(t=><button key={t.id} onClick={()=>setHistoryKind(t.id)} className={`border rounded-xl p-2 text-xs ${historyKind===t.id?'bg-[#1E1612] text-white':''}`}>{t.label}</button>)}</nav>
+      {historyKind==='cashier'?<CashierDayHistory days={cashierDays}/>:<>
       <div className="p-3.5 space-y-3">
         <input aria-label="بحث في كل الفواتير" placeholder="رقم الفاتورة أو العميل أو التاريخ أو الصنف" value={invoiceSearch} onChange={event=>setInvoiceSearch(event.target.value)} className="w-full rounded-xl border border-[#E6DEC8] p-3 text-sm" />
         <RecordPagination {...invoicePage} />
@@ -2183,14 +1637,14 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
                       {inv.returnRefundAmount.toLocaleString("ar-EG")} ج.م
                     </p>
                   )}
-                  {!inv.isReturned && (
+                  {!inv.isReturned && (<details><summary className="text-xs p-2">تسوية استثنائية</summary>
                     <button
                       onClick={() => onReturnInvoice(inv.id)}
                       className="text-amber-800 hover:bg-amber-50 px-2 py-1 rounded-lg font-bold flex items-center gap-1"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
-                      مرتجع
-                    </button>
+                      تسجيل مرتجع استثنائي
+                    </button></details>
                   )}
                 </div>
               </div>
@@ -2200,6 +1654,7 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
       </div>
 
       <div className="px-3.5"><RecordPagination {...invoicePage} /></div>
+      </>}
       {selectedReceiptInv && (
         <InvoiceReceiptModal
           invoice={selectedReceiptInv}
@@ -2224,14 +1679,12 @@ interface MoreMenuProps {
   expenses: Expense[];
   partners: Partner[];
   auditLogs: AuditLogEntry[];
-  shifts: ShiftRecord[];
   currentPartner: Partner;
   initialSubPage?:
     | "menu"
     | "data_control"
     | "expenses"
     | "partners"
-    | "shifts"
     | "cloud";
   onAddExpense: (exp: Omit<Expense, "id">) => void | boolean;
   showDemoTools?: boolean;
@@ -2255,7 +1708,6 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   expenses,
   partners,
   auditLogs,
-  shifts,
   currentPartner,
   initialSubPage = "menu",
   showDemoTools = false,
@@ -2273,11 +1725,13 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   onBack,
 }) => {
   const [subPage, setSubPage] = useState<
-    "menu" | "data_control" | "expenses" | "partners" | "shifts" | "cloud"
+    "menu" | "data_control" | "expenses" | "partners" | "cloud"
   >(initialSubPage);
 
   const [expTitle, setExpTitle] = useState("");
   const [expAmount, setExpAmount] = useState("");
+  const [expFrequency,setExpFrequency]=useState<NonNullable<Expense['frequency']>>('daily');
+  const [expenseFilter,setExpenseFilter]=useState<'all'|'monthly_fixed'|'daily'>('all');
   const [expenseError, setExpenseError] = useState("");
   const [expCategory, setExpCategory] =
     useState<Expense["category"]>("أكياس وتغليف");
@@ -2486,6 +1940,12 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                 <option value="نثريات أخرى">نثريات</option>
               </select>
             </div>
+            <label className="block text-xs font-bold">نوع المصروف
+              <select aria-label="نوع المصروف" value={expFrequency} onChange={e=>setExpFrequency(e.target.value as NonNullable<Expense['frequency']>)} className="w-full border rounded-xl p-2 mt-1">
+                <option value="daily">مصروف يومي</option><option value="monthly_fixed">مصروف شهري ثابت</option>
+              </select>
+            </label>
+            <p className="text-xs text-stone-500">التصنيف الشهري يحفظ نوع المصروف؛ كل عملية صرف تُسجل عند حدوثها.</p>
             <div className="grid grid-cols-3 gap-2">
               {(["درج المحل", "خزنة الشركة", "من جيب الشريك"] as const).map(
                 (src) => (
@@ -2515,6 +1975,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                 const accepted = onAddExpense({
                   date: businessDate(),
                   category: expCategory,
+                  frequency:expFrequency,
                   title: expTitle.trim(),
                   amount: amt,
                   partnerName: currentPartner.name,
@@ -2542,7 +2003,12 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
           </div>
 
           <div className="space-y-2">
-            {expenses.map((e) => (
+            <label className="block text-xs">عرض المصروفات
+              <select aria-label="تصفية المصروفات" value={expenseFilter} onChange={e=>setExpenseFilter(e.target.value as typeof expenseFilter)} className="w-full border rounded-xl p-2">
+                <option value="all">كل المصروفات</option><option value="daily">اليومية</option><option value="monthly_fixed">الشهرية الثابتة</option>
+              </select>
+            </label>
+            {expenses.filter(e=>expenseFilter==='all'||e.frequency===expenseFilter).map((e) => (
               <div
                 key={e.id}
                 className="bg-white rounded-2xl p-3 border border-[#E6DEC8] shadow-sm flex items-center justify-between"
@@ -2552,6 +2018,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                     {e.title}
                     {e.isCancelled ? " — ملغى" : ""}
                   </div>
+                  <div className="text-xs text-[#7A6855]">{e.frequency==='monthly_fixed'?'شهري ثابت':e.frequency==='daily'?'يومي':'سجل سابق غير مصنّف'}</div>
                   <div className="text-xs text-[#7A6855]">
                     {e.category} • {e.paidFrom} • {e.partnerName}
                   </div>
@@ -2633,41 +2100,6 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                   كلمات المرور تُدار من الحساب الموثق ولا تُحفظ ضمن بيانات
                   المحل.
                 </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (subPage === "shifts") {
-    return (
-      <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
-        <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
-          <button
-            onClick={() => setSubPage("menu")}
-            className="p-1.5 text-[#D4AF37]"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </button>
-          <h1 className="text-base font-extrabold">سجل الورديات</h1>
-          <div className="w-8" />
-        </div>
-        <div className="p-4 space-y-2.5">
-          {shifts.map((sh) => (
-            <div
-              key={sh.id}
-              className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] shadow-sm space-y-2"
-            >
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-extrabold">{sh.shiftName}</span>
-                <span className="text-xs font-bold text-emerald-700">
-                  {sh.status}
-                </span>
-              </div>
-              <div className="text-xs text-[#7A6855]">
-                الكاشير: {sh.cashierName} • المبيعات: {sh.cashSales} ج.م
               </div>
             </div>
           ))}

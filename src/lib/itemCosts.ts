@@ -51,7 +51,7 @@ export function recalculateRecipeCosts(
     if (visiting.has(id)) throw new Error("تحتوي الوصفات اعتمادًا دائريًا");
     visiting.add(id);
     const value =
-      item.hasRecipe && item.recipe?.length
+      item.hasRecipe && item.recipe?.length && !(item.category==='manufactured_blend'&&item.costingVersion===2)
         ? Number(
             item.recipe
               .reduce((total, ingredient) => {

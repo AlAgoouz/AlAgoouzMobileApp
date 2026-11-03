@@ -32,6 +32,7 @@ export function recordEmployeeAction(state:StoreState, employeeId:string, type:E
     next = recordExpense(next, {
       date:transaction.date, category:'رواتب ويوميات', title:`${type} — ${employee.name} — ${period}`,
       amount:transaction.amount, paidFrom, partnerName:partner.name, notes,
+      frequency:employee.salaryType==='شهري'&&type==='صرف راتب'?'monthly_fixed':'daily',
       sourceEmployeeTransactionId:transaction.id,
     }, partnerId);
     transaction.expenseId = next.expenses[0].id;

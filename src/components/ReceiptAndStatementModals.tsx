@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { escapePrintData } from '../lib/safeHtml';
 import { businessDate } from '../lib/dates';
+import {whatsAppNumber} from '../lib/contactDetails';
 import {
   X,
   Printer,
@@ -25,12 +26,8 @@ import {
 
 // تنسيق رقم الموبايل المصري للواتساب
 export function formatEgyptWhatsAppPhone(rawPhone?: string): string {
-  if (!rawPhone) return '';
-  const digits = rawPhone.replace(/\D/g, '');
-  if (!digits) return '';
-  if (digits.startsWith('20')) return digits;
-  if (digits.startsWith('0')) return `2${digits}`;
-  return digits;
+  if(!rawPhone)return '';
+  try{return whatsAppNumber(rawPhone);}catch{return '';}
 }
 
 // ============================================================================
@@ -48,6 +45,16 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
   onClose,
 }) => {
   const [phoneInput, setPhoneInput] = useState(customerPhone);
+  const [pdfBusy,setPdfBusy]=useState(false),[pdfError,setPdfError]=useState('');
+  const exportPdf=async(share:boolean)=>{
+    if(pdfBusy)return;setPdfBusy(true);setPdfError('');
+    try{
+      const {invoicePdfFile,downloadInvoiceFile}=await import('../lib/invoicePdf');
+      const file=await invoicePdfFile(invoice);
+      if(share&&navigator.canShare?.({files:[file]})&&navigator.share){try{await navigator.share({files:[file],title:`فاتورة ${invoice.invoiceNumber}`});}catch(error){if((error as Error).name==='AbortError')return;downloadInvoiceFile(file);setPdfError('تم تنزيل الفاتورة؛ افتح محادثة العميل من زر واتساب وأرفق الملف.');}}
+      else {downloadInvoiceFile(file);if(share)setPdfError('تم تنزيل الفاتورة؛ افتح محادثة العميل من زر واتساب وأرفق الملف.');}
+    }catch(error){if((error as Error).name!=='AbortError')setPdfError((error as Error).message);}finally{setPdfBusy(false);}
+  };
 
   const buildWhatsAppInvoiceText = () => {
     const lines: string[] = [
@@ -307,6 +314,11 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
           </div>
 
           {/* أزرار الطباعة والواتساب */}
+          {invoice.saleType==='wholesale'&&invoice.items.every(line=>line.category==='manufactured_blend')&&<div className="grid grid-cols-2 gap-2">
+            <button disabled={pdfBusy} onClick={()=>void exportPdf(false)} className="border rounded-xl p-3 font-bold">{pdfBusy?'جارٍ تجهيز الفاتورة…':'تنزيل الفاتورة PDF'}</button>
+            <button disabled={pdfBusy} onClick={()=>void exportPdf(true)} className="border rounded-xl p-3 font-bold">مشاركة ملف الفاتورة</button>
+          </div>}
+          {pdfError&&<p role="status" className="text-xs">{pdfError}</p>}
           <div className="grid grid-cols-2 gap-2.5 pt-1">
             <button
               onClick={handleSendWhatsApp}
