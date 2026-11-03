@@ -1,6 +1,14 @@
 import { it, expect, vi, afterEach } from 'vitest';
 import { StoreEngine, type StoreTransport } from '../src/lib/storeEngine';
-import { emptyStore } from '../src/lib/storeState';
+import { emptyStore,cloudStoreInput,toCloud } from '../src/lib/storeState';
+
+it('validates mapped cloud input at the engine boundary and rejects malformed remote data',async()=>{
+ const transport:StoreTransport={load:async()=>({state:cloudStoreInput({...toCloud(emptyStore),items:[{id:'broken'}]}),version:1}),save:async()=>2};
+ const engine=new StoreEngine(transport);await engine.load();
+ expect(engine.snapshot.status).toBe('error');expect(engine.snapshot.state.items).toEqual([]);
+ transport.load=async()=>({state:cloudStoreInput(toCloud(emptyStore)),version:1});await engine.load();
+ expect(engine.snapshot.status).toBe('ready');expect(engine.snapshot.state).toEqual(emptyStore);
+});
 afterEach(() => vi.useRealTimers());
 it('checks a small version without reloading unchanged data and deduplicates refresh requests', async () => {
   const {engine,transport}=setup();
