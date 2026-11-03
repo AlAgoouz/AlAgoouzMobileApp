@@ -12,34 +12,7 @@ import {categoryLabel,itemCategories,requiresRecipe,isStockItem,isRecipeOnUse} f
 import React, { useState, useMemo } from "react";
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import {checkCustomerDetails,checkSupplierDetails} from '../lib/contactDetails';
-import {
-  ChevronRight,
-  ChevronLeft,
-  Search,
-  Plus,
-  RotateCcw,
-  Clock,
-  Wallet,
-  Receipt,
-  ScanLine,
-  Sparkles,
-  Shield,
-  Flame,
-  FolderSync,
-  Cloud,
-  Printer,
-  UserCheck,
-  LogOut,
-  Trash2,
-  Database,
-  AlertTriangle,
-  Download,
-  RefreshCw,
-  MessageCircle,
-  FileText,
-  Upload,
-  FileSpreadsheet,
-} from "lucide-react";
+import {Search, Plus, RotateCcw, Flame, Printer, LogOut, Trash2, Download, RefreshCw, MessageCircle, FileText, Upload, FileSpreadsheet} from 'lucide-react';
 import {
   InventoryItem,
   Supplier,

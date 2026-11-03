@@ -4,22 +4,7 @@ import {Modal} from './Modal';
 import {isStockItem} from '../lib/itemPolicy';
 import React, { useState, useMemo } from "react";
 import { payrollBalance, currentPayrollPeriod } from '../lib/payroll';
-import {
-  ChevronRight,
-  Scale,
-  CheckCircle2,
-  History,
-  Search,
-  Users,
-  Wallet,
-  CalendarCheck,
-  Award,
-  AlertOctagon,
-  Banknote,
-  Check,
-  UserPlus,
-  Trash2,
-} from "lucide-react";
+import {Scale, CheckCircle2, History, Search, Users, Wallet, CalendarCheck, Award, AlertOctagon, Banknote, Check, UserPlus, Trash2} from 'lucide-react';
 import {
   InventoryItem,
   StocktakingAuditRecord,

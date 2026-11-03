@@ -6,8 +6,8 @@ export function ContactEditModal({target,mode,onSave,onClose}: {target:Customer|
  const [details,setDetails]=useState({name:target.name,phone:target.phone,area:(target as Customer).area??'',address:(target as Supplier).address??'',representativeName:(target as Supplier).representativeName??''});const [error,setError]=useState('');
  const fields=mode==='customers'?['name','phone','area'] as const:['name','phone','address','representativeName'] as const;
  const labels={name:'الاسم',phone:'رقم التليفون',area:'المنطقة',address:'العنوان',representativeName:'اسم المندوب'};
- return <Modal title={<>تعديل بيانات التواصل</>}  onClose={onClose}>{fields.map(key=><label className="block" key={key}>{labels[key]}<input className="border p-2 rounded-xl w-full" value={details[key]} onChange={e=>setDetails({...details,[key]:e.target.value})}/></label>)}
+ return <Modal title={<>تعديل بيانات التواصل</>}  onClose={onClose} footer={<div><button className="bg-[#1E1612] text-white p-2 rounded-xl" onClick={()=>{try{if(mode==='customers')checkCustomerDetails(details);else checkSupplierDetails(details);const clean=Object.fromEntries(fields.map(k=>[k,details[k].trim()])) as typeof details;if(onSave(target.id,clean))onClose();else setError('لم يتم حفظ التعديل؛ راجع التنبيه');}catch(e){setError((e as Error).message);}}}>حفظ بيانات التواصل</button><button className="p-2" onClick={onClose}>إلغاء</button></div>}>{fields.map(key=><label className="block" key={key}>{labels[key]}<input className="border p-2 rounded-xl w-full" value={details[key]} onChange={e=>setDetails({...details,[key]:e.target.value})}/></label>)}
 {error&&<p role="alert">{error}</p>}
-<button className="bg-[#1E1612] text-white p-2 rounded-xl" onClick={()=>{try{if(mode==='customers')checkCustomerDetails(details);else checkSupplierDetails(details);const clean=Object.fromEntries(fields.map(k=>[k,details[k].trim()])) as typeof details;if(onSave(target.id,clean))onClose();else setError('لم يتم حفظ التعديل؛ راجع التنبيه');}catch(e){setError((e as Error).message);}}}>حفظ بيانات التواصل</button>
-<button className="p-2" onClick={onClose}>إلغاء</button></Modal>;
+
+</Modal>;
 }

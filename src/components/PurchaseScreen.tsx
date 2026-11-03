@@ -5,27 +5,7 @@ import {RecordPagination,useRecordPage} from './RecordPagination';
 import {latestSupplierPrices} from '../lib/supplierPurchases';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
 import React, { useState, useMemo } from "react";
-import {
-  ChevronRight,
-  Truck,
-  Search,
-  AlertTriangle,
-  Plus,
-  Minus,
-  Trash2,
-  Edit3,
-  Clock,
-  Package,
-  Tag,
-  Check,
-  FileText,
-  Calendar,
-  X,
-  ShoppingBag,
-  Eye,
-  UserPlus,
-  Sparkles,
-} from "lucide-react";
+import {Truck, Search, AlertTriangle, Plus, Minus, Trash2, Edit3, Clock, Package, Tag, Check, FileText, X, ShoppingBag, Eye, UserPlus} from 'lucide-react';
 import {
   InventoryItem,
   Supplier,
@@ -338,14 +318,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-28 flex flex-col">
-      {invoiceError && (
-        <p role="alert" className="text-red-700 bg-red-50 p-3 font-bold">
-          {invoiceError}
-        </p>
-      )}
-      {viewMode==='list'&&<RecordPagination {...invoicePage}/>}
-      {/* هيدر قسم المشتريات */}
-      <OperationHeader title={<>{viewMode === "list"
+<OperationHeader title={<>{viewMode === "list"
               ? "المشتريات وفواتير التوريد"
               : "إنشاء فاتورة مشتريات جديدة"}</>} description={<>{viewMode === "list"
               ? "سجل فواتير الشراء وتوريدات الموردين"
@@ -371,6 +344,14 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
             الفواتير ({purchaseInvoices.length})
           </button>
         )}</OperationHeader>
+      {invoiceError && (
+        <p role="alert" className="text-red-700 bg-red-50 p-3 font-bold">
+          {invoiceError}
+        </p>
+      )}
+      {viewMode==='list'&&<RecordPagination {...invoicePage}/>}
+      {/* هيدر قسم المشتريات */}
+      
 
       {/* ================= الوضع الأول: شاشة قسم المشتريات الرئيسية (سجل الفواتير + زر إنشاء فاتورة) ================= */}
       {viewMode === "list" && (

@@ -2,25 +2,7 @@ import {ReceiptText as HeaderReceiptText,FolderSync as HeaderFolderSync} from 'l
 import {OperationHeader} from './OperationHeader';
 import { businessDate } from "../lib/dates";
 import React, { useState, useMemo } from "react";
-import {
-  ChevronRight,
-  ShoppingBag,
-  Users,
-  Search,
-  Plus,
-  Minus,
-  Trash2,
-  Check,
-  FileSpreadsheet,
-  Upload,
-  Download,
-  Sparkles,
-  CheckCircle2,
-  FolderSync,
-  Coffee,
-  Scale,
-  AlertTriangle,
-} from "lucide-react";
+import {ShoppingBag, Users, Search, Trash2, Check, FileSpreadsheet, Upload, Download, CheckCircle2, Coffee, AlertTriangle} from 'lucide-react';
 import {
   InventoryItem,
   Customer,
@@ -276,13 +258,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-36">
-      {saleError && (
-        <p role="alert" className="text-red-700 bg-red-50 p-3 font-bold">
-          {saleError}
-        </p>
-      )}
-      {/* الهيدر */}
-      <OperationHeader title={<>{saleMode === "wholesale"
+<OperationHeader title={<>{saleMode === "wholesale"
               ? "فاتورة بيع جملة (بُن العجوز)"
               : "نقطة بيع المحل (قطاعي ومشروبات)"}</>} description={<>اختيار الأصناف ومراجعة الفاتورة قبل الاعتماد.</>} icon={HeaderReceiptText} onBack={onBack}><button
           onClick={onNavigateToCashierSync}
@@ -292,6 +268,13 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
           <FileSpreadsheet className="w-4 h-4" />
           شيت الكاشير
         </button></OperationHeader>
+      {saleError && (
+        <p role="alert" className="text-red-700 bg-red-50 p-3 font-bold">
+          {saleError}
+        </p>
+      )}
+      {/* الهيدر */}
+      
 
       <div className="p-3.5 space-y-3.5">
         {/* التبديل بين بيع الجملة وبيع المحل */}

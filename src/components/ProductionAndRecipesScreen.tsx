@@ -4,20 +4,7 @@ import {productionNeeds} from '../lib/inventory';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
 import {requiresRecipe} from '../lib/itemPolicy';
 import React, { useEffect, useState, useMemo } from "react";
-import {
-  ChevronRight,
-  Flame,
-  Plus,
-  Trash2,
-  CheckCircle2,
-  AlertTriangle,
-  Coffee,
-  Layers,
-  History,
-  Sparkles,
-  Scale,
-  Save,
-} from "lucide-react";
+import {Flame, Plus, Trash2, CheckCircle2, AlertTriangle, Layers, History, Scale, Save} from 'lucide-react';
 import {
   InventoryItem,
   ProductionBatch,

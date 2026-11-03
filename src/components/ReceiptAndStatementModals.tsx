@@ -3,18 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { escapePrintData } from '../lib/safeHtml';
 import { businessDate } from '../lib/dates';
 import {whatsAppNumber} from '../lib/contactDetails';
-import {
-  X,
-  Printer,
-  MessageCircle,
-  FileText,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Plus,
-  Trash2,
-  CheckCircle2,
-  Phone,
-} from 'lucide-react';
+import {Printer, MessageCircle, ArrowDownLeft, ArrowUpRight, Plus, Trash2, CheckCircle2, Phone} from 'lucide-react';
 import {
   SalesInvoice,
   PurchaseInvoice,
@@ -202,7 +191,22 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
   };
 
   return (
-    <Modal title={<>بُن العجوز — أصل المزاج</>} description={<>فاتورة # {invoice.invoiceNumber} •  {invoice.date}</>} onClose={onClose}><div className="space-y-3">
+    <Modal title={<>بُن العجوز — أصل المزاج</>} description={<>فاتورة # {invoice.invoiceNumber} •  {invoice.date}</>} onClose={onClose} footer={<div className="grid grid-cols-2 gap-2.5 pt-1">
+            <button
+              onClick={handleSendWhatsApp}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-2xl shadow flex items-center justify-center gap-1.5 text-xs"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>إرسال واتساب</span>
+            </button>
+            <button
+              onClick={handlePrintReceipt}
+              className="bg-[#1E1612] hover:bg-[#2B201A] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-3 rounded-2xl shadow flex items-center justify-center gap-1.5 text-xs"
+            >
+              <Printer className="w-4 h-4 text-[#D4AF37]" />
+              <span>طباعة الفاتورة</span>
+            </button>
+          </div>}><div className="space-y-3">
           <div className="bg-white rounded-2xl p-3 border border-[#E6DEC8] flex items-center justify-between text-xs">
             <div>
               <div className="text-[10px] text-[#7A6855]">العميل</div>
@@ -292,22 +296,7 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
             <button disabled={pdfBusy} onClick={()=>void exportPdf(true)} className="border rounded-xl p-3 font-bold">مشاركة ملف الفاتورة</button>
           </div>}
           {pdfError&&<p role="status" className="text-xs">{pdfError}</p>}
-          <div className="grid grid-cols-2 gap-2.5 pt-1">
-            <button
-              onClick={handleSendWhatsApp}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-2xl shadow flex items-center justify-center gap-1.5 text-xs"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>إرسال واتساب</span>
-            </button>
-            <button
-              onClick={handlePrintReceipt}
-              className="bg-[#1E1612] hover:bg-[#2B201A] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-3 rounded-2xl shadow flex items-center justify-center gap-1.5 text-xs"
-            >
-              <Printer className="w-4 h-4 text-[#D4AF37]" />
-              <span>طباعة الفاتورة</span>
-            </button>
-          </div>
+          
         </div></Modal>
   );
 };
@@ -512,7 +501,22 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
   return (
     <Modal title={<>كشف حساب:  {target.name}</>} description={<>{mode === 'supplier'
                 ? 'سجل فواتير التوريد والدفعات'
-                : 'سجل مسحوبات العميل والتحصيل'} {' '} •  {target.phone}</>} onClose={onClose}><div className="space-y-3.5">
+                : 'سجل مسحوبات العميل والتحصيل'} {' '} •  {target.phone}</>} onClose={onClose} footer={<div className="grid grid-cols-2 gap-2.5 pt-1">
+            <button
+              onClick={handleSendWhatsAppStatement}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-2xl shadow flex items-center justify-center gap-1.5 text-xs"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>إرسال الكشف واتساب</span>
+            </button>
+            <button
+              onClick={handlePrintStatement}
+              className="bg-[#1E1612] hover:bg-[#2B201A] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-3 rounded-2xl shadow flex items-center justify-center gap-1.5 text-xs"
+            >
+              <Printer className="w-4 h-4 text-[#D4AF37]" />
+              <span>طباعة كشف الحساب</span>
+            </button>
+          </div>}><div className="space-y-3.5">
           {/* ملخص الرصيد */}
           <div className="rounded-2xl bg-gradient-to-br from-[#1E1612] to-[#2B201A] text-white p-3.5 border border-[#C59B27] grid grid-cols-3 gap-2 text-center">
             <div>
@@ -690,22 +694,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
           </div>
 
           {/* أزرار إرسال كشف الحساب واتساب أو طباعته */}
-          <div className="grid grid-cols-2 gap-2.5 pt-1">
-            <button
-              onClick={handleSendWhatsAppStatement}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-2xl shadow flex items-center justify-center gap-1.5 text-xs"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>إرسال الكشف واتساب</span>
-            </button>
-            <button
-              onClick={handlePrintStatement}
-              className="bg-[#1E1612] hover:bg-[#2B201A] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-3 rounded-2xl shadow flex items-center justify-center gap-1.5 text-xs"
-            >
-              <Printer className="w-4 h-4 text-[#D4AF37]" />
-              <span>طباعة كشف الحساب</span>
-            </button>
-          </div>
+          
         </div></Modal>
   );
 };
