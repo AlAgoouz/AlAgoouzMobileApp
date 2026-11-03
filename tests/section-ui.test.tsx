@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
+import {webcrypto} from 'node:crypto';
 import {afterEach,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {ItemDefinitionModal} from '../src/components/ItemDefinitionModal';
@@ -10,8 +11,9 @@ import {INITIAL_ITEMS,INITIAL_CUSTOMERS,INITIAL_SUPPLIERS} from '../src/data/ini
 import {approveCashierDay,attachCashierReport} from '../src/lib/cashierDays';
 import {emptyStore} from '../src/lib/storeState';
 import {salesForReports} from '../src/lib/cashierDays';
-afterEach(cleanup);
+afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 it('uploads both real CSV reports, posts one day with a stock shortage, and rejects a duplicate date',async()=>{
+ vi.stubGlobal('crypto',webcrypto);
  let live={...emptyStore,items:[{...raw,stock:1}]};
  const attach=vi.fn(async(date,report)=>{live=attachCashierReport(live,date,report);redraw();});
  const approve=vi.fn(async(id)=>{live=approveCashierDay(live,id,'Owner');redraw();});
