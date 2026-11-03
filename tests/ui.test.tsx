@@ -43,7 +43,7 @@ it('filters insights when the selected period changes', () => {
     />,
   );
   expect(screen.getByText(/إجمالي المبيعات:/).textContent).not.toContain('١٢');
-  fireEvent.click(screen.getByRole('button', { name: 'كل الفترات' }));
+  fireEvent.click(screen.getByRole('button', { name: 'كل السجل' }));
   expect(screen.getByText(/إجمالي المبيعات:/).textContent).toContain('١٢');
 });
 it('submits email and password once, displays auth failure, and permits retry', async () => {
