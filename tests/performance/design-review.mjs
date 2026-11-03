@@ -100,6 +100,16 @@ export async function verifyDesign(){
       await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
       await page.getByRole('heading',{name:'كل شغلك، بخطوة واحدة'}).waitFor();
     }
+    await page.setViewportSize({width:1440,height:900});
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await limit(page,'sections-card-effects');
+    const hoveredCard=page.locator('.section-tile').first();await hoveredCard.hover();
+    await page.screenshot({path:'design-card-hover-mobile.png',fullPage:true,animations:'disabled'});
+    assert.notEqual(await hoveredCard.evaluate(e=>getComputedStyle(e).transform),'none','Actionable cards must visibly respond to desktop hover');
+    await page.emulateMedia({reducedMotion:'reduce'});await limit(page,'sections-card-reduced-motion');
+    assert.equal(await hoveredCard.evaluate(e=>getComputedStyle(e).transform),'none','Reduced-motion cards must remain stable');
+    evidence.cardHover=true;
+    await page.setViewportSize({width:360,height:800});
     await page.goto(origin+'/#type=recovery');
     // A mail link opens a new document. A hash-only goto from this already-open
     // SPA is same-document navigation and does not rerun its initial-link guard.
