@@ -1,0 +1,24 @@
+name: Scaffold user access migration
+on:
+  push:
+    branches: [codex/scaffold-user-migration]
+permissions:
+  contents: read
+jobs:
+  scaffold:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Create migration using the official CLI
+        run: |
+          npx --yes supabase@3.0.0 migration new --help
+          npx --yes supabase@3.0.0 migration new separate_user_accounts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-access-migration-scaffold
+          path: supabase/migrations/*_separate_user_accounts.sql
+          if-no-files-found: error
