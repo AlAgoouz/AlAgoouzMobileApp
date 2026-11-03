@@ -1,3 +1,4 @@
+import {Modal} from './Modal';
 import React, { useState, useMemo } from 'react';
 import { escapePrintData } from '../lib/safeHtml';
 import { businessDate } from '../lib/dates';
@@ -201,35 +202,7 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3">
-      <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border-2 border-[#C59B27] animate-in fade-in zoom-in-95 duration-150">
-        {/* هيدر الإيصال */}
-        <div className="bg-[#1E1612] text-[#FBF5B7] p-4 flex items-center justify-between border-b border-[#C59B27]">
-          <div className="flex items-center gap-2.5">
-            <img
-              src="/logo.jpg"
-              alt="بُن العجوز"
-              className="w-10 h-10 rounded-xl object-cover border border-[#D4AF37]"
-            />
-            <div>
-              <h3 className="text-sm font-black text-[#FBF5B7]">
-                بُن العجوز — أصل المزاج
-              </h3>
-              <p className="text-[11px] text-[#D4AF37]">
-                فاتورة #{invoice.invoiceNumber} • {invoice.date}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl bg-white/10 text-[#D4AF37] hover:bg-white/20"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* جسم الفاتورة */}
-        <div className="p-4 space-y-3 max-h-[75vh] overflow-y-auto bg-[#FAF8F4]">
+    <Modal title={<>بُن العجوز — أصل المزاج</>} description={<>فاتورة # {invoice.invoiceNumber} •  {invoice.date}</>} onClose={onClose}><div className="space-y-3">
           <div className="bg-white rounded-2xl p-3 border border-[#E6DEC8] flex items-center justify-between text-xs">
             <div>
               <div className="text-[10px] text-[#7A6855]">العميل</div>
@@ -335,9 +308,7 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
               <span>طباعة الفاتورة</span>
             </button>
           </div>
-        </div>
-      </div>
-    </div>
+        </div></Modal>
   );
 };
 
@@ -539,31 +510,9 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3">
-      <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border-2 border-[#C59B27]">
-        {/* الهيدر */}
-        <div className="bg-[#1E1612] text-[#FBF5B7] p-4 flex items-center justify-between border-b border-[#C59B27]">
-          <div>
-            <h3 className="text-sm font-black flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-[#D4AF37]" />
-              كشف حساب: {target.name}
-            </h3>
-            <p className="text-[11px] text-[#D4AF37]">
-              {mode === 'supplier'
+    <Modal title={<>كشف حساب:  {target.name}</>} description={<>{mode === 'supplier'
                 ? 'سجل فواتير التوريد والدفعات'
-                : 'سجل مسحوبات العميل والتحصيل'}{' '}
-              • {target.phone}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl bg-white/10 text-[#D4AF37] hover:bg-white/20"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-4 space-y-3.5 max-h-[78vh] overflow-y-auto bg-[#FAF8F4]">
+                : 'سجل مسحوبات العميل والتحصيل'} {' '} •  {target.phone}</>} onClose={onClose}><div className="p-4 space-y-3.5 max-h-[78vh] overflow-y-auto bg-[#FAF8F4]">
           {/* ملخص الرصيد */}
           <div className="rounded-2xl bg-gradient-to-br from-[#1E1612] to-[#2B201A] text-white p-3.5 border border-[#C59B27] grid grid-cols-3 gap-2 text-center">
             <div>
@@ -757,9 +706,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
               <span>طباعة كشف الحساب</span>
             </button>
           </div>
-        </div>
-      </div>
-    </div>
+        </div></Modal>
   );
 };
 

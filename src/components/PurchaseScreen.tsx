@@ -1,3 +1,6 @@
+import {ShoppingBag as HeaderShoppingBag} from 'lucide-react';
+import {OperationHeader} from './OperationHeader';
+import {Modal} from './Modal';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import {latestSupplierPrices} from '../lib/supplierPurchases';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
@@ -342,35 +345,17 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       )}
       {viewMode==='list'&&<RecordPagination {...invoicePage}/>}
       {/* هيدر قسم المشتريات */}
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={() => {
+      <OperationHeader title={<>{viewMode === "list"
+              ? "المشتريات وفواتير التوريد"
+              : "إنشاء فاتورة مشتريات جديدة"}</>} description={<>{viewMode === "list"
+              ? "سجل فواتير الشراء وتوريدات الموردين"
+              : "اختر المورد والأصناف والكميات لتغذية المخزن"}</>} icon={HeaderShoppingBag} onBack={() => {
             if (viewMode === "create") {
               setViewMode("list");
             } else {
               onBack();
             }
-          }}
-          className="p-1.5 rounded-xl hover:bg-white/10 transition flex items-center text-[#D4AF37]"
-          title="رجوع"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-
-        <div className="text-center">
-          <h1 className="text-base font-black tracking-wide text-[#FBF5B7]">
-            {viewMode === "list"
-              ? "المشتريات وفواتير التوريد"
-              : "إنشاء فاتورة مشتريات جديدة"}
-          </h1>
-          <p className="text-[10px] text-[#D4AF37]">
-            {viewMode === "list"
-              ? "سجل فواتير الشراء وتوريدات الموردين"
-              : "اختر المورد والأصناف والكميات لتغذية المخزن"}
-          </p>
-        </div>
-
-        {viewMode === "list" ? (
+          }}>{viewMode === "list" ? (
           <button
             onClick={handleStartNewInvoice}
             className="bg-gradient-to-r from-[#C59B27] to-[#E5C158] text-[#1E1612] px-3 py-1.5 rounded-xl text-xs font-black shadow flex items-center gap-1"
@@ -385,8 +370,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
           >
             الفواتير ({purchaseInvoices.length})
           </button>
-        )}
-      </div>
+        )}</OperationHeader>
 
       {/* ================= الوضع الأول: شاشة قسم المشتريات الرئيسية (سجل الفواتير + زر إنشاء فاتورة) ================= */}
       {viewMode === "list" && (
@@ -1082,27 +1066,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
       {/* نافذة تفاصيل فاتورة مشتريات مسجلة */}
       {selectedInvoiceDetails && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-5 space-y-4 shadow-2xl border border-[#C59B27]">
-            <div className="flex items-center justify-between border-b border-[#F2ECE1] pb-3">
-              <div>
-                <h3 className="text-sm font-black text-[#1E1612]">
-                  تفاصيل فاتورة مشتريات #{selectedInvoiceDetails.invoiceNumber}
-                </h3>
-                <p className="text-xs text-[#8C7A6B]">
-                  المورد: {selectedInvoiceDetails.supplierName} •{" "}
-                  {selectedInvoiceDetails.date}
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedInvoiceDetails(null)}
-                className="p-1.5 rounded-full bg-[#FAF8F4] text-[#6E5D4F]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-2 max-h-60 overflow-y-auto">
+        <Modal title={<>تفاصيل فاتورة مشتريات # {selectedInvoiceDetails.invoiceNumber}</>} description={<>المورد:  {selectedInvoiceDetails.supplierName} • {" "}  {selectedInvoiceDetails.date}</>} onClose={()=>setSelectedInvoiceDetails(null)}><div className="space-y-2 max-h-60 overflow-y-auto">
               {selectedInvoiceDetails.items.map((it, idx) => (
                 <div
                   key={idx}
@@ -1124,8 +1088,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                 </div>
               ))}
             </div>
-
-            <div className="bg-[#1E1612] text-[#FBF5B7] rounded-2xl p-3.5 text-xs space-y-1">
+<div className="bg-[#1E1612] text-[#FBF5B7] rounded-2xl p-3.5 text-xs space-y-1">
               <div className="flex justify-between">
                 <span>إجمالي الفاتورة:</span>
                 <span className="font-black">
@@ -1149,51 +1112,36 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                   ج.م
                 </span>
               </div>
-            </div>
-          </div>
-        </div>
+            </div></Modal>
       )}
 
       {/* نافذة إضافة مورد جديد سريعاً من داخل الفاتورة */}
       {showNewSupplierModal && onQuickAddSupplier && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3.5 shadow-2xl border border-[#C59B27]">
-            <div className="flex items-center justify-between border-b pb-2.5">
-              <h3 className="text-sm font-black text-[#1E1612]">
-                إضافة مورد جديد سريعاً
-              </h3>
-              <button
-                onClick={() => setShowNewSupplierModal(false)}
-                className="p-1 rounded-lg bg-[#FAF8F4]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <input
+        <Modal title={<>إضافة مورد جديد سريعاً</>}  onClose={()=>setShowNewSupplierModal(false)}><input
               type="text"
               value={newSupName}
               onChange={(e) => setNewSupName(e.target.value)}
               placeholder="اسم المورد أو الشركة"
               className="w-full border border-[#DED6C6] rounded-xl px-3 py-2.5 text-xs font-bold"
             />
-            <input
+<input
               type="text"
               value={newSupPhone}
               onChange={(e) => setNewSupPhone(e.target.value)}
               placeholder="رقم الموبايل"
               className="w-full border border-[#DED6C6] rounded-xl px-3 py-2.5 text-xs font-bold"
             />
-            <input
+<input
               type="text"
               value={newSupCategory}
               onChange={(e) => setNewSupCategory(e.target.value)}
               placeholder="التخصص (مثلاً: بن أخضر، حبهان، أكواب...)"
               className="w-full border border-[#DED6C6] rounded-xl px-3 py-2.5 text-xs font-bold"
             />
-            <input aria-label="عنوان المورد" placeholder="عنوان المورد" value={newSupAddress} onChange={e=>setNewSupAddress(e.target.value)} className="border rounded-xl p-2 w-full" />
-            <input aria-label="اسم المندوب" placeholder="اسم المندوب" value={newSupRepresentative} onChange={e=>setNewSupRepresentative(e.target.value)} className="border rounded-xl p-2 w-full" />
-            {supplierError&&<p role="alert">{supplierError}</p>}
-            <button
+<input aria-label="عنوان المورد" placeholder="عنوان المورد" value={newSupAddress} onChange={e=>setNewSupAddress(e.target.value)} className="border rounded-xl p-2 w-full" />
+<input aria-label="اسم المندوب" placeholder="اسم المندوب" value={newSupRepresentative} onChange={e=>setNewSupRepresentative(e.target.value)} className="border rounded-xl p-2 w-full" />
+{supplierError&&<p role="alert">{supplierError}</p>}
+<button
               onClick={() => {
                 if (!newSupName.trim()) return;
                 try {
@@ -1216,9 +1164,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
               className="w-full bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] py-2.5 rounded-xl text-xs font-black"
             >
               حفظ المورد
-            </button>
-          </div>
-        </div>
+            </button></Modal>
       )}
 
       {/* نافذة تعريف صنف جديد للمخزن مباشرة من فاتورة المشتريات */}
@@ -1226,25 +1172,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
       {/* نافذة مقارنة كل الموردين وأسعارهم */}
       {compareModalItem && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-5 space-y-4 shadow-2xl border border-[#C59B27]">
-            <div className="flex items-center justify-between border-b pb-3">
-              <div>
-                <h3 className="text-sm font-black text-[#1E1612]">
-                  مقارنة أسعار الموردين
-                </h3>
-                <p className="text-xs text-[#8C7A6B]">
-                  {compareModalItem.name}
-                </p>
-              </div>
-              <button
-                onClick={() => setCompareModalItem(null)}
-                className="p-1.5 rounded-full bg-[#FAF8F4] text-[#6E5D4F]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="space-y-2.5">
+        <Modal title={<>مقارنة أسعار الموردين</>} description={<>{compareModalItem.name}</>} onClose={()=>setCompareModalItem(null)}><div className="space-y-2.5">
               {compareModalItem.supplierPrices.map((sp, i) => (
                 <div
                   key={i}
@@ -1274,9 +1202,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-        </div>
+            </div></Modal>
       )}
     </div>
   );

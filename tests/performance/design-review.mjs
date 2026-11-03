@@ -14,6 +14,27 @@ export async function verifyDesign(){
     const layout=await page.evaluate(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width&& (r.right>innerWidth+1||r.left< -1);}).slice(0,12).map(e=>({tag:e.tagName,classes:e.className,text:e.textContent?.slice(0,90)}))}));
     if(layout.scrollWidth>layout.width+1){const debug=await page.evaluate(()=>({scrollX,roots:[...document.querySelectorAll('html,body,#root,.agouz-app,.app-workspace,.screen-stage,.account-content,.account-access')].map(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {node:e.tagName,classes:e.className,x:r.x,width:r.width,right:r.right,display:s.display,columns:s.gridTemplateColumns,minWidth:s.minWidth,margin:s.margin,padding:s.padding};}),elements:[...document.querySelectorAll('h1,.account-access span')].slice(0,15).map(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {text:e.textContent?.slice(0,40),x:r.x,width:r.width,right:r.right,font:s.font,position:s.position,transform:s.transform};})}));evidence.layoutErrors.push({stage,...layout,debug});console.log('Layout overflow',stage,JSON.stringify({...layout,debug}));}
   };
+  const reviewModal=async(page,trigger,label)=>{
+    await trigger.click();
+    const dialog=page.getByRole('dialog');await dialog.waitFor();
+    assert.equal(await dialog.evaluate(e=>e.matches(':modal')),true,'Dialogs must use the browser top layer');
+    assert.ok((await dialog.getAttribute('aria-labelledby'))?.length,'Every dialog needs a named heading');
+    const controls=await dialog.locator('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]').count();
+    for(let index=0;index<controls+2;index++){
+      await page.keyboard.press('Tab');
+      assert.equal(await dialog.evaluate(e=>e.contains(document.activeElement)),true,'Keyboard focus must remain inside the active dialog');
+    }
+    for(const width of [320,360,1440]){
+      await page.setViewportSize({width,height:800});await limit(page,`dialog-${label}-${width}`);
+      const bounds=await dialog.boundingBox();assert.ok(bounds&&bounds.x>=0&&bounds.y>=0&&bounds.x+bounds.width<=width+1&&bounds.y+bounds.height<=801,'Dialog must fit the viewport');
+      assert.equal(await dialog.getByRole('button',{name:'إغلاق النافذة'}).isVisible(),true);
+      await page.screenshot({path:`design-dialog-${label}-${width}-mobile.png`,fullPage:true});
+    }
+    await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+    assert.equal(await trigger.evaluate(e=>e===document.activeElement),true,'Closing a dialog must restore the opening control focus');
+    assert.notEqual(await page.locator('body').evaluate(e=>e.style.overflow),'hidden','Closing must unlock page scrolling');
+    await page.setViewportSize({width:360,height:800});
+  };
   try {
     const context=await browser.newContext({viewport:{width:360,height:800},reducedMotion:'reduce'});
     await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
@@ -74,6 +95,10 @@ export async function verifyDesign(){
       await page.getByText('جارٍ تحميل الشاشة…',{exact:true}).waitFor({state:'hidden'});
       assert.equal(await page.getByText('تعذر فتح الشاشة',{exact:false}).count(),0);
       await limit(page,title);
+      assert.equal(await page.locator('.operation-header').count(),1,'Every internal section must share one header');
+      assert.equal(await page.locator('.operation-header h1').count(),1);
+      const addDialogs={'المنتجات والتسعير':'منتج جديد','الإنتاج والوصفات':'جديد','مخزن البن':'إضافة','عملاء الجملة':'إضافة','الموردين':'إضافة','المستخدمين':'إضافة مستخدم','العمال والرواتب':'عامل جديد'};
+      if(addDialogs[title])await reviewModal(page,page.getByRole('button',{name:addDialogs[title],exact:true}),String(evidence.sections.length+1));
       if(title==='المصاريف'){
         await page.getByRole('button',{name:'حسابي',exact:true}).click();
         await page.getByRole('heading',{name:'حسابي',exact:true}).waitFor();

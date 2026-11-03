@@ -1,3 +1,6 @@
+import {Tag as HeaderTag,Package as HeaderPackage,TriangleAlert as HeaderTriangleAlert,Users as HeaderUsers,ReceiptText as HeaderReceiptText,DatabaseBackup as HeaderDatabaseBackup,Wallet as HeaderWallet,Cloud as HeaderCloud,CircleUser as HeaderCircleUser} from 'lucide-react';
+import {OperationHeader} from './OperationHeader';
+import {Modal} from './Modal';
 import {FinancialPartnersScreen} from './FinancialPartnersScreen';
 import {CashierDayHistory} from './CashierDayHistory';
 import type {CashierDay} from '../types/erp';
@@ -209,29 +212,13 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
       {/* هيدر قسم المنتجات والتسعير */}
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <div className="text-center">
-          <h1 className="text-base font-black text-[#FBF5B7]">
-            المنتجات والتسعير
-          </h1>
-          <p className="text-[10px] text-[#D4AF37]">
-            الكتالوج الأساسي للدورة التشغيلية (شراء • إنتاج • بيع)
-          </p>
-        </div>
-        <button
+      <OperationHeader title={<>المنتجات والتسعير</>} description={<>الكتالوج الأساسي للدورة التشغيلية (شراء • إنتاج • بيع)</>} icon={HeaderTag} onBack={onBack}><button
           onClick={handleOpenAddModal}
           className="bg-gradient-to-l from-[#D4AF37] to-[#B38728] text-[#1E1612] px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow"
         >
           <Plus className="w-4 h-4" />
           <span>منتج جديد</span>
-        </button>
-      </div>
+        </button></OperationHeader>
 
       <div className="p-3.5 space-y-3.5">
         {/* كارت الملخص التوضيحي للدورة التشغيلية وزر إضافة منتج */}
@@ -501,12 +488,20 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 
       {/* نافذة تعديل بيانات وتسعير المنتج */}
       {editingItem && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-5 space-y-3.5 shadow-2xl border border-[#C59B27]">
-            <h3 className="text-sm font-black text-[#1E1612]">
-              تعديل بيانات وتسعير المنتج ({editingItem.name})
-            </h3>
-            <div>
+        <Modal title={<>تعديل بيانات وتسعير المنتج ( {editingItem.name} )</>}  onClose={()=>setEditingItem(null)} footer={<div className="flex gap-2 pt-2">
+              <button
+                onClick={handleSaveItemEdits}
+                className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-black py-2.5 rounded-xl text-xs"
+              >
+                حفظ التعديلات
+              </button>
+              <button
+                onClick={() => setEditingItem(null)}
+                className="px-5 py-2.5 rounded-xl border border-[#DFD7C6] text-[#5C4B3E] font-bold text-xs"
+              >
+                إلغاء
+              </button>
+            </div>}><div>
               <label className="text-xs font-bold text-[#7A6855] block mb-1">
                 اسم المنتج
               </label>
@@ -519,7 +514,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-extrabold"
               />
             </div>
-            <div className="grid grid-cols-2 gap-2.5">
+<div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label className="text-xs font-bold text-[#7A6855] block mb-1">
                   تصنيف المنتج
@@ -607,25 +602,9 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 />
               </div>
             </div>
-            {editError && (
+{editError && (
               <p className="text-[11px] font-bold text-red-600">{editError}</p>
-            )}
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleSaveItemEdits}
-                className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-black py-2.5 rounded-xl text-xs"
-              >
-                حفظ التعديلات
-              </button>
-              <button
-                onClick={() => setEditingItem(null)}
-                className="px-5 py-2.5 rounded-xl border border-[#DFD7C6] text-[#5C4B3E] font-bold text-xs"
-              >
-                إلغاء
-              </button>
-            </div>
-          </div>
-        </div>
+            )}</Modal>
       )}
     </div>
   );
@@ -751,28 +730,13 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <div className="text-center">
-          <h1 className="text-base font-extrabold">المخزن والأصناف</h1>
-          <p className="text-[11px] text-[#D4AF37]">
-            القيمة: {Math.round(totalInventoryCapital).toLocaleString("ar-EG")}{" "}
-            ج.م
-          </p>
-        </div>
-        <button
+      <OperationHeader title={<>المخزن والأصناف</>} description={<>القيمة:  {Math.round(totalInventoryCapital).toLocaleString("ar-EG")} {" "} ج.م</>} icon={HeaderPackage} onBack={onBack}><button
           onClick={() => setShowAddModal(true)}
           className="bg-gradient-to-l from-[#D4AF37] to-[#B38728] text-[#1E1612] px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow"
         >
           <Plus className="w-4 h-4" />
           إضافة
-        </button>
-      </div>
+        </button></OperationHeader>
 
       <div className="p-3.5 space-y-3">
         {/* فلاتر الأقسام المختصرة */}
@@ -920,12 +884,20 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 
       {/* نافذة تعديل الصنف */}
       {editingItem && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-5 space-y-3.5 shadow-2xl border border-[#C59B27]">
-            <h3 className="text-sm font-extrabold text-[#1E1612]">
-              تعديل الصنف
-            </h3>
-            <div>
+        <Modal title={<>تعديل الصنف</>}  onClose={()=>setEditingItem(null)} footer={<div className="flex gap-2 pt-2">
+              <button
+                onClick={handleSaveItemEdits}
+                className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl"
+              >
+                حفظ
+              </button>
+              <button
+                onClick={() => setEditingItem(null)}
+                className="px-5 py-2.5 rounded-xl border border-[#DFD7C6] text-[#5C4B3E] font-bold"
+              >
+                إلغاء
+              </button>
+            </div>}><div>
               <label className="text-xs font-bold text-[#7A6855] block mb-1">
                 اسم الصنف
               </label>
@@ -938,7 +910,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                 className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
               />
             </div>
-            <div className="grid grid-cols-2 gap-2.5">
+<div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label className="text-xs font-bold text-[#7A6855] block mb-1">
                   القسم
@@ -1026,25 +998,9 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                 />
               </div>
             </div>
-            {editError && (
+{editError && (
               <p className="text-[11px] font-bold text-red-600">{editError}</p>
-            )}
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleSaveItemEdits}
-                className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl"
-              >
-                حفظ
-              </button>
-              <button
-                onClick={() => setEditingItem(null)}
-                className="px-5 py-2.5 rounded-xl border border-[#DFD7C6] text-[#5C4B3E] font-bold"
-              >
-                إلغاء
-              </button>
-            </div>
-          </div>
-        </div>
+            )}</Modal>
       )}
 
       {/* نافذة إضافة صنف جديد */}
@@ -1068,18 +1024,7 @@ export const ShortagesScreen: React.FC<{
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <h1 className="text-base font-extrabold">
-          النواقص ({lowItems.length})
-        </h1>
-        <div className="w-8" />
-      </div>
+      <OperationHeader title={<>النواقص ( {lowItems.length} )</>} description={<>الأصناف التي تحتاج توريدًا أو مراجعة رصيدها.</>} icon={HeaderTriangleAlert} onBack={onBack}></OperationHeader>
 
       <div className="p-3.5 space-y-2.5">
         {lowItems.length === 0 ? (
@@ -1257,26 +1202,15 @@ export const SuppliersAndCustomersScreen: React.FC<{
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <h1 className="text-base font-extrabold">
-          {mode === "suppliers"
+      <OperationHeader title={<>{mode === "suppliers"
             ? `الموردين (${suppliers.length})`
-            : `العملاء (${customers.length})`}
-        </h1>
-        <button
+            : `العملاء (${customers.length})`}</>} description={<>بيانات التواصل وسجل المعاملات والأرصدة.</>} icon={HeaderUsers} onBack={onBack}><button
           onClick={() => setShowAddModal(true)}
           className="bg-[#C59B27] text-[#1E1612] px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1"
         >
           <Plus className="w-4 h-4" />
           إضافة
-        </button>
-      </div>
+        </button></OperationHeader>
 
       <div className="p-3.5 space-y-2.5">
         {mode === "suppliers"
@@ -1377,38 +1311,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
       )}
 
       {payModalTarget && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-4 shadow-2xl border border-[#C59B27]">
-            <h3 className="text-sm font-extrabold text-[#1E1612]">
-              {mode === "suppliers" ? "سداد للمورد:" : "تحصيل من العميل:"}{" "}
-              {payModalTarget.name}
-            </h3>
-            {/* الرصيد الحيّ من البيانات الفعلية (وليس لقطة اللحظة التي فُتحت فيها النافذة) */}
-            <div className="text-[11px] font-bold text-[#7A6855]">
-              {mode === "suppliers" ? "له حاليًا" : "عليه حاليًا"}:{" "}
-              <b>
-                {(mode === "suppliers"
-                  ? suppliers.find((s) => s.id === payModalTarget.id)?.balance
-                  : customers.find((c) => c.id === payModalTarget.id)
-                      ?.balance) ?? payModalTarget.balance}
-                {" ج.م"}
-              </b>
-            </div>
-            <input
-              type="number"
-              value={amountInput}
-              onChange={(e) => {
-                setAmountInput(e.target.value);
-                if (payModalError) setPayModalError("");
-              }}
-              className="w-full border border-[#DFD7C6] rounded-xl px-3.5 py-2.5 text-base font-black text-center"
-            />
-            {payModalError && (
-              <p className="text-[11px] font-bold text-red-600 text-center">
-                {payModalError}
-              </p>
-            )}
-            <div className="flex gap-2">
+        <Modal title={<>{mode === "suppliers" ? "سداد للمورد:" : "تحصيل من العميل:"} {" "}  {payModalTarget.name}</>}  onClose={()=>setPayModalTarget(null)} footer={<div className="flex gap-2">
               <button
                 onClick={() => {
                   const val = parseFloat(amountInput);
@@ -1439,44 +1342,34 @@ export const SuppliersAndCustomersScreen: React.FC<{
               >
                 إلغاء
               </button>
+            </div>}><div className="text-[11px] font-bold text-[#7A6855]">
+              {mode === "suppliers" ? "له حاليًا" : "عليه حاليًا"}:{" "}
+              <b>
+                {(mode === "suppliers"
+                  ? suppliers.find((s) => s.id === payModalTarget.id)?.balance
+                  : customers.find((c) => c.id === payModalTarget.id)
+                      ?.balance) ?? payModalTarget.balance}
+                {" ج.م"}
+              </b>
             </div>
-          </div>
-        </div>
+<input
+              type="number"
+              value={amountInput}
+              onChange={(e) => {
+                setAmountInput(e.target.value);
+                if (payModalError) setPayModalError("");
+              }}
+              className="w-full border border-[#DFD7C6] rounded-xl px-3.5 py-2.5 text-base font-black text-center"
+            />
+{payModalError && (
+              <p className="text-[11px] font-bold text-red-600 text-center">
+                {payModalError}
+              </p>
+            )}</Modal>
       )}
 
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3 shadow-2xl border border-[#C59B27]">
-            <h3 className="text-sm font-extrabold text-[#1E1612]">
-              {mode === "suppliers" ? "إضافة مورد جديد" : "إضافة عميل جديد"}
-            </h3>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="الاسم باختصار..."
-              className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
-            />
-            <input
-              type="text"
-              value={newPhone}
-              onChange={(e) => setNewPhone(e.target.value)}
-              placeholder="رقم التليفون..."
-              className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
-            />
-            {mode==='customers' ? <input aria-label="منطقة العميل" value={newArea} onChange={e=>setNewArea(e.target.value)} placeholder="المنطقة" className="w-full border rounded-xl px-3 py-2 text-sm"/> : <>
-              <input aria-label="عنوان المورد" value={newAddress} onChange={e=>setNewAddress(e.target.value)} placeholder="العنوان" className="w-full border rounded-xl px-3 py-2 text-sm"/>
-              <input aria-label="اسم المندوب" value={newRepresentative} onChange={e=>setNewRepresentative(e.target.value)} placeholder="اسم المندوب" className="w-full border rounded-xl px-3 py-2 text-sm"/>
-            </>}
-            {addModalError && <p role="alert" className="text-red-700 text-xs">{addModalError}</p>}
-            {mode==='customers'&&<input
-              type="number"
-              value={newBalance}
-              onChange={(e) => setNewBalance(e.target.value)}
-              placeholder="الرصيد الافتتاحي (ج.م)"
-              className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
-            />}
-            <div className="flex gap-2 pt-1">
+        <Modal title={<>{mode === "suppliers" ? "إضافة مورد جديد" : "إضافة عميل جديد"}</>}  onClose={()=>setShowAddModal(false)} footer={<div className="flex gap-2 pt-1">
               <button
                 onClick={handleCreate}
                 className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl"
@@ -1489,9 +1382,32 @@ export const SuppliersAndCustomersScreen: React.FC<{
               >
                 إلغاء
               </button>
-            </div>
-          </div>
-        </div>
+            </div>}><input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="الاسم باختصار..."
+              className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
+            />
+<input
+              type="text"
+              value={newPhone}
+              onChange={(e) => setNewPhone(e.target.value)}
+              placeholder="رقم التليفون..."
+              className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
+            />
+{mode==='customers' ? <input aria-label="منطقة العميل" value={newArea} onChange={e=>setNewArea(e.target.value)} placeholder="المنطقة" className="w-full border rounded-xl px-3 py-2 text-sm"/> : <>
+              <input aria-label="عنوان المورد" value={newAddress} onChange={e=>setNewAddress(e.target.value)} placeholder="العنوان" className="w-full border rounded-xl px-3 py-2 text-sm"/>
+              <input aria-label="اسم المندوب" value={newRepresentative} onChange={e=>setNewRepresentative(e.target.value)} placeholder="اسم المندوب" className="w-full border rounded-xl px-3 py-2 text-sm"/>
+            </>}
+{addModalError && <p role="alert" className="text-red-700 text-xs">{addModalError}</p>}
+{mode==='customers'&&<input
+              type="number"
+              value={newBalance}
+              onChange={(e) => setNewBalance(e.target.value)}
+              placeholder="الرصيد الافتتاحي (ج.م)"
+              className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
+            />}</Modal>
       )}
     </div>
   );
@@ -1528,25 +1444,14 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <h1 className="text-base font-extrabold">
-          سجل المبيعات ({salesInvoices.length})
-        </h1>
-        <button
+      <OperationHeader title={<>سجل المبيعات ( {salesInvoices.length} )</>} description={<>فواتير الجملة وأيام الكاشير والسجل السابق.</>} icon={HeaderReceiptText} onBack={onBack}><button
           onClick={() => window.print()}
           aria-label="طباعة الصفحة الحالية"
           title="طباعة الصفحة الحالية"
           className="p-1.5 rounded-xl hover:bg-white/10 text-[#D4AF37]"
         >
           <Printer className="w-5 h-5" />
-        </button>
-      </div>
+        </button></OperationHeader>
 
       <nav aria-label="نوع سجل المبيعات" className="flex gap-2 p-3">{([{id:'wholesale',label:'فواتير الجملة'},{id:'cashier',label:'مبيعات أيام الكاشير'},{id:'legacy',label:'السجل السابق'}] as const).map(t=><button key={t.id} onClick={()=>setHistoryKind(t.id)} className={`border rounded-xl p-2 text-xs ${historyKind===t.id?'bg-[#1E1612] text-white':''}`}>{t.label}</button>)}</nav>
       {historyKind==='cashier'?<CashierDayHistory days={cashierDays}/>:<>
@@ -1749,18 +1654,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   if (subPage === "data_control") {
     return (
       <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
-        <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
-          <button
-            onClick={onBack}
-            className="p-1.5 text-[#D4AF37]"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </button>
-          <h1 className="text-base font-extrabold">
-            النسخ الاحتياطي واسترجاع البيانات
-          </h1>
-          <div className="w-8" />
-        </div>
+        <OperationHeader title={<>النسخ الاحتياطي واسترجاع البيانات</>} description={<>تصدير بيانات المحل واسترجاع نسخة محفوظة.</>} icon={HeaderDatabaseBackup} onBack={onBack}></OperationHeader>
 
         <div className="p-4 space-y-3.5">
           {/* قسم النسخ الاحتياطي الشامل والاسترجاع وتصدير الإكسيل */}
@@ -1896,16 +1790,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   if (subPage === "expenses") {
     return (
       <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
-        <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
-          <button
-            onClick={onBack}
-            className="p-1.5 text-[#D4AF37]"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </button>
-          <h1 className="text-base font-extrabold">المصروفات</h1>
-          <div className="w-8" />
-        </div>
+        <OperationHeader title={<>المصروفات</>} description={<>المصروفات اليومية والشهرية الثابتة.</>} icon={HeaderWallet} onBack={onBack}></OperationHeader>
         <div className="p-4 space-y-4">
           <div className="bg-white rounded-3xl p-4 border border-[#E6DEC8] shadow-sm space-y-3">
             <div className="text-xs font-extrabold text-[#9E7918]">
@@ -2052,16 +1937,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   if (subPage === "cloud") {
     return (
       <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
-        <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
-          <button
-            onClick={onBack}
-            className="p-1.5 text-[#D4AF37]"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </button>
-          <h1 className="text-base font-extrabold">ربط Supabase</h1>
-          <div className="w-8" />
-        </div>
+        <OperationHeader title={<>ربط Supabase</>} description={<>إعداد اتصال بيانات المحل.</>} icon={HeaderCloud} onBack={onBack}></OperationHeader>
         <div className="p-4 space-y-3">
           <div className="bg-white rounded-3xl p-4 border border-[#E6DEC8] shadow-sm space-y-3">
             <div>
@@ -2110,16 +1986,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
 
   return (
     <div className="bg-[#FAF8F4] text-[#1E1612] pb-6">
-      <div className="px-4 py-3.5 flex items-center justify-between sticky top-0 bg-[#1E1612] text-[#FBF5B7] z-30 border-b border-[#C59B27]/40 shadow-md">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <h1 className="text-base font-extrabold">حسابي</h1>
-        <div className="w-8" />
-      </div>
+      <OperationHeader title={<>حسابي</>} description={<>بيانات حساب الدخول والصلاحيات.</>} icon={HeaderCircleUser} onBack={onBack}></OperationHeader>
 
       <div className="account-content p-3.5">
         <div className="bg-gradient-to-l from-[#1E1612] via-[#2A1F19] to-[#1E1612] text-white border border-[#C59B27] rounded-2xl p-3.5 flex items-center justify-between">
