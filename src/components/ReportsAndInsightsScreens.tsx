@@ -462,12 +462,12 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                     <TrendingUp className="w-4 h-4" />
                     <span>صافي الربح النهائي (بعد خصم المصروفات)</span>
                   </div>
-                  <div className={`text-3xl font-black tracking-tight ${stats.netProfit<0?'text-rose-300':'text-[#FBF5B7]'}`}>
+                  <output aria-label="صافي ربح الفترة" className={`block text-3xl font-black tracking-tight ${stats.netProfit<0?'text-rose-300':'text-[#FBF5B7]'}`}>
                     {stats.netProfit.toFixed(2)} ج.م
-                  </div>
+                  </output>
                   <div className="text-xs text-stone-300 font-semibold">
-                    هامش الربح: {stats.marginPercent.toFixed(1)}% • العائد على
-                    التكلفة: {stats.markupPercent.toFixed(1)}%
+                    هامش مجمل الربح: {stats.sales>0?stats.marginPercent.toFixed(1)+'%':'غير متاح'} • العائد على
+                    التكلفة: {stats.cost>0?stats.markupPercent.toFixed(1)+'%':'غير متاح'}
                   </div>
                 </div>
               </div>
