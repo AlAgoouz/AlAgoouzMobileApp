@@ -8,6 +8,9 @@ export async function verifyDesign(){
   const evidence={login:false,recovery:false,resend:false,recoveredPasswordForm:false,sections:[],widths:[],workspaceWidths:[],accountHasNoSectionMenu:false,reportTabsAccessible:false,periods:false,reducedMotion:false,pageErrors:[],layoutErrors:[]};
   const origin='http://127.0.0.1:5284';
   const limit=async (page,stage)=>{
+    // Viewport updates are acknowledged before responsive styles reach the
+    // compositor. Measure the settled layout, not the previous desktop frame.
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     const layout=await page.evaluate(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width&& (r.right>innerWidth+1||r.left< -1);}).slice(0,12).map(e=>({tag:e.tagName,classes:e.className,text:e.textContent?.slice(0,90)}))}));
     if(layout.scrollWidth>layout.width+1){const debug=await page.evaluate(()=>({scrollX,roots:[...document.querySelectorAll('html,body,#root,.agouz-app,.app-workspace,.screen-stage,.account-content,.account-access')].map(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {node:e.tagName,classes:e.className,x:r.x,width:r.width,right:r.right,display:s.display,columns:s.gridTemplateColumns,minWidth:s.minWidth,margin:s.margin,padding:s.padding};}),elements:[...document.querySelectorAll('h1,.account-access span')].slice(0,15).map(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {text:e.textContent?.slice(0,40),x:r.x,width:r.width,right:r.right,font:s.font,position:s.position,transform:s.transform};})}));evidence.layoutErrors.push({stage,...layout,debug});console.log('Layout overflow',stage,JSON.stringify({...layout,debug}));}
   };
@@ -47,6 +50,7 @@ export async function verifyDesign(){
       await page.setViewportSize({width,height:900});await limit(page,`home-${width}`);
       const used=await page.locator('.app-workspace').evaluate(e=>e.getBoundingClientRect().width);evidence.workspaceWidths.push({viewport:width,used});
       if(width>=768)assert.ok(used>=Math.min(width-(width>=1100?252:0),1440)-2,'Workspace must use the available desktop/tablet width');
+      assert.equal(await page.locator('.agouz-app').evaluate(e=>getComputedStyle(e).paddingInlineStart),width>=1100?'252px':'0px','Sidebar space must reset after changing viewport');
     }
     await page.screenshot({path:'design-home-desktop-mobile.png',fullPage:true});
     await page.getByRole('button',{name:'حسابي',exact:true}).click();await page.getByRole('heading',{name:'حسابي',exact:true}).waitFor();
