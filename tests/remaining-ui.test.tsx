@@ -215,6 +215,8 @@ it("does not attach a retail cash sale to the first wholesale customer", () => {
 it('requires an explicit physical count for cashier deficits before stocktaking',()=>{
  const save=vi.fn();vi.spyOn(window,'confirm').mockReturnValue(true);
  render(<StocktakingScreen items={[{...bean,stock:-2}]} auditRecords={[]} employees={[]} currentPartnerName="Owner" onCommitStocktaking={save} onBack={()=>{}}/>);
+ expect(screen.getByText('بانتظار العد الفعلي')).toBeTruthy();expect(screen.queryByText('✓ مطابق للميزان')).toBeNull();
+ expect((screen.getByLabelText('الرصيد الفعلي: Test bean') as HTMLInputElement).value).toBe('');
  fireEvent.click(screen.getByRole('button',{name:/اعتماد الجرد وتحديث المخزن/}));
  expect(save).not.toHaveBeenCalled();expect(screen.getByRole('alert').textContent).toContain('بالسالب');
  fireEvent.change(screen.getByLabelText('الرصيد الفعلي: Test bean'),{target:{value:'0'}});

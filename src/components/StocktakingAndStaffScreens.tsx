@@ -134,7 +134,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       netVariance: Number((totalSurplus - totalShortage).toFixed(2)),
       shortageCount,
       surplusCount,
-      matchingCount: auditableItems.length - shortageCount - surplusCount,
+      matchingCount: auditableItems.length - shortageCount - surplusCount - allVariances.filter(v=>v.actualStock<0).length,
     };
   }, [allVariances, auditableItems.length]);
 
@@ -360,6 +360,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
             <div className="space-y-2.5">
               {filteredItems.map((item) => {
                 const typed = typedActuals[item.id];
+                const needsActual = item.stock < 0 && typed === undefined;
                 const actualInBase =
                   typed !== undefined && Number.isFinite(typed)
                     ? typed
@@ -377,6 +378,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                 const displayInputValue =
                   rawInput !== undefined
                     ? rawInput
+                    : needsActual ? ''
                     : isKg && inputMode === "gram"
                       ? Math.round(actualInBase * 1000)
                       : actualInBase;
@@ -403,7 +405,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                       </div>
 
                       {/* بادج حالة المطابقة أو العجز */}
-                      {Math.abs(diffInBase) < 0.0001 ? (
+                      {needsActual ? <span className="text-[11px] font-bold bg-amber-50 text-amber-800 px-2.5 py-1 rounded-xl">بانتظار العد الفعلي</span> : Math.abs(diffInBase) < 0.0001 ? (
                         <span className="text-[11px] font-extrabold bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-2.5 py-1 rounded-xl shrink-0">
                           ✓ مطابق للميزان
                         </span>
