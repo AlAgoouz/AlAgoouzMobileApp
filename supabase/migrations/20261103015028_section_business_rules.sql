@@ -2235,7 +2235,7 @@ begin
     end loop;
     if abs(total-(r->>'totalCost')::numeric)>0.011 then raise exception 'CASHIER_TOTAL_COST_MISMATCH';end if;
   end loop;
-end $;
+end $$;
 create or replace function bon_erp_private.inventory_changes(s jsonb,o jsonb)
 returns table(item_id text,quantity numeric) language sql set search_path='' as $$
 with new_sales as (

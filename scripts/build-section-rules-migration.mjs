@@ -9,7 +9,7 @@ payload=payload.replace(/-- BEGIN GENERATED SCHEMA[\s\S]*?-- END GENERATED SCHEM
 payload=payload.replace("('manufactured_blend','drink_recipe') then raise exception 'PRODUCED_ITEM_NOT_PURCHASABLE'","('manufactured_blend','drink_recipe','seasoning_recipe') then raise exception 'PRODUCED_ITEM_NOT_PURCHASABLE'");
 payload=payload.replace("'drink_recipe','direct_product') then raise exception 'INVALID_SALES_QUANTITY'","'drink_recipe','direct_product','direct_drink','seasoning_recipe','snack') then raise exception 'INVALID_SALES_QUANTITY'");
 payload=payload.replace("abs(total-(r->>'totalAmount')::numeric)>0.011 then raise exception 'PURCHASE_TOTAL_OR_SUPPLIER'","abs(total+coalesce((r->>'taxAmount')::numeric,0)-(r->>'totalAmount')::numeric)>0.011 or (r?'netAmount' and abs(total-(r->>'netAmount')::numeric)>0.011) then raise exception 'PURCHASE_TOTAL_OR_SUPPLIER'");
-payload=payload.replace('end $$;',`  perform bon_erp_private.validate_section_changes(s,s);
+payload=payload.replace('end $$;',()=>`  perform bon_erp_private.validate_section_changes(s,s);
   for r in select value from jsonb_array_elements(s->'cashier_days') loop
     if r->>'status'<>'approved' then continue;end if;
     total:=0;
