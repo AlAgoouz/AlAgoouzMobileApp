@@ -7,6 +7,12 @@ import {SectionsHub} from '../src/components/SectionsHub';
 import {ProductsCatalogScreen} from '../src/components/ManagementScreens';
 import {INITIAL_ITEMS} from '../src/data/initialData';
 afterEach(cleanup);
+it('calculates catalog margin correctly for selling prices below one currency unit',()=>{
+ const raw=INITIAL_ITEMS.find(i=>i.category==='raw_bean')!;
+ const noop=vi.fn();
+ render(<ProductsCatalogScreen items={[{...raw,costPrice:0.25,retailPrice:0.5}]} onAddNewItem={noop} onUpdateItem={noop} onDeleteItem={noop} onNavigateToProduction={noop} onNavigateToInventory={noop} onNavigateToPurchase={noop} onBack={noop}/>);
+ expect(screen.getByText('50%',{exact:true})).toBeTruthy();
+});
 it('filters all seven approved categories and keeps legacy ingredients under direct products',()=>{
  const raw=INITIAL_ITEMS.find(i=>i.category==='raw_bean')!;
  const directDrink={...raw,id:'direct-drink',code:'DD',name:'Test bottled drink',category:'direct_drink' as const};

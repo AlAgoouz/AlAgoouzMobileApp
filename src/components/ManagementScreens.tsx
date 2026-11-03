@@ -122,7 +122,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
         ? sellable.reduce(
             (s, i) =>
               s +
-              ((i.retailPrice - i.costPrice) / Math.max(1, i.retailPrice)) *
+              ((i.retailPrice - i.costPrice) / i.retailPrice) *
                 100,
             0,
           ) / sellable.length
