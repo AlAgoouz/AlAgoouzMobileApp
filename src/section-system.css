@@ -40,7 +40,8 @@
 .modal-body > * + * { margin-top:14px; }
 .modal-body label { font-size:12px;font-weight:700;color:#6e583e; }
 .modal-body input:not([type=checkbox]):not([type=radio]),.modal-body select,.modal-body textarea { min-height:46px;max-width:100%;min-width:0;font-size:14px;font-weight:500;color:#35281e;border:1px solid #dfd3c0;border-radius:12px;background:#fffefa; }
-.modal-body label > input,.modal-body label > select,.modal-body label > textarea { display:block;width:100%;margin-top:7px; }
+.modal-body label > input:not([type=checkbox]):not([type=radio]),.modal-body label > select,.modal-body label > textarea { display:block;width:100%;margin-top:7px; }
+.modal-body input[type=checkbox],.modal-body input[type=radio] { width:18px;height:18px;min-height:18px;flex:0 0 18px;margin-top:3px;accent-color:#8d6b2e; }
 .modal-body fieldset { min-width:0; }
 .modal-body input:focus-visible,.modal-body select:focus-visible,.modal-body textarea:focus-visible,.agouz-modal button:focus-visible { outline:2px solid #ac843b;outline-offset:3px; }
 .modal-body [role=alert] { color:#a53128;background:#fff1ec;border:1px solid #efcec3;border-radius:12px;padding:10px 12px; }

@@ -62,7 +62,7 @@ export function UsersScreen({access,partners,onBack}:{access:UserAccess;partners
      <p className="text-xs text-stone-600">الربط لا ينشئ شريكًا ولا يغيّر نسب الملكية أو الأرصدة.</p>
     </fieldset>
     {error&&<p role="alert" className="login-error">{error}</p>}
-    
+
    </form></Modal>}
  </main>;
 }
