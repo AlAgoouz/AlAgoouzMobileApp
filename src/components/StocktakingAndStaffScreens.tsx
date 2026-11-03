@@ -1,22 +1,10 @@
+import {Scale as HeaderScale,Users as HeaderUsers} from 'lucide-react';
+import {OperationHeader} from './OperationHeader';
+import {Modal} from './Modal';
 import {isStockItem} from '../lib/itemPolicy';
 import React, { useState, useMemo } from "react";
 import { payrollBalance, currentPayrollPeriod } from '../lib/payroll';
-import {
-  ChevronRight,
-  Scale,
-  CheckCircle2,
-  History,
-  Search,
-  Users,
-  Wallet,
-  CalendarCheck,
-  Award,
-  AlertOctagon,
-  Banknote,
-  Check,
-  UserPlus,
-  Trash2,
-} from "lucide-react";
+import {Scale, CheckCircle2, History, Search, Users, Wallet, CalendarCheck, Award, AlertOctagon, Banknote, Check, UserPlus, Trash2} from 'lucide-react';
 import {
   InventoryItem,
   StocktakingAuditRecord,
@@ -202,27 +190,10 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-36">
       {/* الهيدر */}
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <div className="text-center">
-          <h1 className="text-base font-extrabold flex items-center justify-center gap-1.5">
-            <Scale className="w-5 h-5 text-[#D4AF37]" />
-            الجرد الفعلي على الميزان وكشف العجز
-          </h1>
-          <p className="text-[11px] text-[#D4AF37]">
-            مقارنة أرصدة السيستم بالوزن الفعلي بالجرام والكيلو والعدد
-          </p>
-        </div>
-        <div className="w-8" />
-      </div>
+      <OperationHeader title={<>الجرد الفعلي على الميزان وكشف العجز</>} description={<>مقارنة أرصدة السيستم بالوزن الفعلي بالجرام والكيلو والعدد</>} icon={HeaderScale} onBack={onBack}></OperationHeader>
 
       {/* تبويبات الجرد */}
-      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 sticky top-[64px] z-20">
+      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 section-tabs sticky top-0 z-20">
         <button
           onClick={() => setActiveTab("new_audit")}
           className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
@@ -762,33 +733,16 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
       {/* الهيدر */}
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <div className="text-center">
-          <h1 className="text-base font-extrabold flex items-center justify-center gap-1.5">
-            <Users className="w-5 h-5 text-[#D4AF37]" />
-            شؤون العمال والباريستا والرواتب
-          </h1>
-          <p className="text-[11px] text-[#D4AF37]">
-            متابعة المستحقات وربط صرف السلف والرواتب بالحسابات
-          </p>
-        </div>
-        <button
+      <OperationHeader title={<>شؤون العمال والباريستا والرواتب</>} description={<>متابعة المستحقات وربط صرف السلف والرواتب بالحسابات</>} icon={HeaderUsers} onBack={onBack}><button
           onClick={() => setShowAddEmpModal(true)}
           className="bg-gradient-to-l from-[#D4AF37] to-[#B38728] text-[#1E1612] px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow"
         >
           <UserPlus className="w-4 h-4" />
           عامل جديد
-        </button>
-      </div>
+        </button></OperationHeader>
 
       {/* التبويبات */}
-      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 sticky top-[64px] z-20">
+      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 section-tabs sticky top-0 z-20">
         <button
           onClick={() => setActiveTab("staff")}
           className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
@@ -1025,20 +979,28 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
       {/* نافذة تسجيل حركة للعامل */}
       {ledgerError && <p role="alert" className="text-red-700 p-3">{ledgerError}</p>}
       {actionModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-4 shadow-2xl border border-[#C59B27]">
-            <h3 className="text-sm font-extrabold text-[#1E1612]">
-              تسجيل ({actionModal.type}) — {actionModal.employee.name}
-            </h3>
-            {(actionModal.type==='سلفة'||actionModal.type==='صرف راتب') && <label className="block text-sm">مصدر الصرف<select aria-label="مصدر صرف العامل" className="block w-full border rounded-xl p-2" value={paidFrom} onChange={(event)=>setPaidFrom(event.target.value as EmployeeTransaction['paidFrom'])}>
+        <Modal title={<>تسجيل ( {actionModal.type} ) —  {actionModal.employee.name}</>}  onClose={()=>setActionModal(null)} footer={<div className="flex gap-2">
+              <button
+                onClick={handleConfirmAction}
+                className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl"
+              >
+                حفظ وتأكيد
+              </button>
+              <button
+                onClick={() => setActionModal(null)}
+                className="px-4 py-2.5 rounded-xl border border-[#DFD7C6] text-[#5C4B3E] font-bold"
+              >
+                إلغاء
+              </button>
+            </div>}>{(actionModal.type==='سلفة'||actionModal.type==='صرف راتب') && <label className="block text-sm">مصدر الصرف<select aria-label="مصدر صرف العامل" className="block w-full border rounded-xl p-2" value={paidFrom} onChange={(event)=>setPaidFrom(event.target.value as EmployeeTransaction['paidFrom'])}>
               <option>درج المحل</option><option>خزنة الشركة</option><option>من جيب الشريك</option>
             </select></label>}
-            {actionError && (
+{actionError && (
               <p className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
                 {actionError}
               </p>
             )}
-            <div>
+<div>
               <label className="text-xs font-bold text-[#7A6855] block mb-1">
                 المبلغ (ج.م)
               </label>
@@ -1053,7 +1015,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                 className="w-full border border-[#DFD7C6] rounded-xl px-3.5 py-2.5 text-base font-black text-center"
               />
             </div>
-            <div>
+<div>
               <label className="text-xs font-bold text-[#7A6855] block mb-1">
                 بيان / ملاحظات
               </label>
@@ -1063,45 +1025,37 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                 onChange={(e) => setActionNotes(e.target.value)}
                 className="w-full border border-[#DFD7C6] rounded-xl px-3.5 py-2 text-xs font-bold"
               />
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleConfirmAction}
-                className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl"
-              >
-                حفظ وتأكيد
-              </button>
-              <button
-                onClick={() => setActionModal(null)}
-                className="px-4 py-2.5 rounded-xl border border-[#DFD7C6] text-[#5C4B3E] font-bold"
-              >
-                إلغاء
-              </button>
-            </div>
-          </div>
-        </div>
+            </div></Modal>
       )}
 
       {/* نافذة إضافة عامل جديد */}
       {showAddEmpModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-5 space-y-3.5 shadow-2xl border border-[#C59B27]">
-            <h3 className="text-base font-extrabold text-[#1E1612]">
-              إضافة عامل أو باريستا جديد
-            </h3>
-            {newEmployeeError && (
+        <Modal title={<>إضافة عامل أو باريستا جديد</>}  onClose={()=>setShowAddEmpModal(false)} footer={<div className="flex gap-2 pt-2">
+              <button
+                onClick={handleCreateEmployee}
+                className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl"
+              >
+                إضافة العامل
+              </button>
+              <button
+                onClick={() => setShowAddEmpModal(false)}
+                className="px-5 py-2.5 rounded-xl border border-[#DFD7C6] text-[#5C4B3E] font-bold"
+              >
+                إلغاء
+              </button>
+            </div>}>{newEmployeeError && (
               <p role="alert" className="text-red-700">
                 {newEmployeeError}
               </p>
             )}
-            <input
+<input
               type="text"
               value={newEmpName}
               onChange={(e) => setNewEmpName(e.target.value)}
               placeholder="اسم العامل ثلاثي..."
               className="w-full border border-[#DFD7C6] rounded-xl px-3.5 py-2.5 text-sm font-bold"
             />
-            <div className="grid grid-cols-2 gap-2.5">
+<div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label className="text-xs font-bold text-[#7A6855] block mb-1">
                   الوظيفة
@@ -1158,23 +1112,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                   className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-sm font-bold"
                 />
               </div>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleCreateEmployee}
-                className="flex-1 bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-2.5 rounded-xl"
-              >
-                إضافة العامل
-              </button>
-              <button
-                onClick={() => setShowAddEmpModal(false)}
-                className="px-5 py-2.5 rounded-xl border border-[#DFD7C6] text-[#5C4B3E] font-bold"
-              >
-                إلغاء
-              </button>
-            </div>
-          </div>
-        </div>
+            </div></Modal>
       )}
     </div>
   );

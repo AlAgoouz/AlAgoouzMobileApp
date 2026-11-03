@@ -1,21 +1,10 @@
+import {Flame as HeaderFlame} from 'lucide-react';
+import {OperationHeader} from './OperationHeader';
 import {productionNeeds} from '../lib/inventory';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
 import {requiresRecipe} from '../lib/itemPolicy';
 import React, { useEffect, useState, useMemo } from "react";
-import {
-  ChevronRight,
-  Flame,
-  Plus,
-  Trash2,
-  CheckCircle2,
-  AlertTriangle,
-  Coffee,
-  Layers,
-  History,
-  Sparkles,
-  Scale,
-  Save,
-} from "lucide-react";
+import {Flame, Plus, Trash2, CheckCircle2, AlertTriangle, Layers, History, Scale, Save} from 'lucide-react';
 import {
   InventoryItem,
   ProductionBatch,
@@ -347,20 +336,7 @@ export const ProductionAndRecipesScreen: React.FC<
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
       {/* الهيدر الموحد بهوية بُن العجوز */}
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 transition flex items-center text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <div className="text-center">
-          <h1 className="text-base font-extrabold flex items-center justify-center gap-1.5">
-            <Flame className="w-5 h-5 text-[#D4AF37]" />
-            الإنتاج والوصفات
-          </h1>
-        </div>
-        <button
+      <OperationHeader title={<>الإنتاج والوصفات</>} description={<>تجهيز التوليفات ومراجعة وصفات الأصناف.</>} icon={HeaderFlame} onBack={onBack}><button
           onClick={() => {
             setShowNewModal(true);
           }}
@@ -368,11 +344,10 @@ export const ProductionAndRecipesScreen: React.FC<
         >
           <Plus className="w-4 h-4" />
           جديد
-        </button>
-      </div>
+        </button></OperationHeader>
 
       {/* شريط التبويبات */}
-      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-3 gap-2 sticky top-[58px] z-20">
+      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-3 gap-2 section-tabs sticky top-0 z-20">
         <button
           onClick={() => {
             setActiveTab("produce");

@@ -1,3 +1,4 @@
+import {Modal} from './components/Modal';
 import {DashboardScreen} from './components/DashboardScreen';
 import {WorkspaceSidebar} from './components/WorkspaceSidebar';
 import {initialPeriod} from './lib/reporting';
@@ -921,20 +922,13 @@ export default function App() {
         </div>
       )}
       {blocked && (
-        <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4">
-          <div
-            className="bg-white rounded-2xl p-5 max-w-md space-y-3"
-            role="alert"
-          >
-            <h2 className="font-bold">{statusText}</h2>
-            <p>
+        <Modal title={statusText} dismissible={false}><div role="alert"><p>
               {cloud.error ||
                 (!partners.some((p) => p.id === loggedPartnerId) &&
                 cloud.status === "ready"
                   ? "هذا الحساب غير مرتبط بملف شريك داخل بيانات المحل"
                   : "")}
-            </p>
-            {["error", "conflict"].includes(cloud.status) && (
+            </p>{["error", "conflict"].includes(cloud.status) && (
               <>
                 <button
                   className="border rounded p-2 m-1"
@@ -975,9 +969,7 @@ export default function App() {
                   </button>
                 )}
               </>
-            )}
-          </div>
-        </div>
+            )}</div></Modal>
       )}
 
       {/* إشعار عائم */}

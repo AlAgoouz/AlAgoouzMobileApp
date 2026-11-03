@@ -1,24 +1,8 @@
+import {ReceiptText as HeaderReceiptText,FolderSync as HeaderFolderSync} from 'lucide-react';
+import {OperationHeader} from './OperationHeader';
 import { businessDate } from "../lib/dates";
 import React, { useState, useMemo } from "react";
-import {
-  ChevronRight,
-  ShoppingBag,
-  Users,
-  Search,
-  Plus,
-  Minus,
-  Trash2,
-  Check,
-  FileSpreadsheet,
-  Upload,
-  Download,
-  Sparkles,
-  CheckCircle2,
-  FolderSync,
-  Coffee,
-  Scale,
-  AlertTriangle,
-} from "lucide-react";
+import {ShoppingBag, Users, Search, Trash2, Check, FileSpreadsheet, Upload, Download, CheckCircle2, Coffee, AlertTriangle} from 'lucide-react';
 import {
   InventoryItem,
   Customer,
@@ -274,35 +258,23 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-36">
-      {saleError && (
-        <p role="alert" className="text-red-700 bg-red-50 p-3 font-bold">
-          {saleError}
-        </p>
-      )}
-      {/* الهيدر */}
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <div className="text-center">
-          <h1 className="text-base font-extrabold">
-            {saleMode === "wholesale"
+<OperationHeader title={<>{saleMode === "wholesale"
               ? "فاتورة بيع جملة (بُن العجوز)"
-              : "نقطة بيع المحل (قطاعي ومشروبات)"}
-          </h1>
-        </div>
-        <button
+              : "نقطة بيع المحل (قطاعي ومشروبات)"}</>} description={<>اختيار الأصناف ومراجعة الفاتورة قبل الاعتماد.</>} icon={HeaderReceiptText} onBack={onBack}><button
           onClick={onNavigateToCashierSync}
           className="bg-gradient-to-l from-[#D4AF37] to-[#B38728] text-[#1E1612] px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow"
           title="استيراد شيت إكسيل الكاشير"
         >
           <FileSpreadsheet className="w-4 h-4" />
           شيت الكاشير
-        </button>
-      </div>
+        </button></OperationHeader>
+      {saleError && (
+        <p role="alert" className="text-red-700 bg-red-50 p-3 font-bold">
+          {saleError}
+        </p>
+      )}
+      {/* الهيدر */}
+
 
       <div className="p-3.5 space-y-3.5">
         {/* التبديل بين بيع الجملة وبيع المحل */}
@@ -715,31 +687,14 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-4 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <div className="text-center">
-          <h1 className="text-base font-extrabold flex items-center justify-center gap-1.5">
-            <FolderSync className="w-5 h-5 text-[#D4AF37]" />
-            ربط ومزامنة شيت كاشير المحل
-          </h1>
-          <p className="text-[11px] text-[#D4AF37]">
-            خصم تلقائي للمنتجات المباشرة وتوليفات البن ووصفات المشروبات
-          </p>
-        </div>
-        <button
+      <OperationHeader title={<>ربط ومزامنة شيت كاشير المحل</>} description={<>خصم تلقائي للمنتجات المباشرة وتوليفات البن ووصفات المشروبات</>} icon={HeaderFolderSync} onBack={onBack}><button
           onClick={downloadSampleCashierExcel}
           className="bg-[#C59B27] text-[#1E1612] px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1"
           title="تحميل نموذج إكسيل الكاشير"
         >
           <Download className="w-4 h-4" />
           قالب Excel
-        </button>
-      </div>
+        </button></OperationHeader>
 
       <div className="p-3.5 space-y-4">
         <label className="block text-sm font-bold">

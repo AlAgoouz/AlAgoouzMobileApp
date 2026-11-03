@@ -1,3 +1,5 @@
+import {Sparkles as HeaderSparkles,ChartNoAxesCombined as HeaderChartNoAxesCombined} from 'lucide-react';
+import {OperationHeader} from './OperationHeader';
 import {initialPeriod,reportRange,inReportRange,buildReport,type PeriodSelection} from '../lib/reporting';
 import {PeriodSelector} from './PeriodSelector';
 import {TrendChart} from './FinancialCharts';
@@ -5,22 +7,7 @@ import {isStockItem} from '../lib/itemPolicy';
 import { operatingExpenses } from '../lib/ledger';
 import React, { useState, useMemo } from 'react';
 import {RecordPagination,useRecordPage} from './RecordPagination';
-import {
-  ChevronRight,
-  Share2,
-  RefreshCw,
-  Users,
-  TrendingUp,
-  PiggyBank,
-  FileText,
-  Package,
-  Download,
-  BarChart3,
-  LayoutGrid,
-  Check,
-  Sparkles,
-  Award,
-} from 'lucide-react';
+import {Share2, Users, TrendingUp, PiggyBank, FileText, Package, Download, LayoutGrid, Sparkles, Award} from 'lucide-react';
 import {
   InventoryItem,
   SalesInvoice,
@@ -106,18 +93,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-20">
       {/* هيدر إسبريسو وذهبي راقي */}
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <h1 className="text-base font-extrabold flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4 text-[#D4AF37]" />
-          تحليلات وذكاء بُن العجوز
-        </h1>
-        <div className="flex items-center gap-2">
+      <OperationHeader title={<>تحليلات وذكاء بُن العجوز</>} description={<>قراءة أداء المحل والتنبيهات خلال الفترة المختارة.</>} icon={HeaderSparkles} onBack={onBack}><div className="flex items-center gap-2">
           <button
             onClick={() => onNavigate('partners')}
             className="p-1.5 rounded-xl hover:bg-white/10 text-[#D4AF37]"
@@ -132,8 +108,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
           >
             <Share2 className="w-5 h-5" />
           </button>
-        </div>
-      </div>
+        </div></OperationHeader>
 
       <div className="p-4 space-y-4">
         <PeriodSelector value={selection} onChange={onPeriod??setLocalPeriod}/>
@@ -361,24 +336,13 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24 flex flex-col">
       {/* الهيدر */}
-      <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-        <h1 className="text-base font-extrabold">
-          تقارير الأرباح وحصص الشركاء
-        </h1>
-        <button
+      <OperationHeader title={<>تقارير الأرباح وحصص الشركاء</>} description={<>النتائج المالية وحصص الشركاء وربحية الأصناف.</>} icon={HeaderChartNoAxesCombined} onBack={onBack}><button
           onClick={() => window.print()}
           className="p-1.5 rounded-xl hover:bg-white/10 transition text-[#D4AF37]"
           title={bottomTab === 'invoices' ? 'طباعة الصفحة الحالية' : 'طباعة التقرير'}
         >
           <Download className="w-5 h-5" />
-        </button>
-      </div>
+        </button></OperationHeader>
 
       <div className="report-tabs bg-white border-b border-[#E6DEC8] py-2 px-3 grid grid-cols-4" aria-label="أقسام التقرير">
         <button

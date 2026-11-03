@@ -1,3 +1,4 @@
+import {Modal} from './Modal';
 import React,{useEffect,useState} from 'react';
 import {ShieldCheck,UserPlus,Users} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
@@ -49,9 +50,7 @@ export function UsersScreen({access,partners,onBack}:{access:UserAccess;partners
   </>}
   {notice&&<p role="status" className="login-notice">{notice}</p>}
   {!form&&error&&<p role="alert" className="login-error">{error}</p>}
-  {form&&<div className="fixed inset-0 z-50 bg-black/60 p-4 overflow-y-auto"><section role="dialog" aria-modal="true" aria-label={form.id?'تعديل حساب المستخدم':'إضافة حساب مستخدم'} className="max-w-lg mx-auto my-4 bg-[#FFFCF7] rounded-3xl p-5 space-y-4">
-   <h2 className="font-black text-lg">{form.id?'تعديل حساب المستخدم':'إضافة حساب مستخدم'}</h2>
-   <form onSubmit={e=>{e.preventDefault();void commit(form);}} className="space-y-3">
+  {form&&<Modal title={<>{form.id?'تعديل حساب المستخدم':'إضافة حساب مستخدم'}</>}  onClose={()=>setForm(null)} busy={busy} footer={<><button disabled={busy} className="login-submit" type="submit" form="managed-user-form">{busy?'جارٍ حفظ المستخدم…':'حفظ المستخدم'}</button><button disabled={busy} className="login-back" type="button" onClick={()=>setForm(null)}>إلغاء</button></>}><form id="managed-user-form" onSubmit={e=>{e.preventDefault();void commit(form);}} className="space-y-3">
     <fieldset disabled={busy} className="space-y-3 min-w-0">
      <label className="block">الاسم<input className="block w-full rounded-xl border p-3 mt-1" required maxLength={80} value={form.displayName} onChange={e=>setForm({...form,displayName:e.target.value})}/></label>
      <label className="block">اسم المستخدم<input dir="ltr" className="block w-full rounded-xl border p-3 mt-1" required minLength={3} maxLength={40} pattern={"[A-Za-z0-9_.\\-]+"} value={form.username} onChange={e=>setForm({...form,username:e.target.value})}/></label>
@@ -63,8 +62,7 @@ export function UsersScreen({access,partners,onBack}:{access:UserAccess;partners
      <p className="text-xs text-stone-600">الربط لا ينشئ شريكًا ولا يغيّر نسب الملكية أو الأرصدة.</p>
     </fieldset>
     {error&&<p role="alert" className="login-error">{error}</p>}
-    <button disabled={busy} className="login-submit w-full" type="submit">{busy?'جارٍ حفظ المستخدم…':'حفظ المستخدم'}</button><button disabled={busy} className="login-back w-full" type="button" onClick={()=>setForm(null)}>إلغاء</button>
-   </form>
-  </section></div>}
+
+   </form></Modal>}
  </main>;
 }
