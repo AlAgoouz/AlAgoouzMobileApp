@@ -5,16 +5,19 @@ import fs from 'node:fs';
 export async function verifyDesign(){
   assert.equal(process.env.CI,'true','DESIGN_REVIEW_REQUIRES_ISOLATED_CI');
   const browser=await chromium.launch({headless:true});
-  const evidence={login:false,recovery:false,resend:false,sections:[],widths:[],pageErrors:[]};
+  const evidence={login:false,recovery:false,resend:false,sections:[],widths:[],pageErrors:[],layoutErrors:[]};
   const origin='http://127.0.0.1:5284';
-  const limit=async page=>assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Horizontal page overflow');
+  const limit=async (page,stage)=>{
+    const layout=await page.evaluate(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width&& (r.right>innerWidth+1||r.left< -1);}).slice(0,12).map(e=>({tag:e.tagName,classes:e.className,text:e.textContent?.slice(0,90)}))}));
+    if(layout.scrollWidth>layout.width+1){evidence.layoutErrors.push({stage,...layout});console.log('Layout overflow',stage,JSON.stringify(layout));}
+  };
   try {
     const context=await browser.newContext({viewport:{width:360,height:800},reducedMotion:'reduce'});
     await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
     const page=await context.newPage();page.on('pageerror',e=>evidence.pageErrors.push(e.message));
     await page.goto(origin);await page.getByRole('heading',{name:'أهلًا برجوعك'}).waitFor();
     assert.equal(await page.getByText(/بوابة الدخول الآمن|إنشاء حساب المالك/).count(),0);
-    await limit(page);await page.screenshot({path:'design-login-mobile.png',fullPage:true});evidence.login=true;
+    await limit(page,'login');await page.screenshot({path:'design-login-mobile.png',fullPage:true});evidence.login=true;
     await page.getByRole('button',{name:'نسيت كلمة المرور؟'}).click();
     await page.getByRole('heading',{name:'استعادة كلمة المرور'}).waitFor();
     assert.equal(await page.getByLabel('كلمة المرور',{exact:true}).count(),0);
@@ -33,7 +36,7 @@ export async function verifyDesign(){
     await page.getByRole('heading',{name:'كل شغلك، بخطوة واحدة'}).waitFor();
     await page.screenshot({path:'design-sections-mobile.png',fullPage:true});
     for(const width of [320,360,430,1024]){
-      await page.setViewportSize({width,height:800});await limit(page);evidence.widths.push(width);
+      await page.setViewportSize({width,height:800});await limit(page,`sections-${width}`);evidence.widths.push(width);
     }
     await page.setViewportSize({width:360,height:800});
     const titles=await page.locator('.section-tile-title').allTextContents();assert.equal(titles.length,15);
@@ -42,12 +45,13 @@ export async function verifyDesign(){
       await page.locator('.sections-hub').waitFor({state:'hidden'});
       await page.getByText('جارٍ تحميل الشاشة…',{exact:true}).waitFor({state:'hidden'});
       assert.equal(await page.getByText('تعذر فتح الشاشة',{exact:false}).count(),0);
-      await limit(page);
+      await limit(page,title);
       evidence.sections.push(title);
       await page.screenshot({path:`design-section-${evidence.sections.length}-mobile.png`,fullPage:true});
       await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
       await page.getByRole('heading',{name:'كل شغلك، بخطوة واحدة'}).waitFor();
     }
     assert.deepEqual(evidence.pageErrors,[]);
+    assert.deepEqual(evidence.layoutErrors,[],'Every section must fit the mobile viewport');
   } finally { await browser.close();fs.writeFileSync('design-review-performance.json',JSON.stringify(evidence,null,2)); }
 }
