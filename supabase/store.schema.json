@@ -2,6 +2,192 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
+    "cashier_days": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved"
+            ]
+          },
+          "financialReport": {
+            "type": "object",
+            "properties": {
+              "fileName": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "uploadedAt": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sourceQueueId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "totalRevenue": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "fileName",
+              "sha256",
+              "uploadedAt",
+              "totalRevenue"
+            ],
+            "additionalProperties": false
+          },
+          "itemsReport": {
+            "type": "object",
+            "properties": {
+              "fileName": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "uploadedAt": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sourceQueueId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "lines": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "itemId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "quantity": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "unitLabel": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "normalizedQtyInBaseUnit": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "itemId",
+                    "quantity",
+                    "unitLabel",
+                    "normalizedQtyInBaseUnit"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "fileName",
+              "sha256",
+              "uploadedAt",
+              "lines"
+            ],
+            "additionalProperties": false
+          },
+          "consumption": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "itemId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "quantity": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "unitCost": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "totalCost": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "itemId",
+                "quantity",
+                "unitCost",
+                "totalCost"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "shortages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "itemId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "shortage": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "itemId",
+                "shortage"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totalCost": {
+            "type": "number",
+            "minimum": 0
+          },
+          "approvedAt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "partnerName": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    },
     "items": {
       "type": "array",
       "items": {
@@ -26,7 +212,10 @@
               "raw_spice",
               "manufactured_blend",
               "drink_recipe",
-              "direct_product"
+              "direct_product",
+              "direct_drink",
+              "seasoning_recipe",
+              "snack"
             ]
           },
           "baseUnit": {
@@ -42,8 +231,7 @@
             "minimum": 0
           },
           "stock": {
-            "type": "number",
-            "minimum": 0
+            "type": "number"
           },
           "minStock": {
             "type": "number",
@@ -134,6 +322,65 @@
                 "date"
               ],
               "additionalProperties": {}
+            }
+          },
+          "costingVersion": {
+            "type": "number",
+            "const": 2
+          },
+          "costHistory": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "date": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "postedAt": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sourceType": {
+                  "type": "string",
+                  "enum": [
+                    "opening",
+                    "purchase",
+                    "production"
+                  ]
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "quantity": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "unitCost": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "averageCost": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "id",
+                "date",
+                "postedAt",
+                "sourceType",
+                "sourceId",
+                "quantity",
+                "unitCost",
+                "averageCost"
+              ],
+              "additionalProperties": false
             }
           }
         },
@@ -294,6 +541,18 @@
             "type": "string",
             "minLength": 1
           },
+          "netAmount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "taxAmount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "accountingVersion": {
+            "type": "number",
+            "const": 2
+          },
           "paymentMethod": {
             "type": "string",
             "enum": [
@@ -329,7 +588,10 @@
                     "raw_spice",
                     "manufactured_blend",
                     "drink_recipe",
-                    "direct_product"
+                    "direct_product",
+                    "direct_drink",
+                    "seasoning_recipe",
+                    "snack"
                   ]
                 },
                 "baseUnit": {
@@ -345,8 +607,7 @@
                   "minimum": 0
                 },
                 "stock": {
-                  "type": "number",
-                  "minimum": 0
+                  "type": "number"
                 },
                 "minStock": {
                   "type": "number",
@@ -437,6 +698,65 @@
                       "date"
                     ],
                     "additionalProperties": {}
+                  }
+                },
+                "costingVersion": {
+                  "type": "number",
+                  "const": 2
+                },
+                "costHistory": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "date": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "postedAt": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "sourceType": {
+                        "type": "string",
+                        "enum": [
+                          "opening",
+                          "purchase",
+                          "production"
+                        ]
+                      },
+                      "sourceId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "quantity": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "unitCost": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "averageCost": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "date",
+                      "postedAt",
+                      "sourceType",
+                      "sourceId",
+                      "quantity",
+                      "unitCost",
+                      "averageCost"
+                    ],
+                    "additionalProperties": false
                   }
                 }
               },
@@ -483,7 +803,10 @@
                     "raw_spice",
                     "manufactured_blend",
                     "drink_recipe",
-                    "direct_product"
+                    "direct_product",
+                    "direct_drink",
+                    "seasoning_recipe",
+                    "snack"
                   ]
                 },
                 "baseUnit": {
@@ -499,8 +822,7 @@
                   "minimum": 0
                 },
                 "stock": {
-                  "type": "number",
-                  "minimum": 0
+                  "type": "number"
                 },
                 "minStock": {
                   "type": "number",
@@ -591,6 +913,65 @@
                       "date"
                     ],
                     "additionalProperties": {}
+                  }
+                },
+                "costingVersion": {
+                  "type": "number",
+                  "const": 2
+                },
+                "costHistory": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "date": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "postedAt": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "sourceType": {
+                        "type": "string",
+                        "enum": [
+                          "opening",
+                          "purchase",
+                          "production"
+                        ]
+                      },
+                      "sourceId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "quantity": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "unitCost": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "averageCost": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "date",
+                      "postedAt",
+                      "sourceType",
+                      "sourceId",
+                      "quantity",
+                      "unitCost",
+                      "averageCost"
+                    ],
+                    "additionalProperties": false
                   }
                 }
               },
@@ -764,7 +1145,10 @@
                     "raw_spice",
                     "manufactured_blend",
                     "drink_recipe",
-                    "direct_product"
+                    "direct_product",
+                    "direct_drink",
+                    "seasoning_recipe",
+                    "snack"
                   ]
                 },
                 "quantity": {
@@ -862,6 +1246,12 @@
           "phone": {
             "type": "string"
           },
+          "address": {
+            "type": "string"
+          },
+          "representativeName": {
+            "type": "string"
+          },
           "category": {
             "type": "string"
           },
@@ -904,6 +1294,9 @@
             "minLength": 1
           },
           "phone": {
+            "type": "string"
+          },
+          "area": {
             "type": "string"
           },
           "type": {
@@ -963,6 +1356,13 @@
           "title": {
             "type": "string",
             "minLength": 1
+          },
+          "frequency": {
+            "type": "string",
+            "enum": [
+              "monthly_fixed",
+              "daily"
+            ]
           },
           "amount": {
             "type": "number",
@@ -1555,6 +1955,7 @@
     }
   },
   "required": [
+    "cashier_days",
     "items",
     "production_batches",
     "purchase_invoices",

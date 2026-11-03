@@ -14,7 +14,8 @@ it('keeps a large invoice history searchable and actionable while rendering only
   expect(screen.getByText(/#INV-00050/)).toBeTruthy();
   fireEvent.change(screen.getByRole('textbox',{name:'بحث في كل الفواتير'}),{target:{value:'INV-00999'}});
   expect(screen.getAllByRole('button',{name:'طباعة / واتساب'})).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button',{name:'مرتجع',exact:true}));
+  screen.getByText('تسوية استثنائية').closest('details')!.open=true;
+  fireEvent.click(screen.getByRole('button',{name:'تسجيل مرتجع استثنائي',exact:true}));
   expect(onReturn).toHaveBeenCalledWith('invoice-999');
 });
 it('keeps report totals over the complete history when its invoice list is paginated and searched',()=>{

@@ -298,7 +298,7 @@ export function recordExpense(
   return {
     ...state,
     expenses: [
-      { ...input, id: crypto.randomUUID(), partnerId },
+      { ...input, frequency:input.frequency??'daily', id: crypto.randomUUID(), partnerId },
       ...state.expenses,
     ],
     partners: state.partners.map((p) =>

@@ -1,5 +1,7 @@
+import {productionNeeds} from '../lib/inventory';
+import {ItemDefinitionModal} from './ItemDefinitionModal';
+import {requiresRecipe} from '../lib/itemPolicy';
 import React, { useEffect, useState, useMemo } from "react";
-import { nextItemCode } from "../lib/operationChecks";
 import {
   ChevronRight,
   Flame,
@@ -76,9 +78,7 @@ export const ProductionAndRecipesScreen: React.FC<
     () =>
       items.filter(
         (i) =>
-          i.category === "raw_bean" ||
-          i.category === "raw_spice" ||
-          i.category === "manufactured_blend",
+          i.category !== "drink_recipe",
       ),
     [items],
   );
@@ -100,46 +100,16 @@ export const ProductionAndRecipesScreen: React.FC<
   );
 
   // حساب الخامات المطلوبة لأمر الإنتاج الحالي (آمن ضد وحدات غير متوافقة حتى لا تتعطل الشاشة)
-  const productionSimulation = useMemo(() => {
-    if (!selectedBlend || !selectedBlend.recipe) return [];
-    return selectedBlend.recipe.map((ing) => {
-      const rawItem = items.find((i) => i.id === ing.ingredientId);
-      const baseUnit = rawItem?.baseUnit || "kg";
-      let perKgInBaseUnit = NaN;
-      try {
-        perKgInBaseUnit = convertToBaseUnit(ing.quantity, ing.unit, baseUnit);
-      } catch {
-        perKgInBaseUnit = NaN;
-      }
-      const invalidUnit = !Number.isFinite(perKgInBaseUnit);
-      const totalRequiredInBase = invalidUnit
-        ? 0
-        : Number((perKgInBaseUnit * produceQtyKg).toFixed(3));
-      const totalRequiredGrams = Math.round(totalRequiredInBase * 1000);
-      const availableInBase = rawItem?.stock || 0;
-      const isEnough =
-        !invalidUnit &&
-        rawItem !== undefined &&
-        availableInBase >= totalRequiredInBase;
-      const cost = invalidUnit
-        ? 0
-        : Number((totalRequiredInBase * (rawItem?.costPrice || 0)).toFixed(2));
-
-      return {
-        ingredientId: ing.ingredientId,
-        ingredientName: rawItem?.name || ing.ingredientName,
-        perKgQty: ing.quantity,
-        perKgUnit: ing.unit,
-        totalRequiredInBase,
-        totalRequiredGrams,
-        invalidUnit,
-        availableInBase,
-        baseUnit,
-        isEnough,
-        cost,
-      };
-    });
-  }, [selectedBlend, items, produceQtyKg]);
+  const productionSimulation = useMemo(()=>{
+    if(!selectedBlend)return [];
+    try{
+      const needs=productionNeeds(selectedBlend,produceQtyKg,items,{checkStock:false});
+      return [...needs].map(([id,totalRequiredInBase])=>{
+        const rawItem=items.find(i=>i.id===id)!;
+        return {ingredientId:id,ingredientName:rawItem.name,perKgQty:totalRequiredInBase/produceQtyKg,perKgUnit:rawItem.baseUnit as UnitType,rawItem,baseUnit:rawItem.baseUnit,totalRequiredInBase,totalRequiredGrams:Math.round(totalRequiredInBase*1000),availableInBase:rawItem.stock,isEnough:rawItem.stock+0.0000001>=totalRequiredInBase,invalidUnit:false,cost:Number((totalRequiredInBase*rawItem.costPrice).toFixed(2))};
+      });
+    }catch{return [];}
+  },[selectedBlend,produceQtyKg,items]);
 
   const canProduceAll = useMemo(
     () =>
@@ -193,17 +163,9 @@ export const ProductionAndRecipesScreen: React.FC<
     blendItems[0] ? String(blendItems[0].wholesalePrice) : "",
   );
   const [recipeEditError, setRecipeEditError] = useState("");
-  const [newModalError, setNewModalError] = useState("");
 
   // نافذة إنشاء توليفة أو مشروب جديد
   const [showNewModal, setShowNewModal] = useState(false);
-  const [newModalType, setNewModalType] = useState<
-    "manufactured_blend" | "drink_recipe"
-  >("manufactured_blend");
-  const [newModalName, setNewModalName] = useState("");
-  const [newModalRetail, setNewModalRetail] = useState("560");
-  const [newModalWholesale, setNewModalWholesale] = useState("490");
-
   const handleSelectRecipeTarget = (id: string) => {
     setRecipeTargetId(id);
     const found = items.find((i) => i.id === id);
@@ -382,60 +344,6 @@ export const ProductionAndRecipesScreen: React.FC<
     });
   };
 
-  const handleCreateNewItemWithRecipe = () => {
-    if (!newModalName.trim()) {
-      setNewModalError("أدخل اسم التوليفة أو المشروب أولاً");
-      return;
-    }
-    const retail = parseFloat(newModalRetail);
-    const wholesale = parseFloat(newModalWholesale);
-    if (
-      !Number.isFinite(retail) ||
-      retail <= 0 ||
-      !Number.isFinite(wholesale) ||
-      wholesale <= 0
-    ) {
-      setNewModalError("أدخل أسعار بيع صحيحة (أرقام أكبر من صفر) في الخانتين");
-      return;
-    }
-    setNewModalError("");
-    const isBlend = newModalType === "manufactured_blend";
-    // توليد كود فريد لا يتعارض مع الأكواد الحالية
-    const code = nextItemCode(
-      items,
-      isBlend ? "BL" : "DR",
-      isBlend ? 310 : 410,
-    );
-    const accepted = onCreateNewBlendOrDrink({
-      code,
-      name: newModalName.trim(),
-      category: newModalType,
-      roastLevel: "وسط",
-      baseUnit: isBlend ? "kg" : "piece",
-      stock: isBlend ? 0 : 999,
-      minStock: isBlend ? 5 : 0,
-      costPrice: 0,
-      lastPurchasePrice: 0,
-      retailPrice: retail,
-      wholesalePrice: wholesale,
-      canSellDirectly: true,
-      hasRecipe: false,
-      recipeYield: 1,
-      recipe: [],
-      supplierPrices: [],
-    });
-    if (accepted === false) {
-      setNewModalError("لم يُحفظ الصنف؛ راجع البيانات والتنبيه");
-      return;
-    }
-    setNewModalName("");
-    setShowNewModal(false);
-    setBannerMessage({
-      type: "success",
-      text: "تم إنشاء الصنف الجديد! يمكنك الآن اختياره وتحديد مكونات وصفته.",
-    });
-  };
-
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
       {/* الهيدر الموحد بهوية بُن العجوز */}
@@ -454,7 +362,6 @@ export const ProductionAndRecipesScreen: React.FC<
         </div>
         <button
           onClick={() => {
-            setNewModalError("");
             setShowNewModal(true);
           }}
           className="bg-[#C59B27] text-[#1E1612] px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow"
@@ -719,7 +626,7 @@ export const ProductionAndRecipesScreen: React.FC<
           <div className="space-y-4">
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
               <div className="text-sm font-extrabold text-slate-800">
-                اختر المنتج (توليفة بن أو مشروب) لتعديل وصفته:
+                اختر توليفة أو مشروبًا بوصفة أو تحويجة لتعديل مكوناته:
               </div>
               <select
                 value={recipeTargetId}
@@ -744,12 +651,11 @@ export const ProductionAndRecipesScreen: React.FC<
                       </option>
                     ))}
                 </optgroup>
-                <optgroup label="تحويل صنف آخر إلى منتج بوصفة">
+                <optgroup label="التحويجات (خصم المكونات عند الاستخدام)">
                   {items
                     .filter(
                       (i) =>
-                        i.category !== "manufactured_blend" &&
-                        i.category !== "drink_recipe",
+                        i.category === "seasoning_recipe",
                     )
                     .map((i) => (
                       <option key={i.id} value={i.id}>
@@ -1069,93 +975,7 @@ export const ProductionAndRecipesScreen: React.FC<
       </div>
 
       {/* نافذة إضافة توليفة جديدة أو مشروب جديد */}
-      {showNewModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-5 space-y-4 shadow-2xl">
-            <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-amber-600" />
-              إضافة توليفة بن جديدة أو مشروب جديد
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setNewModalType("manufactured_blend")}
-                className={`py-2.5 rounded-xl text-xs font-extrabold border ${
-                  newModalType === "manufactured_blend"
-                    ? "bg-amber-800 text-white border-amber-800"
-                    : "bg-slate-50 text-slate-700 border-slate-200"
-                }`}
-              >
-                ☕ توليفة بن تُصنّع بالكيلو
-              </button>
-              <button
-                onClick={() => setNewModalType("drink_recipe")}
-                className={`py-2.5 rounded-xl text-xs font-extrabold border ${
-                  newModalType === "drink_recipe"
-                    ? "bg-amber-800 text-white border-amber-800"
-                    : "bg-slate-50 text-slate-700 border-slate-200"
-                }`}
-              >
-                🥤 مشروب يُحضّر بالكوب
-              </button>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-600 block mb-1">
-                اسم التوليفة أو المشروب
-              </label>
-              <input
-                type="text"
-                value={newModalName}
-                onChange={(e) => setNewModalName(e.target.value)}
-                placeholder="مثلاً: توليفة بُن العجوز اسبشيال بالبندق"
-                className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-bold"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-bold text-slate-600 block mb-1">
-                  سعر البيع قطاعي
-                </label>
-                <input
-                  type="number"
-                  value={newModalRetail}
-                  onChange={(e) => setNewModalRetail(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600 block mb-1">
-                  سعر البيع جملة
-                </label>
-                <input
-                  type="number"
-                  value={newModalWholesale}
-                  onChange={(e) => setNewModalWholesale(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleCreateNewItemWithRecipe}
-                className="flex-1 bg-amber-800 text-white font-extrabold py-2.5 rounded-xl"
-              >
-                حفظ وفتح الوصفة
-              </button>
-              <button
-                onClick={() => setShowNewModal(false)}
-                className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-600 font-bold"
-              >
-                إلغاء
-              </button>
-            </div>
-            {newModalError && (
-              <p className="text-[11px] font-bold text-red-600 text-center">
-                {newModalError}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+      {showNewModal && <ItemDefinitionModal items={items} allowedCategories={['manufactured_blend','drink_recipe','seasoning_recipe']} onSave={onCreateNewBlendOrDrink} onClose={()=>setShowNewModal(false)}/>}
     </div>
   );
 };

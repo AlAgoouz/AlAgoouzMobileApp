@@ -12,6 +12,7 @@ dist/
 audit/baseline-*.zip
 cashier-exports/
 coverage/
+tmp/
 .env.*
 !.env.example
 

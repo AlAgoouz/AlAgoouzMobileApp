@@ -1,3 +1,6 @@
+import {RecordPagination,useRecordPage} from './RecordPagination';
+import {latestSupplierPrices} from '../lib/supplierPurchases';
+import {ItemDefinitionModal} from './ItemDefinitionModal';
 import React, { useState, useMemo } from "react";
 import {
   ChevronRight,
@@ -27,6 +30,9 @@ import {
   PurchaseInvoiceItem,
   ItemCategory,
 } from "../types/erp";
+import {isPurchasable,itemCategories} from '../lib/itemPolicy';
+import {movingAverageCost} from '../lib/costing';
+import {checkSupplierDetails} from '../lib/contactDetails';
 import { businessDate } from "../lib/dates";
 
 interface PurchaseScreenProps {
@@ -71,14 +77,12 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   );
   const [invoiceDate, setInvoiceDate] = useState<string>(businessDate());
   const [itemCategoryFilter, setItemCategoryFilter] = useState<
-    "all" | "raw_bean" | "raw_spice" | "direct_product"
+    "all" | ItemCategory
   >("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showItemPickerModal, setShowItemPickerModal] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"نقدي" | "آجل" | "جزئي">(
-    "نقدي",
-  );
-  const [paidAmountInput, setPaidAmountInput] = useState<string>("");
+  const [taxInput,setTaxInput]=useState('0');
+  const taxAmount=Number(taxInput);
   const [compareModalItem, setCompareModalItem] =
     useState<InventoryItem | null>(null);
 
@@ -86,27 +90,19 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   const [showNewSupplierModal, setShowNewSupplierModal] = useState(false);
   const [newSupName, setNewSupName] = useState("");
   const [newSupPhone, setNewSupPhone] = useState("");
+  const [newSupAddress,setNewSupAddress]=useState('');
+  const [newSupRepresentative,setNewSupRepresentative]=useState('');
+  const [supplierError,setSupplierError]=useState('');
   const [newSupCategory, setNewSupCategory] = useState("توريد بن وخامات");
 
   // نافذة تعريف صنف خام جديد سريعاً من داخل الفاتورة
   const [showNewItemModal, setShowNewItemModal] = useState(false);
-  const [newItemName, setNewItemName] = useState("");
-  const [newItemCat, setNewItemCat] = useState<ItemCategory>("raw_bean");
-  const [newItemCost, setNewItemCost] = useState("");
-  const [newItemRetail, setNewItemRetail] = useState("");
-  const [newItemWholesale, setNewItemWholesale] = useState("");
-  const [newItemModalError, setNewItemModalError] = useState("");
   const [invoiceError, setInvoiceError] = useState("");
 
   // الأصناف القابلة للشراء
   const purchasableItems = useMemo(
     () =>
-      items.filter(
-        (i) =>
-          i.category === "raw_bean" ||
-          i.category === "raw_spice" ||
-          i.category === "direct_product",
-      ),
+      items.filter(isPurchasable),
     [items],
   );
 
@@ -163,9 +159,11 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
     });
   }, [purchaseInvoices, invoiceFilter, invoiceSearch]);
 
+  const invoicePage=useRecordPage(filteredInvoices,invoiceSearch+'|'+invoiceFilter);
+
   const filteredPickerItems = useMemo(() => {
     return purchasableItems.filter((i) => {
-      if (itemCategoryFilter !== "all" && i.category !== itemCategoryFilter) {
+      if (itemCategoryFilter !== "all" && (i.category==='raw_spice'?'direct_product':i.category) !== itemCategoryFilter) {
         return false;
       }
       if (searchQuery.trim()) {
@@ -223,7 +221,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
   const higherThanCheapestCount = useMemo(() => {
     return cart.filter((c) => {
-      const prices = c.item.supplierPrices.map((sp) => sp.price);
+      const prices = latestSupplierPrices(c.item.supplierPrices).map((sp) => sp.price);
       const minPrice =
         prices.length > 0 ? Math.min(...prices) : c.item.lastPurchasePrice;
       return c.purchasePrice > minPrice;
@@ -234,11 +232,11 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   const cheapestCompareIndex = useMemo(() => {
     if (!compareModalItem || compareModalItem.supplierPrices.length === 0)
       return -1;
-    const prices = compareModalItem.supplierPrices.map((sp) => sp.price);
+    const prices = latestSupplierPrices(compareModalItem.supplierPrices).map((sp) => sp.price);
     return prices.indexOf(Math.min(...prices));
   }, [compareModalItem]);
 
-  const totalInvoiceAmount = useMemo(
+  const netInvoiceAmount = useMemo(
     () =>
       cart.reduce(
         (sum, c) => sum + Number((c.quantity * c.purchasePrice).toFixed(2)),
@@ -247,12 +245,13 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
     [cart],
   );
 
+  const totalInvoiceAmount=Number((netInvoiceAmount+(Number.isFinite(taxAmount)?taxAmount:0)).toFixed(2));
+
   const handleStartNewInvoice = () => {
     setCart([]);
     setSelectedSupplierId(suppliers[0]?.id || "");
     setInvoiceDate(businessDate());
-    setPaymentMethod("نقدي");
-    setPaidAmountInput("");
+    setTaxInput('0');
     setSearchQuery("");
     setViewMode("create");
   };
@@ -274,22 +273,11 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       setInvoiceError("أكمل أسعار البيع بأرقام صحيحة غير سالبة");
       return;
     }
-    const enteredPaid = Number(paidAmountInput);
-    if (
-      paymentMethod === "جزئي" &&
-      (!paidAmountInput.trim() ||
-        !Number.isFinite(enteredPaid) ||
-        enteredPaid < 0 ||
-        enteredPaid > totalInvoiceAmount)
-    ) {
-      setInvoiceError(
-        `أدخل مدفوعًا بين صفر وإجمالي الفاتورة (${totalInvoiceAmount.toFixed(2)} ج.م)`,
-      );
-      return;
-    }
+    if(!taxInput.trim()||!Number.isFinite(taxAmount)||taxAmount<0){setInvoiceError('أدخل ضريبة صحيحة أو صفرًا');return;}
+    if(!suppliers.some(s=>s.id===selectedSupplierId)){setInvoiceError('اختر موردًا مسجلًا');return;}
     const supplier = suppliers.find((s) => s.id === selectedSupplierId);
     const invoiceItems: PurchaseInvoiceItem[] = cart.map((c) => {
-      const prices = c.item.supplierPrices;
+      const prices = latestSupplierPrices(c.item.supplierPrices);
       const cheapest =
         prices.length > 0
           ? prices.reduce(
@@ -318,19 +306,9 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
         previousWacCost: c.item.costPrice,
         cheapestSupplierPrice: cheapest.price,
         cheapestSupplierName: cheapest.supplierName,
-        updateProductCost: c.updateCost,
+        updateProductCost: true,
       };
     });
-
-    const paid =
-      paymentMethod === "نقدي"
-        ? totalInvoiceAmount
-        : paymentMethod === "آجل"
-          ? 0
-          : Math.min(
-              totalInvoiceAmount,
-              Math.max(0, parseFloat(paidAmountInput) || 0),
-            );
 
     const accepted = onSavePurchase({
       date: invoiceDate,
@@ -338,9 +316,12 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       supplierName: supplier?.name || "مورد عام",
       items: invoiceItems,
       totalAmount: totalInvoiceAmount,
-      paidAmount: paid,
-      remainingAmount: Number((totalInvoiceAmount - paid).toFixed(2)),
-      paymentMethod,
+      netAmount: netInvoiceAmount,
+      taxAmount,
+      accountingVersion:2,
+      paidAmount:totalInvoiceAmount,
+      remainingAmount:0,
+      paymentMethod:'نقدي',
       partnerName: currentPartnerName,
     });
 
@@ -359,6 +340,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
           {invoiceError}
         </p>
       )}
+      {viewMode==='list'&&<RecordPagination {...invoicePage}/>}
       {/* هيدر قسم المشتريات */}
       <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between shadow-md border-b border-[#C59B27]/40 sticky top-0 z-30">
         <button
@@ -529,7 +511,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                 </p>
               </div>
             ) : (
-              filteredInvoices.map((inv) => (
+              invoicePage.visible.map((inv) => (
                 <div
                   key={inv.id}
                   className="bg-white rounded-2xl p-4 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm space-y-3 transition"
@@ -709,21 +691,12 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
             {/* تبويبات تصفية الأصناف */}
             <div className="grid grid-cols-4 gap-1.5">
-              {[
-                { id: "all", label: "الكل" },
-                { id: "raw_bean", label: "حبوب بن خام" },
-                { id: "raw_spice", label: "تحويجة وإضافات" },
-                { id: "direct_product", label: "معلبات وأكواب" },
-              ].map((cat) => (
+              {[{id:'all',label:'الكل'},...itemCategories.filter(c=>['raw_bean','direct_product','direct_drink','snack'].includes(c.id))].map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() =>
                     setItemCategoryFilter(
-                      cat.id as
-                        | "all"
-                        | "raw_bean"
-                        | "raw_spice"
-                        | "direct_product",
+                      cat.id as 'all'|ItemCategory,
                     )
                   }
                   className={`py-1.5 px-1 rounded-xl text-[10px] font-extrabold border transition ${
@@ -866,9 +839,9 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
                   const cheapestRecord =
                     item.supplierPrices.length > 0
-                      ? item.supplierPrices.reduce(
+                      ? latestSupplierPrices(item.supplierPrices).reduce(
                           (min, p) => (p.price < min.price ? p : min),
-                          item.supplierPrices[0],
+                          latestSupplierPrices(item.supplierPrices)[0],
                         )
                       : {
                           price: lastPrice,
@@ -876,16 +849,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                           date: "-",
                         };
 
-                  const newWac =
-                    item.stock + quantity > 0
-                      ? Number(
-                          (
-                            (item.stock * item.costPrice +
-                              quantity * purchasePrice) /
-                            (item.stock + quantity)
-                          ).toFixed(2),
-                        )
-                      : purchasePrice;
+                  const newWac = movingAverageCost(item.stock,item.costPrice,quantity,purchasePrice);
 
                   const unitArabic =
                     item.baseUnit === "kg"
@@ -916,7 +880,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                       <div className="grid grid-cols-2 gap-2.5">
                         <div className="bg-white border border-[#DED6C6] rounded-xl px-3 py-2">
                           <label className="text-[10px] font-bold text-[#8C7A6B] block">
-                            سعر الشراء للـ {unitArabic}
+                            سعر الشراء قبل الضريبة للـ {unitArabic}
                           </label>
                           <div className="flex items-center gap-1 mt-0.5">
                             <Edit3 className="w-3.5 h-3.5 text-[#9E7918] shrink-0" />
@@ -1076,22 +1040,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                         </div>
                       </div>
 
-                      <label className="flex items-center justify-between pt-0.5 cursor-pointer">
-                        <span className="text-[11px] font-bold text-[#6E5D4F]">
-                          تحديث متوسط التكلفة (WAC) وتكلفة التوليفات المرتبطة
-                          تلقائياً
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={updateCost}
-                          onChange={(e) =>
-                            updateCartItem(item.id, {
-                              updateCost: e.target.checked,
-                            })
-                          }
-                          className="w-4 h-4 accent-[#1E1612] rounded"
-                        />
-                      </label>
+                      <p className="text-xs">يتحدث متوسط التكلفة تلقائيًا مع كل شراء، دون الضريبة.</p>
                     </div>
                   );
                 })}
@@ -1099,45 +1048,14 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
             )}
           </div>
 
-          {/* الخطوة 4: طريقة السداد للمورد */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E6DEC8] space-y-3">
-            <div className="text-xs font-black text-[#1E1612]">
-              4. طريقة السداد للمورد
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {(["نقدي", "آجل", "جزئي"] as const).map((method) => (
-                <button
-                  key={method}
-                  onClick={() => setPaymentMethod(method)}
-                  className={`py-2.5 rounded-xl text-xs font-extrabold border transition ${
-                    paymentMethod === method
-                      ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27] shadow-sm"
-                      : "bg-[#FAF8F4] text-[#6E5D4F] border-[#E6DEC8]"
-                  }`}
-                >
-                  {method === "نقدي"
-                    ? "نقدي بالكامل"
-                    : method === "آجل"
-                      ? "آجل (على الحساب)"
-                      : "سداد جزئي"}
-                </button>
-              ))}
-            </div>
-            {paymentMethod === "جزئي" && (
-              <div className="flex items-center justify-between gap-3 pt-1">
-                <span className="text-xs font-bold text-[#6E5D4F]">
-                  المبلغ المدفوع الآن للمورد:
-                </span>
-                <input
-                  type="number"
-                  value={paidAmountInput}
-                  onChange={(e) => setPaidAmountInput(e.target.value)}
-                  placeholder="0.00"
-                  className="w-36 border border-[#DED6C6] bg-[#FAF8F4] rounded-xl px-3 py-1.5 text-sm font-black text-center"
-                />
-              </div>
-            )}
-          </div>
+          <section className="bg-white rounded-2xl p-4 border space-y-3">
+            <p>قيمة الأصناف قبل الضريبة: {netInvoiceAmount.toLocaleString('ar-EG')} ج.م</p>
+            <label className="block">الضريبة (مبلغ منفصل)
+              <input aria-label="ضريبة فاتورة الشراء" type="number" min="0" step="0.01" value={taxInput} onChange={e=>setTaxInput(e.target.value)} className="border rounded-xl p-2 w-full" />
+            </label>
+            <p>الإجمالي شامل الضريبة: {totalInvoiceAmount.toLocaleString('ar-EG')} ج.م</p>
+            <p>مدفوعة بالكامل — لا تُضاف مديونية جديدة للمورد.</p>
+          </section>
 
           {/* شريط حفظ الفاتورة السفلي */}
           <div className="fixed bottom-[58px] left-0 right-0 bg-white border-t border-[#E6DEC8] p-3 flex items-center gap-2.5 z-30 max-w-[445px] mx-auto shadow-md">
@@ -1272,12 +1190,19 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
               placeholder="التخصص (مثلاً: بن أخضر، حبهان، أكواب...)"
               className="w-full border border-[#DED6C6] rounded-xl px-3 py-2.5 text-xs font-bold"
             />
+            <input aria-label="عنوان المورد" placeholder="عنوان المورد" value={newSupAddress} onChange={e=>setNewSupAddress(e.target.value)} className="border rounded-xl p-2 w-full" />
+            <input aria-label="اسم المندوب" placeholder="اسم المندوب" value={newSupRepresentative} onChange={e=>setNewSupRepresentative(e.target.value)} className="border rounded-xl p-2 w-full" />
+            {supplierError&&<p role="alert">{supplierError}</p>}
             <button
               onClick={() => {
                 if (!newSupName.trim()) return;
+                try {
+                checkSupplierDetails({name:newSupName,phone:newSupPhone,address:newSupAddress,representativeName:newSupRepresentative});
                 onQuickAddSupplier({
                   name: newSupName.trim(),
-                  phone: newSupPhone.trim() || "01000000000",
+                  phone: newSupPhone.trim(),
+                  address:newSupAddress.trim(),
+                  representativeName:newSupRepresentative.trim(),
                   category: newSupCategory.trim() || "مورد خامات",
                   balance: 0,
                   totalPurchases: 0,
@@ -1286,6 +1211,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                 setNewSupName("");
                 setNewSupPhone("");
                 setShowNewSupplierModal(false);
+                } catch(error){setSupplierError((error as Error).message);}
               }}
               className="w-full bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] py-2.5 rounded-xl text-xs font-black"
             >
@@ -1296,118 +1222,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       )}
 
       {/* نافذة تعريف صنف جديد للمخزن مباشرة من فاتورة المشتريات */}
-      {showNewItemModal && onQuickAddItem && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3 shadow-2xl border border-[#C59B27]">
-            <div className="flex items-center justify-between border-b pb-2.5">
-              <h3 className="text-sm font-black text-[#1E1612]">
-                تعريف صنف جديد للمخزن والفاتورة
-              </h3>
-              <button
-                onClick={() => setShowNewItemModal(false)}
-                className="p-1 rounded-lg bg-[#FAF8F4]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <input
-              type="text"
-              value={newItemName}
-              onChange={(e) => setNewItemName(e.target.value)}
-              placeholder="اسم الصنف (مثلاً: بن يمني، حبهان جامبو...)"
-              className="w-full border border-[#DED6C6] rounded-xl px-3 py-2 text-xs font-bold"
-            />
-            <select
-              value={newItemCat}
-              onChange={(e) => setNewItemCat(e.target.value as ItemCategory)}
-              className="w-full border border-[#DED6C6] rounded-xl px-3 py-2 text-xs font-bold bg-[#FAF8F4]"
-            >
-              <option value="raw_bean">حبوب بن محمصة خام (بالكيلو)</option>
-              <option value="raw_spice">تحويجة وإضافات (بالكيلو)</option>
-              <option value="direct_product">منتجات وأكواب (بالقطعة)</option>
-            </select>
-            <div className="grid grid-cols-3 gap-2">
-              <input
-                type="number"
-                value={newItemCost}
-                onChange={(e) => setNewItemCost(e.target.value)}
-                placeholder="سعر الشراء"
-                className="border border-[#DED6C6] rounded-xl px-2.5 py-2 text-xs font-bold"
-              />
-              <input
-                type="number"
-                value={newItemRetail}
-                onChange={(e) => setNewItemRetail(e.target.value)}
-                placeholder="بيع قطاعي"
-                className="border border-[#DED6C6] rounded-xl px-2.5 py-2 text-xs font-bold"
-              />
-              <input
-                type="number"
-                value={newItemWholesale}
-                onChange={(e) => setNewItemWholesale(e.target.value)}
-                placeholder="بيع جملة"
-                className="border border-[#DED6C6] rounded-xl px-2.5 py-2 text-xs font-bold"
-              />
-            </div>
-            <button
-              onClick={() => {
-                if (!newItemName.trim()) {
-                  setNewItemModalError("أدخل اسم الصنف أولاً");
-                  return;
-                }
-                const cost = parseFloat(newItemCost);
-                const retail = parseFloat(newItemRetail);
-                const wholesale = parseFloat(newItemWholesale);
-                if (
-                  [cost, retail, wholesale].some(
-                    (v) => !Number.isFinite(v) || v <= 0,
-                  )
-                ) {
-                  setNewItemModalError(
-                    "أدخل أسعارًا صحيحة (أرقام موجبة) في الخانات الثلاثة",
-                  );
-                  return;
-                }
-                setNewItemModalError("");
-                // توليد كود فريد لا يتعارض مع أكواد الأصناف الحالية
-                const existingCodes = new Set(items.map((i) => i.code));
-                let code = "";
-                do {
-                  code = `BN-${Math.floor(100 + Math.random() * 899)}`;
-                } while (existingCodes.has(code));
-                onQuickAddItem({
-                  code,
-                  name: newItemName.trim(),
-                  category: newItemCat,
-                  baseUnit: newItemCat === "direct_product" ? "piece" : "kg",
-                  stock: 0,
-                  minStock: 5,
-                  costPrice: cost,
-                  lastPurchasePrice: cost,
-                  retailPrice: retail,
-                  wholesalePrice: wholesale,
-                  canSellDirectly: true,
-                  hasRecipe: false,
-                  supplierPrices: [],
-                });
-                setNewItemName("");
-                setNewItemCost("");
-                setNewItemRetail("");
-                setNewItemWholesale("");
-                setShowNewItemModal(false);
-              }}
-              className="w-full bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] py-2.5 rounded-xl text-xs font-black"
-            >
-              حفظ الصنف وإضافته للقائمة
-            </button>
-            {newItemModalError && (
-              <p className="text-[11px] font-bold text-red-600 text-center">
-                {newItemModalError}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+      {showNewItemModal && onQuickAddItem && <ItemDefinitionModal items={items} allowedCategories={['raw_bean','direct_product','direct_drink','snack']} onSave={onQuickAddItem} onClose={()=>setShowNewItemModal(false)}/>}
 
       {/* نافذة مقارنة كل الموردين وأسعارهم */}
       {compareModalItem && (

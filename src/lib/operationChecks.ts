@@ -4,6 +4,7 @@ import type {
   SalesInvoice,
   StocktakingItemVariance,
 } from "../types/erp";
+import { isPurchasable, isStockItem } from './itemPolicy';
 
 const round = (value: number) => Number(value.toFixed(2));
 const validMoney = (value: number) => Number.isFinite(value) && value >= 0;
@@ -76,8 +77,7 @@ export function checkPurchase(
     const item = items.find((i) => i.id === line.itemId);
     if (
       !item ||
-      item.category === "drink_recipe" ||
-      item.category === "manufactured_blend" ||
+      !isPurchasable(item) ||
       ids.has(line.itemId)
     )
       throw new Error("صنف شراء غير موجود أو مكرر أو مخصص للإنتاج");
@@ -93,13 +93,18 @@ export function checkPurchase(
       throw new Error("راجع كميات الشراء والأسعار");
     total += round(line.quantity * line.purchasePrice);
   }
-  sameMoney(data.totalAmount, round(total));
+  const tax = data.taxAmount ?? 0;
+  if (!validMoney(tax)) throw new Error('الضريبة يجب أن تكون مبلغًا غير سالب');
+  if (data.netAmount !== undefined) sameMoney(data.netAmount, round(total));
+  sameMoney(data.totalAmount, round(total + tax));
   if (
     !validMoney(data.paidAmount) ||
     data.paidAmount > data.totalAmount + 0.001
   )
     throw new Error("المدفوع لا يمكن أن يتجاوز إجمالي الفاتورة");
   sameMoney(data.remainingAmount, round(data.totalAmount - data.paidAmount));
+  if (data.accountingVersion === 2 && (data.paymentMethod !== 'نقدي' || data.remainingAmount !== 0 || data.paidAmount !== data.totalAmount))
+    throw new Error('المشتريات الجديدة مدفوعة بالكامل');
 }
 export function prepareSale(
   data: Omit<SalesInvoice, "id" | "invoiceNumber">,
@@ -166,7 +171,7 @@ export function checkStocktaking(
     const item = items.find((i) => i.id === variance.itemId);
     if (
       !item ||
-      item.category === "drink_recipe" ||
+      !isStockItem(item) ||
       !validMoney(variance.actualStock)
     )
       throw new Error("صنف الجرد أو رصيده الفعلي غير صالح");

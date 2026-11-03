@@ -7,6 +7,8 @@ import {recordPayment,returnSale,recordExpense} from '../src/lib/ledger';
 import {deductInventory} from '../src/lib/inventory';
 import {adjustCatalogItem} from '../src/lib/catalogAdjustments';
 import {businessDate} from '../src/lib/dates';
+import {receiveStock} from '../src/lib/costing';
+import {attachCashierReport,approveCashierDay} from '../src/lib/cashierDays';
 import type {StoreState} from '../src/lib/storeState';
 import type {SalesInvoice,InventoryItem} from '../src/types/erp';
 const active=!!process.env.AGOUZ_TEST_PG_CONTAINER;
@@ -43,12 +45,15 @@ function sale(quantity=2,item=bean):SalesInvoice{
   return {id:'sale',invoiceNumber:'SALE-1',date:businessDate(),saleType:'retail',customerName:'Shop',items:[{itemId:item.id,itemName:item.name,category:item.category,quantity,unitLabel:item.baseUnit,normalizedQtyInBaseUnit:quantity,unitPrice:2,unitCost:item.costPrice,totalPrice:total,totalCost:cost,profit:Number((total-cost).toFixed(2))}],subtotal:total,discount:0,totalAmount:total,totalCost:cost,netProfit:Number((total-cost).toFixed(2)),paidAmount:total,remainingAmount:0,paymentMethod:'نقدي',partnerName:'Owner'};
 }
 function stockState():StoreState{return {...state,items:[{...bean}]};}
-function sold(store:StoreState,invoice:SalesInvoice):StoreState{return {...store,items:deductInventory(invoice.items,store.items),salesInvoices:[invoice,...store.salesInvoices]};}
+function sold(store:StoreState,invoice:SalesInvoice):StoreState{return {...store,items:deductInventory(invoice.items,store.items),salesInvoices:[invoice,...store.salesInvoices],customers:store.customers.map(c=>c.id===invoice.customerId?{...c,balance:c.balance+invoice.remainingAmount,totalSales:c.totalSales+invoice.totalAmount,invoicesCount:c.invoicesCount+1,lastPurchaseDate:invoice.date}:c)};}
 function workerState():StoreState{return {...state,employees:[{...INITIAL_EMPLOYEES[0],id:'worker',salaryType:'شهري',baseMonthlySalary:1000,payrollPeriod:currentPayrollPeriod(),openingPayable:0,workedDaysThisMonth:0,totalAdvances:0,totalDeductions:0,totalPaidOut:0,totalBonuses:0}]};}
 
 it.skipIf(!active)('accepts an actual sale and refuses a forged nonnegative balance that hides an oversell',()=>{
-  const before=stockState();seed(before);accept(sold(before,sale()));
-  reject({...before,items:[{...bean,stock:0}],salesInvoices:[sale(11)]},'INVENTORY_MOVEMENT_MISMATCH');
+  const blend:InventoryItem={...bean,id:'blend',code:'BL1',category:'manufactured_blend',hasRecipe:true,recipe:[{ingredientId:bean.id,ingredientName:bean.name,quantity:1000,unit:'gram'}]};
+  const customer={...INITIAL_CUSTOMERS[0],area:'Cairo',phone:'01012345678',balance:0,totalSales:0,invoicesCount:0};
+  const before={...stockState(),items:[bean,blend],customers:[customer]};seed(before);
+  const invoice={...sale(2,blend),saleType:'wholesale' as const,customerId:customer.id,customerName:customer.name};accept(sold(before,invoice));
+  reject({...before,items:[bean,{...blend,stock:0}],salesInvoices:[{...sale(11,blend),saleType:'wholesale',customerId:customer.id}]},'INVENTORY_MOVEMENT_MISMATCH');
 });
 it.skipIf(!active)('permits catalog count corrections only with a stocktaking journal',()=>{
   const before=stockState();seed(before);accept(adjustCatalogItem(before,bean.id,{stock:8},'Owner'));
@@ -57,7 +62,7 @@ it.skipIf(!active)('permits catalog count corrections only with a stocktaking jo
 it.skipIf(!active)('keeps drink components consumed on return and rejects restoring them',()=>{
   const raw={...bean,stock:1};
   const drink:InventoryItem={...bean,id:'drink',code:'D1',category:'drink_recipe',baseUnit:'piece',stock:999,costPrice:0.3,hasRecipe:true,recipe:[{ingredientId:bean.id,ingredientName:bean.name,quantity:300,unit:'gram'}]};
-  const before={...stockState(),items:[raw,drink]};seed(before);accept(sold(before,sale(2,drink)));
+  const before={...stockState(),items:[raw,drink]};seed(before);reject(sold(before,sale(2,drink)),'NEW_SALE_WHOLESALE_CUSTOMER_REQUIRED');
   reject({...before,items:[{...raw,stock:0},drink],salesInvoices:[sale(4,drink)]},'INVENTORY_MOVEMENT_MISMATCH');
   const paid=sold(before,sale(2,drink));seed(paid);const returned=returnSale(paid,'sale','Owner');accept(returned);
   reject({...returned,items:returned.items.map((item)=>item.id==='bean'?{...item,stock:1}:item)},'INVENTORY_MOVEMENT_MISMATCH');
@@ -75,7 +80,7 @@ it.skipIf(!active)('requires production to consume the configured recipe',()=>{
   const blend:InventoryItem={...bean,id:'blend',code:'M1',category:'manufactured_blend',stock:0,openingStock:0,hasRecipe:true,recipe:[{ingredientId:bean.id,ingredientName:bean.name,quantity:500,unit:'gram'}],costPrice:0.5};
   const before={...stockState(),items:[bean,blend]};seed(before);
   const batch={id:'batch',batchNumber:'P1',date:businessDate(),blendId:blend.id,blendName:blend.name,quantityProducedKg:2,unitCostPerKg:0.5,totalBatchCost:1,ingredientsConsumed:[{ingredientId:bean.id,ingredientName:bean.name,quantityUsed:1,displayQuantity:'1 kg',cost:1}],partnerName:'Owner'};
-  accept({...before,items:[{...bean,stock:9},{...blend,stock:2}],productionBatches:[batch]});
+  accept({...before,items:[{...bean,stock:9},receiveStock(blend,2,0.5,{id:batch.id,date:batch.date,type:'production'})],productionBatches:[batch]});
   reject({...before,items:[bean,{...blend,stock:2}],productionBatches:[{...batch,unitCostPerKg:0,totalBatchCost:0,ingredientsConsumed:[]}]},'PRODUCTION_CONSUMPTION_MISMATCH');
 });
 it.skipIf(!active)('enforces actual debt, payment allocation and invoice settlement together',()=>{
@@ -114,6 +119,7 @@ it.skipIf(!active)('restricts snapshot restoration to the verified owner and sep
   const other='22222222-2222-4222-8222-222222222222';
   sql(`insert into auth.users values('${other}','other@local.test',now())on conflict do nothing;insert into public.erp_members(user_id,username,partner_id,role)values('${other}','other','p2','partner')on conflict do nothing;`);
   expect(()=>sql(`begin;set local request.jwt.claim.sub='${other}';set local role authenticated;select public.bon_erp_restore_store(0,${literal(toCloud(restored))},gen_random_uuid());rollback;`)).toThrow('OWNER_REQUIRED');
+  sql(`delete from public.erp_members where user_id='${other}';delete from auth.users where id='${other}';`);
 });
 it.skipIf(!active)('does not expose privileged validation helpers or direct table updates',()=>{
   expect(sql("select has_function_privilege('authenticated','bon_erp_private.validate_changes(jsonb,jsonb)','EXECUTE')")).toBe('f');
@@ -124,4 +130,39 @@ it.skipIf(!active)('lets only the backup principal read private files without ac
   expect(sql(`begin;insert into auth.users values('${reader}','backup@local.test',now());insert into bon_erp_private.storage_backup_principal values(true,'${reader}');insert into storage.objects values(gen_random_uuid(),'private','nested/file.bin');set local request.jwt.claim.sub='${reader}';set local role authenticated;select name from storage.objects;select count(*) from public.bon_elagouz_store;rollback;`)).toBe('nested/file.bin\n0');
   expect(()=>sql(`begin;set local role authenticated;insert into storage.objects values(gen_random_uuid(),'private','bad');rollback;`)).toThrow('permission denied');
   expect(()=>sql(`begin;set local role authenticated;delete from storage.objects;rollback;`)).toThrow('permission denied');
+});
+
+function cashierPair(){
+  const drink:InventoryItem={...bean,id:'drink',code:'DR1',category:'drink_recipe',baseUnit:'piece',stock:0,openingStock:0,costPrice:0.3,hasRecipe:true,recipe:[{ingredientId:bean.id,ingredientName:bean.name,quantity:300,unit:'gram'}]};
+  const before={...stockState(),items:[{...bean,stock:1},drink]};
+  const withMoney=attachCashierReport(before,businessDate(),{type:'financial',file:{fileName:'financial.xlsx',sha256:'a'.repeat(64),uploadedAt:new Date().toISOString()},totalRevenue:200});
+  const pending=attachCashierReport(withMoney,businessDate(),{type:'items',file:{fileName:'items.xlsx',sha256:'b'.repeat(64),uploadedAt:new Date().toISOString()},lines:[{itemId:drink.id,quantity:5,unitLabel:'piece',normalizedQtyInBaseUnit:5}]});
+  return {before,pending,posted:approveCashierDay(pending,pending.cashierDays[0].id,'Owner')};
+}
+it.skipIf(!active)('accepts pending paired cashier reports without posting and permits verified cashier stock shortages',()=>{
+ const {before,pending,posted}=cashierPair();seed(before);accept(pending);accept(posted);expect(posted.items[0].stock).toBe(-0.5);
+});
+it.skipIf(!active)('rejects forged cashier consumption, cost, shortage evidence and changed approved reports',()=>{
+ const {before,posted}=cashierPair();seed(before);
+ const forged=structuredClone(posted);forged.cashierDays[0].consumption![0].quantity=1;reject(forged,'CASHIER_COST_MISMATCH');
+ const shortage=structuredClone(posted);shortage.cashierDays[0].shortages=[];reject(shortage,'CASHIER_SHORTAGE_MISMATCH');
+ seed(posted);const modified=structuredClone(posted);modified.cashierDays[0].financialReport!.totalRevenue=500;reject(modified,'CASHIER_REPORT_IMMUTABLE');
+});
+it.skipIf(!active)('refuses a second cashier report for the same business date and a missing half of the approved day',()=>{
+ const {before,pending,posted}=cashierPair();seed(before);
+ reject({...pending,cashierDays:[...pending.cashierDays,{...pending.cashierDays[0],id:'duplicate'}]},'DUPLICATE_CASHIER_DAY');
+ const incomplete=structuredClone(posted);delete incomplete.cashierDays[0].financialReport;reject(incomplete,'CASHIER_REPORT_PAIR_REQUIRED');
+});
+it.skipIf(!active)('requires separate purchase tax, full payment, moving average and dated cost history',()=>{
+ const supplier={id:'supplier',name:'Supplier',phone:'01012345678',address:'Cairo',representativeName:'Agent',category:'Raw',balance:0,totalPurchases:0,invoicesCount:0};
+ const before={...stockState(),suppliers:[supplier]};seed(before);
+ const invoice={id:'purchase',invoiceNumber:'P1',date:businessDate(),supplierId:supplier.id,supplierName:supplier.name,accountingVersion:2 as const,items:[{itemId:bean.id,itemName:bean.name,quantity:2,unit:'kg',purchasePrice:2,previousLastPrice:1,previousWacCost:1,cheapestSupplierPrice:1,cheapestSupplierName:'Supplier',updateProductCost:true}],netAmount:4,taxAmount:0.56,totalAmount:4.56,paidAmount:4.56,remainingAmount:0,paymentMethod:'نقدي' as const,partnerName:'Owner'};
+ const after={...before,items:[receiveStock(bean,2,2,{id:invoice.id,date:invoice.date,type:'purchase'})],purchaseInvoices:[invoice],suppliers:[{...supplier,totalPurchases:4.56,invoicesCount:1}]};accept(after);
+ reject({...after,purchaseInvoices:[{...invoice,paidAmount:0,remainingAmount:4.56,paymentMethod:'آجل'}],suppliers:[{...supplier,totalPurchases:4.56,invoicesCount:1,balance:4.56}]},'NEW_PURCHASE_FULL_PAYMENT_REQUIRED');
+ reject({...after,items:[{...after.items[0],costPrice:2}]},'PURCHASE_AVERAGE_COST_MISMATCH');
+ reject({...after,items:[{...after.items[0],costHistory:[]}]},'PURCHASE_COST_HISTORY_REQUIRED');
+});
+it.skipIf(!active)('rejects negative initial stock and missing new contact information',()=>{
+ seed(state);reject({...state,items:[{...bean,stock:-1,openingStock:0}]},'INVENTORY_MOVEMENT_MISMATCH');
+ reject({...state,customers:[{...INITIAL_CUSTOMERS[0],balance:0,totalSales:0,invoicesCount:0}]},'CONTACT_DETAILS_REQUIRED');
 });

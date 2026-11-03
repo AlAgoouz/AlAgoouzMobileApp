@@ -33,7 +33,7 @@ for(let run=0;run<3;run++){
   if(run===0)await page.screenshot({path:label+'-mobile.png'});
   phase('opening-invoices');await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
   const invoiceStart=performance.now();await page.getByRole('button',{name:/فواتير البيع/}).click();
-  await page.getByRole('heading',{name:/الفواتير والمرتجعات/}).waitFor();
+  await page.getByRole('heading',{name:/سجل المبيعات/}).waitFor();
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   sample.invoiceReadyMs=performance.now()-invoiceStart;
   phase('counting-invoices');sample.nodes=await page.locator('*').count();sample.renderedInvoices=await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).count();

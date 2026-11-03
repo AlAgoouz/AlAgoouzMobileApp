@@ -1,3 +1,6 @@
+import type {QueuedCashierReport} from './components/CashierDayScreen';
+import {attachCashierReport,approveCashierDay,salesForReports} from './lib/cashierDays';
+import {isStockItem} from './lib/itemPolicy';
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Settings,
@@ -51,7 +54,6 @@ import {
   checkStocktaking,
 } from "./lib/operationChecks";
 
-import { ParsedCashierRow, mapRawCashierRows } from "./lib/cashierExcelParser";
 import { getSupabaseClient, getSupabaseCredentials } from "./lib/supabaseSync";
 import { useErpStore } from "./hooks/useErpStore";
 import { parseBackup, createBackup, type StoreState } from "./lib/storeState";
@@ -68,11 +70,15 @@ import {
 import { businessDate } from "./lib/dates";
 import { recordEmployeeAction, reverseEmployeeAction, closePayrollPeriod, currentPayrollPeriod } from './lib/payroll';
 import { adjustCatalogItem } from './lib/catalogAdjustments';
-import { cashierSourceId } from "./lib/cashierRows";
+import {checkCustomerDetails,checkSupplierDetails} from './lib/contactDetails';
+import {receiveStock} from './lib/costing';
 import {
   downloadFullBackupJson,
   exportFullStoreExcel,
 } from "./lib/backupExport";
+
+const WholesaleInvoiceScreen=React.lazy(()=>import('./components/WholesaleInvoiceScreen').then(m=>({default:m.WholesaleInvoiceScreen})));
+const CashierDayScreen=React.lazy(()=>import('./components/CashierDayScreen').then(m=>({default:m.CashierDayScreen})));
 
 const unloadedPartner: Partner = {
   id: "",
@@ -134,17 +140,6 @@ const ProfitReportsScreen = React.lazy(() =>
   })),
 );
 
-const SalesPosScreen = React.lazy(() =>
-  import("./components/SalesAndCashierSyncScreens").then((module) => ({
-    default: module.SalesPosScreen,
-  })),
-);
-const CashierSyncScreen = React.lazy(() =>
-  import("./components/SalesAndCashierSyncScreens").then((module) => ({
-    default: module.CashierSyncScreen,
-  })),
-);
-
 const ProductsCatalogScreen = React.lazy(() =>
   import("./components/ManagementScreens").then((module) => ({
     default: module.ProductsCatalogScreen,
@@ -196,7 +191,7 @@ const InvoiceReceiptModal = React.lazy(() =>
 export default function App() {
   const [activeScreen, setActiveScreen] = useState<string>("home");
   const [moreInitialTab, setMoreInitialTab] = useState<
-    "menu" | "data_control" | "expenses" | "partners" | "shifts" | "cloud"
+    "menu" | "data_control" | "expenses" | "partners" | "cloud"
   >("menu");
   const [hideProfits, setHideProfits] = useState<boolean>(false);
   const [globalSearch, setGlobalSearch] = useState<string>("");
@@ -206,23 +201,25 @@ export default function App() {
 
   const cloud = useErpStore();
   const { engine, member } = cloud;
+  const confirmSave=async()=>{await engine.flush();if(engine.snapshot.status!=='ready')throw Error(engine.snapshot.error||'لم يصل تأكيد اعتماد العملية؛ راجع حالة الحفظ');};
   const loggedPartnerId = member?.partnerId ?? null;
   const {
     items,
     productionBatches,
     purchaseInvoices,
     salesInvoices,
+    cashierDays,
     suppliers,
     customers,
     expenses,
     partners,
     auditLogs,
-    shifts,
     employees,
     employeeTransactions,
     stocktakingRecords,
     accountPayments,
   } = cloud.state;
+  const reportSales=useMemo(()=>salesForReports({salesInvoices,cashierDays}),[salesInvoices,cashierDays]);
   const currentPartner =
     partners.find((p) => p.id === loggedPartnerId) || unloadedPartner;
   const safeAction = (action: () => void) => {
@@ -324,15 +321,7 @@ export default function App() {
 
   const [queueError, setQueueError] = useState("");
   const queueBusy = React.useRef(false);
-  const queueHandler =
-    React.useRef<
-      (record: {
-        id: string;
-        file_name: string;
-        sale_date: string;
-        raw_rows: Record<string, unknown>[];
-      }) => Promise<void>
-    >();
+  const [queuedReports,setQueuedReports]=useState<QueuedCashierReport[]>([]);
   useEffect(() => {
     if (!member) return;
     const sb = getSupabaseClient();
@@ -345,26 +334,12 @@ export default function App() {
       try {
         const { data, error } = await sb
           .from("cashier_sync_queue")
-          .select("id,file_name,sale_date,raw_rows")
+          .select("id,file_name,sale_date,raw_rows,content_hash")
           .eq("processed", false)
           .order("created_at")
           .limit(20);
         if (error) throw new Error("تعذر قراءة الملفات المعلقة للكاشير");
-        const failures: string[] = [];
-        for (const record of data ?? []) {
-          if (disposed || engine.snapshot.status !== "ready") break;
-          try {
-            await queueHandler.current?.(record);
-          } catch (error) {
-            failures.push(`${record.file_name}: ${(error as Error).message}`);
-          }
-        }
-        if (!disposed)
-          setQueueError(
-            failures.length
-              ? `ملفات لم تعتمد وتحتاج مراجعة: ${failures.slice(0, 3).join("؛ ")}`
-              : "",
-          );
+        if(!disposed){setQueuedReports(previous=>previous.length===data?.length&&previous.every((r,i)=>r.id===data[i].id&&r.content_hash===data[i].content_hash)?previous:data??[]);setQueueError('');}
       } catch (error) {
         if (!disposed)
           setQueueError(
@@ -469,19 +444,16 @@ export default function App() {
 
     const unitCostPerKg = Number((totalBatchCost / quantityKg).toFixed(2));
 
+    const batchId = crypto.randomUUID();
     const finalCatalog = updatedCatalog.map((item) => {
       if (item.id === blendId) {
-        return {
-          ...item,
-          stock: Number((item.stock + quantityKg).toFixed(3)),
-          costPrice: unitCostPerKg,
-        };
+        return receiveStock(item, quantityKg, unitCostPerKg, {id:batchId,date:businessDate(),type:'production'});
       }
       return item;
     });
 
     const newBatch: ProductionBatch = {
-      id: crypto.randomUUID(),
+      id: batchId,
       batchNumber: nextSequentialNumber(
         productionBatches.map((b) => b.batchNumber),
         "PRD-2026",
@@ -520,6 +492,11 @@ export default function App() {
   const handleSavePurchase = (
     invoiceData: Omit<PurchaseInvoice, "id" | "invoiceNumber">,
   ) => {
+    invoiceData = {...invoiceData, accountingVersion:2};
+    const supplier=engine.state.suppliers.find(s=>s.id===invoiceData.supplierId);
+    if(!supplier)throw Error('اختر موردًا مسجلًا');
+    checkSupplierDetails(supplier);
+    invoiceData={...invoiceData,supplierName:supplier.name};
     checkPurchase(invoiceData, engine.snapshot.state.items);
     if (
       !invoiceData.items.length ||
@@ -560,18 +537,7 @@ export default function App() {
       const purchasedLine = invoiceData.items.find((l) => l.itemId === item.id);
       if (!purchasedLine) return item;
 
-      const oldStock = Math.max(0, item.stock);
-      const newStock = Number((oldStock + purchasedLine.quantity).toFixed(3));
-      const newWac =
-        purchasedLine.updateProductCost && newStock > 0
-          ? Number(
-              (
-                (oldStock * item.costPrice +
-                  purchasedLine.quantity * purchasedLine.purchasePrice) /
-                newStock
-              ).toFixed(2),
-            )
-          : item.costPrice;
+      const received = receiveStock(item,purchasedLine.quantity,purchasedLine.purchasePrice,{id:newInvoice.id,date:invoiceData.date,type:'purchase'});
 
       const updatedSupplierPrices = [
         {
@@ -581,15 +547,11 @@ export default function App() {
           date: invoiceData.date,
           invoiceId: invNum,
         },
-        ...item.supplierPrices.filter(
-          (sp) => sp.supplierId !== invoiceData.supplierId,
-        ),
+        ...item.supplierPrices,
       ];
 
       return {
-        ...item,
-        stock: newStock,
-        costPrice: newWac,
+        ...received,
         lastPurchasePrice: purchasedLine.purchasePrice,
         retailPrice: purchasedLine.newRetailPrice ?? item.retailPrice,
         wholesalePrice: purchasedLine.newWholesalePrice ?? item.wholesalePrice,
@@ -628,7 +590,6 @@ export default function App() {
   };
 
   // دالة خصم الأصناف من المخزون (خصم مباشر للبن والتوليفات الجاهزة، وفك الوصفة للمشروبات!)
-  const deductSoldItemsFromInventory = deductInventory;
 
   // 3. حفظ فاتورة بيع (جملة أو قطاعي مباشر)
   const handleSaveSale = (
@@ -638,7 +599,12 @@ export default function App() {
     let invoiceItems: SalesInvoiceItem[];
     let liveTotalCost = 0;
     try {
+      if(saleData.saleType!=='wholesale'||saleData.items.some(line=>engine.state.items.find(i=>i.id===line.itemId)?.category!=='manufactured_blend'))throw Error('فواتير البيع الجديدة للتوليفات بالجملة فقط');
       const liveItems = engine.snapshot.state.items;
+      const customer=engine.state.customers.find(c=>c.id===saleData.customerId);
+      if(!customer)throw Error('اختر عميلًا مسجلًا');
+      checkCustomerDetails(customer);
+      saleData={...saleData,customerName:customer.name};
       if (
         saleData.saleType === "wholesale" &&
         !engine.snapshot.state.customers.some(
@@ -646,14 +612,6 @@ export default function App() {
         )
       )
         throw new Error("اختر عميل جملة موجودًا قبل حفظ الفاتورة");
-      if (
-        saleData.saleType === "retail" &&
-        saleData.customerId === "cust-cash" &&
-        saleData.remainingAmount > 0
-      )
-        throw new Error(
-          "البيع بالقطاعي نقدًا فوري؛ لا يمكن ترك مبلغ متأخر على العميل السريع",
-        );
       if (
         !saleData.items.length ||
         saleData.items.some(
@@ -727,133 +685,7 @@ export default function App() {
     showToast(
       `تم تسجيل الفاتورة #${invNum}؛ تابع حالة حفظ السحابة أعلى الشاشة.`,
     );
-    setReceiptModalInvoice(newSale);
-    setActiveScreen("home");
-    return true;
-  };
-
-  // 4. استيراد شيت مبيعات الكاشير (Excel / CSV أو من الفولدر المراقب)
-  const handleImportCashierRows = async (
-    rows: ParsedCashierRow[],
-    sourceFileName: string,
-    saleDate = businessDate(),
-    queueId?: string,
-  ): Promise<boolean> => {
-    if (
-      !rows.length ||
-      rows.some((r) => !r.matchedItem || r.error || r.quantity <= 0)
-    )
-      throw new Error(
-        "الملف يحتوي صفوفًا غير مطابقة أو مرتجعات أو كميات غير صالحة؛ أصلحها قبل الاعتماد.",
-      );
-    const sourceId = await cashierSourceId(rows, saleDate);
-    const state = engine.snapshot.state;
-    const duplicate = state.salesInvoices.find((i) => i.sourceId === sourceId);
-    if (duplicate) {
-      if (!queueId)
-        throw new Error("هذا الملف مستورد بالفعل؛ لم يتم تكرار الخصم.");
-      const next = {
-        ...state,
-        salesInvoices: state.salesInvoices.map((i) =>
-          i.id === duplicate.id ? { ...i, sourceQueueId: queueId } : i,
-        ),
-      };
-      engine.replace(next, queueId);
-      await engine.flush();
-      return engine.snapshot.status === "ready";
-    }
-    const invoiceItems: SalesInvoiceItem[] = rows.map((r) => {
-      const item = state.items.find((i) => i.id === r.matchedItem!.id);
-      if (!item) throw new Error("تغير كتالوج الأصناف؛ أعد قراءة الملف.");
-      const quantity = ["gram", "ml"].includes(r.unitHint)
-        ? r.quantity / 1000
-        : r.quantity;
-      const totalPrice =
-        r.totalPrice ??
-        Number(
-          (r.unitPrice !== undefined
-            ? r.unitPrice * r.quantity
-            : quantity * item.retailPrice
-          ).toFixed(2),
-        );
-      const totalCost = Number((quantity * item.costPrice).toFixed(2));
-      return {
-        itemId: item.id,
-        itemName: item.name,
-        category: item.category,
-        quantity: r.quantity,
-        unitLabel: r.unitHint,
-        normalizedQtyInBaseUnit: quantity,
-        unitPrice: quantity ? totalPrice / quantity : 0,
-        unitCost: item.costPrice,
-        totalPrice,
-        totalCost,
-        profit: Number((totalPrice - totalCost).toFixed(2)),
-      };
-    });
-    const nextItems = deductInventory(invoiceItems, state.items);
-    const totalAmount = Number(
-      invoiceItems.reduce((sum, i) => sum + i.totalPrice, 0).toFixed(2),
-    );
-    const totalCost = Number(
-      invoiceItems.reduce((sum, i) => sum + i.totalCost, 0).toFixed(2),
-    );
-    const invoice: SalesInvoice = {
-      id: crypto.randomUUID(),
-      invoiceNumber: `POS-SYNC-${crypto.randomUUID().slice(0, 8)}`,
-      date: saleDate,
-      saleType: "cashier_sync",
-      customerName: `مبيعات كاشير (${sourceFileName})`,
-      sourceFile: sourceFileName,
-      sourceId,
-      sourceQueueId: queueId,
-      items: invoiceItems,
-      subtotal: totalAmount,
-      discount: 0,
-      totalAmount,
-      totalCost,
-      netProfit: Number((totalAmount - totalCost).toFixed(2)),
-      paidAmount: totalAmount,
-      remainingAmount: 0,
-      paymentMethod: "نقدي",
-      partnerName: currentPartner.name,
-    };
-    engine.replace(
-      {
-        ...state,
-        items: nextItems,
-        salesInvoices: [invoice, ...state.salesInvoices],
-        auditLogs: [
-          {
-            id: crypto.randomUUID(),
-            timestamp: new Date().toISOString(),
-            actorId: member?.userId,
-            partnerName: currentPartner.name,
-            actionType: "مزامنة كاشير",
-            description: `استيراد ${sourceFileName}`,
-            amount: totalAmount,
-          },
-          ...state.auditLogs,
-        ],
-      },
-      queueId,
-    );
-    await engine.flush();
-    if (engine.snapshot.status !== "ready")
-      throw new Error(
-        "لم يتأكد الحفظ؛ الملف لم يُعتمد. أعد محاولة الحفظ من التنبيه.",
-      );
-    showToast("تم حفظ ملف الكاشير على السحابة وخصم المخزون.");
-    setQueueError("");
-    return true;
-  };
-  queueHandler.current = async (record) => {
-    await handleImportCashierRows(
-      mapRawCashierRows(record.raw_rows, engine.snapshot.state.items),
-      record.file_name,
-      record.sale_date,
-      record.id,
-    );
+    return newSale;
   };
 
   // 5. اعتماد محضر الجرد الفعلي على الميزان وتحديث المخزن
@@ -935,10 +767,11 @@ export default function App() {
     setItems((prev) =>
       prev.map((item) => ({
         ...item,
-        stock: item.category === "drink_recipe" ? 999 : 0,
+        stock: 0,
       })),
     );
     setSalesInvoices([]);
+    engine.field("cashierDays",[]);
     setPurchaseInvoices([]);
     setProductionBatches([]);
     setExpenses([]);
@@ -985,6 +818,7 @@ export default function App() {
   const handleClearAllDemoData = () => {
     setItems([]);
     setSalesInvoices([]);
+    engine.field("cashierDays",[]);
     setPurchaseInvoices([]);
     setProductionBatches([]);
     setSuppliers([]);
@@ -1016,13 +850,13 @@ export default function App() {
   const shortagesCount = useMemo(
     () =>
       items.filter(
-        (i) => i.category !== "drink_recipe" && i.stock <= i.minStock,
+        (i) => isStockItem(i) && i.stock <= i.minStock,
       ).length,
     [items],
   );
 
   const dashboardAnalytics = useMemo(() => {
-    const activeSales = salesInvoices.filter((i) => !i.isReturned);
+    const activeSales = reportSales.filter((i) => !i.isReturned);
     const salesTotal = activeSales.reduce((s, i) => s + i.totalAmount, 0);
     const costTotal = activeSales.reduce((s, i) => s + i.totalCost, 0);
     const grossProfit = activeSales.reduce((s, i) => s + i.netProfit, 0);
@@ -1045,9 +879,7 @@ export default function App() {
     const rawStockValue = items
       .filter(
         (i) =>
-          i.category === "raw_bean" ||
-          i.category === "raw_spice" ||
-          i.category === "direct_product",
+          isStockItem(i)&&i.category!=="manufactured_blend",
       )
       .reduce((s, i) => s + Math.max(0, i.stock) * i.costPrice, 0);
     const blendStockValue = items
@@ -1108,7 +940,7 @@ export default function App() {
       topSellingProducts,
       maxProductRevenue,
     };
-  }, [salesInvoices, expenses, items, customers, suppliers]);
+  }, [reportSales, expenses, items, customers, suppliers]);
 
   const globalSearchResults = useMemo(() => {
     if (!globalSearch.trim()) return [];
@@ -1148,7 +980,7 @@ export default function App() {
       : cloud.status === "dirty"
         ? "تعديلات بانتظار الحفظ"
         : cloud.status === "ready"
-          ? "محفوظ على السحابة"
+          ? ""
           : cloud.status === "loading"
             ? "جارٍ تحميل بيانات المحل…"
             : cloud.status === "conflict"
@@ -1162,12 +994,12 @@ export default function App() {
           بيئة اختبار محلية — بيانات تجريبية منفصلة
         </div>
       )}
-      <div
+      {cloud.status !== 'ready' && <div
         role="status"
         className="sticky top-0 z-40 w-full bg-stone-900 text-white text-xs text-center p-2"
       >
         {statusText}
-      </div>
+      </div>}
       {queueError && (
         <div
           role="alert"
@@ -1422,7 +1254,7 @@ export default function App() {
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-3">
                   <div className="text-[10px] text-[#D8CBB8] font-bold">
-                    إجمالي المبيعات ({dashboardAnalytics.invoicesCount} فاتورة)
+                    إجمالي المبيعات ({dashboardAnalytics.invoicesCount} مستند بيع)
                   </div>
                   <div className="text-lg font-black text-white mt-0.5">
                     {dashboardAnalytics.salesTotal.toLocaleString("ar-EG")}{" "}
@@ -1619,7 +1451,7 @@ export default function App() {
                       توزيع مصادر المبيعات
                     </h3>
                     <p className="text-[10px] text-[#8C7A6B]">
-                      نسبة مبيعات الجملة مقابل المحل وشيت الكاشير
+                      نسبة مبيعات الجملة مقابل المحل وتقارير يوم الكاشير
                     </p>
                   </div>
                 </div>
@@ -1973,7 +1805,7 @@ export default function App() {
               </button>
 
               <div className="grid grid-cols-2 gap-2.5">
-                {/* 1. بيع جملة ومحل */}
+                {/* 1. فواتير الجملة */}
                 <button
                   onClick={() => setActiveScreen("sales_pos")}
                   className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm text-right transition flex items-start gap-3 group"
@@ -1983,10 +1815,10 @@ export default function App() {
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-black text-[#1E1612]">
-                      بيع جملة ومحل
+                      فواتير الجملة
                     </div>
                     <div className="text-[10px] text-[#8C7A6B] font-semibold mt-0.5 leading-tight">
-                      كاشير جرام وكيلو وفاتورة واتساب
+                      عميل مسجل وتوليفات بسعر متفق عليه
                     </div>
                   </div>
                 </button>
@@ -2106,7 +1938,7 @@ export default function App() {
                     فواتير البيع
                   </div>
                   <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    طباعة ومرتجعات
+                    سجل الجملة وأيام الكاشير
                   </div>
                 </button>
 
@@ -2255,7 +2087,8 @@ export default function App() {
               });
             }}
             onQuickAddSupplier={(newSup) => {
-              safeAction(() => {
+              return safeAction(() => {
+                checkSupplierDetails(newSup);
                 const created: Supplier = {
                   ...newSup,
                   id: crypto.randomUUID(),
@@ -2265,7 +2098,7 @@ export default function App() {
               });
             }}
             onQuickAddItem={(newItem) => {
-              safeAction(() => {
+              return safeAction(() => {
                 const created: InventoryItem = {
                   ...newItem,
                   id: crypto.randomUUID(),
@@ -2358,37 +2191,18 @@ export default function App() {
           />
         )}
 
-        {activeScreen === "sales_pos" && (
-          <SalesPosScreen
-            items={items}
-            customers={customers}
-            currentPartnerName={currentPartner.name}
-            onSaveSale={(data) => {
-              let saved = false;
-              return (
-                safeAction(() => {
-                  saved = handleSaveSale(data);
-                }) && saved
-              );
-            }}
-            onNavigateToCashierSync={() => setActiveScreen("cashier_sync")}
-            onBack={() => setActiveScreen("home")}
-          />
-        )}
-
-        {activeScreen === "cashier_sync" && (
-          <CashierSyncScreen
-            items={items}
-            onImportCashierRows={handleImportCashierRows}
-            onBack={() => setActiveScreen("home")}
-          />
-        )}
+        {activeScreen === 'sales_pos' && <WholesaleInvoiceScreen items={items} customers={customers} currentPartnerName={currentPartner.name} onBack={()=>setActiveScreen('home')} onSaveSale={async data=>{
+          let invoice:SalesInvoice|false=false;
+          if(!safeAction(()=>{invoice=handleSaveSale(data);})||!invoice)return false;
+          try{await confirmSave();setReceiptModalInvoice(invoice);setActiveScreen('home');return true;}catch(error){showToast((error as Error).message);return false;}
+        }}/>}
+        {activeScreen === 'cashier_sync' && <CashierDayScreen items={items} days={cashierDays} queued={queuedReports} onBack={()=>setActiveScreen('home')} onAttach={async(date,report)=>{engine.replace(attachCashierReport(engine.state,date,report),report.file.sourceQueueId);await confirmSave();if(report.file.sourceQueueId)setQueuedReports(rows=>rows.filter(r=>r.id!==report.file.sourceQueueId));}} onApprove={async(id)=>{engine.replace(approveCashierDay(engine.state,id,currentPartner.name));await confirmSave();}}/>}
 
         {activeScreen === "products" && (
           <ProductsCatalogScreen
             items={items}
             onAddNewItem={(newItem) => {
-              safeAction(() => {
+              return safeAction(() => {
                 if (
                   hasInvalidNumbers([
                     newItem.stock,
@@ -2471,7 +2285,7 @@ export default function App() {
           <InventoryScreen
             items={items}
             onAddNewItem={(newItem) => {
-              safeAction(() => {
+              return safeAction(() => {
                 if (
                   hasInvalidNumbers([
                     newItem.stock,
@@ -2552,7 +2366,7 @@ export default function App() {
         )}
 
         {activeScreen === "suppliers" && (
-          <SuppliersAndCustomersScreen
+          <SuppliersAndCustomersScreen onUpdateContact={(mode,id,details)=>safeAction(()=>{if(mode==='customers'){checkCustomerDetails(details);setCustomers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}else{checkSupplierDetails(details);setSuppliers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}addAuditLog("تعديل وصفة/صنف","تحديث بيانات التواصل");})}
             mode="suppliers"
             suppliers={suppliers}
             customers={customers}
@@ -2591,7 +2405,8 @@ export default function App() {
               });
             }}
             onAddSupplier={(sup) => {
-              safeAction(() => {
+              return safeAction(() => {
+                checkSupplierDetails(sup);
                 if (!sup.name.trim() || hasInvalidNumbers([sup.balance])) {
                   showToast(
                     "راجع البيانات: اسم المورد مطلوب والرصيد رقم غير سالب.",
@@ -2642,7 +2457,7 @@ export default function App() {
         )}
 
         {activeScreen === "customers" && (
-          <SuppliersAndCustomersScreen
+          <SuppliersAndCustomersScreen onUpdateContact={(mode,id,details)=>safeAction(()=>{if(mode==='customers'){checkCustomerDetails(details);setCustomers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}else{checkSupplierDetails(details);setSuppliers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}addAuditLog("تعديل وصفة/صنف","تحديث بيانات التواصل");})}
             mode="customers"
             suppliers={suppliers}
             customers={customers}
@@ -2690,7 +2505,8 @@ export default function App() {
               });
             }}
             onAddCustomer={(cust) => {
-              safeAction(() => {
+              return safeAction(() => {
+                checkCustomerDetails(cust);
                 if (!cust.name.trim() || hasInvalidNumbers([cust.balance])) {
                   showToast(
                     "راجع البيانات: اسم العميل مطلوب والرصيد رقم غير سالب.",
@@ -2724,9 +2540,11 @@ export default function App() {
 
         {activeScreen === "sales_invoices" && (
           <SalesInvoicesAndReturnsScreen
+            cashierDays={cashierDays}
             salesInvoices={salesInvoices}
             customers={customers}
             onReturnInvoice={(invId) => {
+              if(!window.confirm('تأكيد المرتجع الاستثنائي وعكس قيمته المالية؟ مكونات المشروبات المستهلكة لا تعود للمخزون.'))return;
               safeAction(() => {
                 const state = returnSale(
                   engine.snapshot.state,
@@ -2752,7 +2570,7 @@ export default function App() {
         {activeScreen === "insights" && (
           <SmartInsightsScreen
             items={items}
-            salesInvoices={salesInvoices}
+            salesInvoices={reportSales}
             customers={customers}
             onNavigate={(sc) => setActiveScreen(sc)}
             onBack={() => setActiveScreen("home")}
@@ -2762,7 +2580,7 @@ export default function App() {
         {activeScreen === "reports" && (
           <ProfitReportsScreen
             items={items}
-            salesInvoices={salesInvoices}
+            salesInvoices={reportSales}
             expenses={expenses}
             partners={partners}
             onBack={() => setActiveScreen("home")}
@@ -2850,7 +2668,6 @@ export default function App() {
             expenses={expenses}
             partners={partners}
             auditLogs={auditLogs}
-            shifts={shifts}
             currentPartner={currentPartner}
             initialSubPage={moreInitialTab}
             showDemoTools={getSupabaseCredentials().url.startsWith("http://127.0.0.1:")}
@@ -2928,6 +2745,7 @@ export default function App() {
                   suppliers,
                   customers,
                   expenses,
+                  cashierDays,
                 );
                 showToast("📊 تم تصدير ملف الإكسيل الشامل للمحل بنجاح!");
               } catch {

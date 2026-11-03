@@ -63,7 +63,6 @@ export async function processCashierFile(
   if (!rows.length || rows.length > 10000)
     throw new Error('عدد الصفوف غير صالح');
   const hash = createHash('sha256')
-    .update(date + '\n')
     .update(buffer)
     .digest('hex');
   const { data, error } = await client.rpc('bon_erp_enqueue_export', {

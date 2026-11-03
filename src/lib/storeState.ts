@@ -15,6 +15,7 @@ import type {
   EmployeeTransaction,
   StocktakingAuditRecord,
   AccountPaymentRecord,
+  CashierDay,
 } from "../types/erp";
 
 export interface StoreState {
@@ -32,6 +33,7 @@ export interface StoreState {
   employeeTransactions: EmployeeTransaction[];
   stocktakingRecords: StocktakingAuditRecord[];
   accountPayments: AccountPaymentRecord[];
+  cashierDays: CashierDay[];
 }
 export const emptyStore: StoreState = {
   items: [],
@@ -48,6 +50,7 @@ export const emptyStore: StoreState = {
   employeeTransactions: [],
   stocktakingRecords: [],
   accountPayments: [],
+  cashierDays: [],
 };
 export const cloudFields: Record<keyof StoreState, string> = {
   items: "items",
@@ -64,6 +67,7 @@ export const cloudFields: Record<keyof StoreState, string> = {
   employeeTransactions: "employee_transactions",
   stocktakingRecords: "stocktaking_records",
   accountPayments: "account_payments",
+  cashierDays: "cashier_days",
 };
 const text = z.string(),
   id = text.min(1),
@@ -86,10 +90,13 @@ const item = base
       "manufactured_blend",
       "drink_recipe",
       "direct_product",
+      "direct_drink",
+      "seasoning_recipe",
+      "snack",
     ]),
     baseUnit: z.enum(["kg", "piece", "liter"]),
     openingStock: money.optional(),
-    stock: money,
+    stock: number,
     minStock: money,
     costPrice: money,
     lastPurchasePrice: money,
@@ -108,13 +115,15 @@ const item = base
         })
         .passthrough(),
     ),
+    costingVersion: z.literal(2).optional(),
+    costHistory: z.array(z.object({id, date: id, postedAt: id, sourceType: z.enum(['opening','purchase','production']), sourceId: id, quantity: number.positive(), unitCost: money, averageCost: money})).optional(),
   })
   .passthrough();
 const line = z
   .object({
     itemId: id,
     itemName: text,
-    category: z.enum(['raw_bean','raw_spice','manufactured_blend','drink_recipe','direct_product']),
+    category: z.enum(['raw_bean','raw_spice','manufactured_blend','drink_recipe','direct_product','direct_drink','seasoning_recipe','snack']),
     quantity: money,
     normalizedQtyInBaseUnit: money,
     totalPrice: money,
@@ -139,6 +148,12 @@ const invoice = base
   })
   .passthrough();
 export const schema = z.object({
+  cashierDays:z.array(base.extend({date:id,status:z.enum(['pending','approved']),
+    financialReport:z.object({fileName:id,sha256:text.regex(/^[a-f0-9]{64}$/),uploadedAt:id,sourceQueueId:id.optional(),totalRevenue:money}).optional(),
+    itemsReport:z.object({fileName:id,sha256:text.regex(/^[a-f0-9]{64}$/),uploadedAt:id,sourceQueueId:id.optional(),lines:z.array(z.object({itemId:id,quantity:number.positive(),unitLabel:id,normalizedQtyInBaseUnit:number.positive()})).min(1)}).optional(),
+    consumption:z.array(z.object({itemId:id,quantity:number.positive(),unitCost:money,totalCost:money})).optional(),
+    shortages:z.array(z.object({itemId:id,shortage:number.positive()})).optional(),totalCost:money.optional(),approvedAt:id.optional(),partnerName:id.optional(),
+  })).default([]),
   items: z.array(item),
   productionBatches: z.array(
     base
@@ -166,6 +181,9 @@ export const schema = z.object({
   purchaseInvoices: z.array(
     invoice.extend({
       supplierId: id,
+      netAmount: money.optional(),
+      taxAmount: money.optional(),
+      accountingVersion: z.literal(2).optional(),
       paymentMethod: z.enum(['نقدي','آجل','جزئي']),
       supplierName: text,
       inventoryBefore: z.array(item).optional(),
@@ -205,6 +223,8 @@ export const schema = z.object({
       .extend({
         name: id,
         phone: text,
+        address: text.optional(),
+        representativeName: text.optional(),
         category: text,
         balance: money,
         totalPurchases: money,
@@ -217,6 +237,7 @@ export const schema = z.object({
       .extend({
         name: id,
         phone: text,
+        area: text.optional(),
         type: text,
         balance: money,
         totalSales: money,
@@ -230,6 +251,7 @@ export const schema = z.object({
         date: id,
         category: z.enum(['إيجار','كهرباء ومياه وغاز','رواتب ويوميات','صيانة مطاحن وماكينات','أكياس وتغليف','نقل ومشال','مسحوبات شركاء','نثريات أخرى']),
         title: id,
+        frequency: z.enum(['monthly_fixed','daily']).optional(),
         amount: money,
         partnerName: text,
         paidFrom: z.enum(['درج المحل','خزنة الشركة','من جيب الشريك','تسوية مخزون (بدون نقدية)']),
@@ -380,6 +402,16 @@ export function validateStore(value: unknown): StoreState {
     );
   }
   const parsed = result.data;
+  if(new Set(parsed.cashierDays.map(d=>d.date)).size!==parsed.cashierDays.length)throw Error('يوجد يوم كاشير مكرر');
+  for(const day of parsed.cashierDays){
+    if(!day.financialReport&&!day.itemsReport)throw Error('يوم الكاشير بلا تقارير');
+    if(day.status==='approved'&&(!day.financialReport||!day.itemsReport||!day.consumption?.length||day.totalCost===undefined||!day.approvedAt||!day.partnerName))throw Error('لا يعتمد يوم الكاشير قبل اكتمال التقريرين وتكلفة المخزون');
+    for(const line of day.itemsReport?.lines??[]){const raw=parsed.items.find(i=>i.id===line.itemId);if(!raw||Math.abs(convertToBaseUnit(line.quantity,line.unitLabel as import('../types/erp').UnitType,raw.baseUnit)-line.normalizedQtyInBaseUnit)>0.000001)throw Error('كمية تقرير الكاشير أو وحدته غير صحيحة');}
+    if(day.status==='approved'){
+      const costs=day.consumption!;
+      if(new Set(costs.map(l=>l.itemId)).size!==costs.length||costs.some(l=>!parsed.items.some(i=>i.id===l.itemId)||Math.abs(Number((l.quantity*l.unitCost).toFixed(2))-l.totalCost)>0.011)||Math.abs(costs.reduce((sum,l)=>sum+l.totalCost,0)-day.totalCost!)>0.011)throw Error('تكلفة يوم الكاشير لا تطابق المكونات المستهلكة');
+    }else if(day.totalCost!==undefined||day.consumption||day.approvedAt||day.shortages)throw Error('يوم الكاشير لم يعتمد؛ لا يمكن تسجيل تكلفته بعد');
+  }
   for (const [key, rows] of Object.entries(parsed)) {
     if (new Set(rows.map((row) => row.id)).size !== rows.length)
       throw new Error(`معرفات مكررة في ${key}`);
