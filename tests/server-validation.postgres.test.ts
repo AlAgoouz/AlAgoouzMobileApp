@@ -161,6 +161,8 @@ it.skipIf(!active)('requires separate purchase tax, full payment, moving average
  reject({...after,purchaseInvoices:[{...invoice,paidAmount:0,remainingAmount:4.56,paymentMethod:'آجل'}],suppliers:[{...supplier,totalPurchases:4.56,invoicesCount:1,balance:4.56}]},'NEW_PURCHASE_FULL_PAYMENT_REQUIRED');
  reject({...after,items:[{...after.items[0],costPrice:2}]},'PURCHASE_AVERAGE_COST_MISMATCH');
  reject({...after,items:[{...after.items[0],costHistory:[]}]},'PURCHASE_COST_HISTORY_REQUIRED');
+ seed(after);reject({...after,items:[{...after.items[0],costPrice:2}]},'COST_FROM_DOCUMENT_REQUIRED');
+ reject({...after,items:[{...after.items[0],costHistory:[]}]},'COST_HISTORY_IMMUTABLE');
 });
 it.skipIf(!active)('rejects negative initial stock and missing new contact information',()=>{
  seed(state);reject({...state,items:[{...bean,stock:-1,openingStock:0}]},'INVENTORY_MOVEMENT_MISMATCH');

@@ -881,10 +881,10 @@ export default function App() {
         (i) =>
           isStockItem(i)&&i.category!=="manufactured_blend",
       )
-      .reduce((s, i) => s + Math.max(0, i.stock) * i.costPrice, 0);
+      .reduce((s, i) => s + i.stock * i.costPrice, 0);
     const blendStockValue = items
       .filter((i) => i.category === "manufactured_blend")
-      .reduce((s, i) => s + Math.max(0, i.stock) * i.costPrice, 0);
+      .reduce((s, i) => s + i.stock * i.costPrice, 0);
     const totalInventoryValue = Math.round(rawStockValue + blendStockValue);
 
     // المديونيات (لنا وعليها)
