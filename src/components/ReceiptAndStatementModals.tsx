@@ -314,10 +314,10 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
           </div>
 
           {/* أزرار الطباعة والواتساب */}
-          <div className="grid grid-cols-2 gap-2">
+          {invoice.saleType==='wholesale'&&invoice.items.every(line=>line.category==='manufactured_blend')&&<div className="grid grid-cols-2 gap-2">
             <button disabled={pdfBusy} onClick={()=>void exportPdf(false)} className="border rounded-xl p-3 font-bold">{pdfBusy?'جارٍ تجهيز الفاتورة…':'تنزيل الفاتورة PDF'}</button>
             <button disabled={pdfBusy} onClick={()=>void exportPdf(true)} className="border rounded-xl p-3 font-bold">مشاركة ملف الفاتورة</button>
-          </div>
+          </div>}
           {pdfError&&<p role="status" className="text-xs">{pdfError}</p>}
           <div className="grid grid-cols-2 gap-2.5 pt-1">
             <button

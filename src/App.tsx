@@ -889,10 +889,7 @@ export default function App() {
 
     // المديونيات (لنا وعليها)
     const totalCustomerDebts = customers.reduce((s, c) => s + c.balance, 0);
-    const totalSupplierBalances = suppliers.reduce(
-      (s, sup) => s + sup.balance,
-      0,
-    );
+    const totalSupplierPurchases = purchaseInvoices.filter(i=>!i.isCancelled).reduce((sum,invoice)=>sum+invoice.totalAmount,0);
 
     // أعلى الأصناف مبيعاً وربحاً للرسم البياني الأفقي
     const productStatsMap = new Map<
@@ -936,11 +933,11 @@ export default function App() {
       blendStockValue: Math.round(blendStockValue),
       totalInventoryValue,
       totalCustomerDebts,
-      totalSupplierBalances,
+      totalSupplierPurchases,
       topSellingProducts,
       maxProductRevenue,
     };
-  }, [reportSales, expenses, items, customers, suppliers]);
+  }, [reportSales, expenses, items, customers, purchaseInvoices]);
 
   const globalSearchResults = useMemo(() => {
     if (!globalSearch.trim()) return [];
@@ -1640,12 +1637,12 @@ export default function App() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-extrabold text-[#7A6855]">
-                    حسابات الموردين (علينا)
+                    مشتريات الموردين
                   </span>
                   <Truck className="w-4 h-4 text-[#1E1612]" />
                 </div>
                 <div className="text-base font-black text-[#1E1612] mt-1">
-                  {dashboardAnalytics.totalSupplierBalances.toLocaleString(
+                  {dashboardAnalytics.totalSupplierPurchases.toLocaleString(
                     "ar-EG",
                   )}{" "}
                   <span className="text-[10px] font-normal text-[#7A6855]">
@@ -1653,7 +1650,7 @@ export default function App() {
                   </span>
                 </div>
                 <div className="text-[10px] text-[#9E7918] font-bold mt-0.5">
-                  اضغط للسداد وكشف الحساب &gt;
+                  سجل الشراء ومقارنة الأسعار &gt;
                 </div>
               </button>
             </div>

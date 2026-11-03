@@ -28,7 +28,8 @@ export function buildInvoicePdf(invoice:SalesInvoice,fontBase64:string){
   wrapped.forEach((text,index)=>arabic(text,192,y+index*7));number(line.normalizedQtyInBaseUnit,114,y);number(line.unitPrice,80,y);number(line.totalPrice,42,y);
   doc.setDrawColor(225,218,202);doc.line(14,y+height-5,196,y+height-5);y+=height;
  }
- if(y+61>270){doc.addPage();header();}
+ if(y+(invoice.discount>0?79:61)>270){doc.addPage();header();}
+ if(invoice.discount>0){y+=5;arabic('الإجمالي قبل الخصم',196,y);number(invoice.subtotal,55,y);y+=9;arabic('الخصم',196,y);number(invoice.discount,55,y);y+=9;}
  y+=5;arabic('الإجمالي بالجنيه المصري',196,y,14);number(invoice.totalAmount,55,y);y+=10;
  arabic(`طريقة الدفع: ${invoice.paymentMethod}`,196,y);y+=9;arabic('المدفوع',196,y);number(invoice.paidAmount,55,y);y+=9;arabic('المتبقي',196,y);number(invoice.remainingAmount,55,y);y+=13;arabic('شكرًا لتعاملكم مع بُن العجوز',196,y);
  const pages=doc.getNumberOfPages();for(let page=1;page<=pages;page++){doc.setPage(page);doc.setFontSize(10);doc.setTextColor(110);doc.text(`${page} / ${pages}`,105,286,{align:'center'});}
