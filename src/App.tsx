@@ -1,3 +1,4 @@
+import {SectionsHub} from './components/SectionsHub';
 import type {QueuedCashierReport} from './components/CashierDayScreen';
 import {attachCashierReport,approveCashierDay,salesForReports} from './lib/cashierDays';
 import {isStockItem} from './lib/itemPolicy';
@@ -69,7 +70,7 @@ import {
 } from "./lib/ledger";
 import { businessDate } from "./lib/dates";
 import { recordEmployeeAction, reverseEmployeeAction, closePayrollPeriod, currentPayrollPeriod } from './lib/payroll';
-import { adjustCatalogItem } from './lib/catalogAdjustments';
+import { adjustCatalogItem, canDeleteCatalogItem } from './lib/catalogAdjustments';
 import {checkCustomerDetails,checkSupplierDetails} from './lib/contactDetails';
 import {receiveStock} from './lib/costing';
 import {
@@ -962,7 +963,6 @@ export default function App() {
     return (
       <LoginScreen
         onSignIn={cloud.signIn}
-        onSignUp={cloud.signUp}
         onRequestPasswordReset={cloud.requestPasswordReset}
         onResendConfirmation={cloud.resendConfirmation}
         authError={cloud.authError}
@@ -985,7 +985,7 @@ export default function App() {
               : "تعذر تأكيد الحفظ";
 
   return (
-    <div className="min-h-screen bg-[#EFECE4] flex flex-col items-center justify-start">
+    <div className="agouz-app min-h-screen bg-[#EFECE4] flex flex-col items-center justify-start">
       {getSupabaseCredentials().url.startsWith("http://127.0.0.1:") && (
         <div className="w-full bg-amber-100 p-2 text-center text-xs font-bold">
           بيئة اختبار محلية — بيانات تجريبية منفصلة
@@ -1696,365 +1696,13 @@ export default function App() {
         )}
 
         {/* ================= 2. قسم الأقسام (بالتصميم الاحترافي الأول الفخم بالإسبريسو والذهبي) ================= */}
-        {activeScreen === "sections" && (
-          <div className="px-4 pt-4 pb-24 space-y-4">
-            {/* هيدر قسم الأقسام الفاخر */}
-            <div className="bg-gradient-to-l from-[#1E1612] via-[#2A1F1A] to-[#1E1612] rounded-2xl p-3.5 text-[#FAF8F4] border border-[#C59B27]/60 shadow-lg flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <img
-                  src="/logo.png"
-                  alt="بُن العجوز"
-                  className="w-12 h-12 object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.65)] shrink-0"
-                />
-                <div>
-                  <h1 className="text-sm font-black text-[#FBF5B7]">
-                    أقسام وإدارة بُن العجوز
-                  </h1>
-                  <p className="text-[11px] text-[#D4AF37]">
-                    اختر القسم المطلوب للعمل المباشر
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setActiveScreen("home")}
-                className="bg-white/10 hover:bg-white/20 text-[#FBF5B7] border border-[#C59B27]/40 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition"
-              >
-                <BarChart3 className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span>الإحصائيات</span>
-              </button>
-            </div>
-
-            {/* شريط البحث السريع داخل الأقسام */}
-            <div className="relative">
-              <div className="bg-white rounded-2xl border border-[#E6DEC8] focus-within:border-[#C59B27] px-3.5 py-2.5 flex items-center gap-2.5 shadow-sm">
-                <Search className="w-4 h-4 text-[#9E7918] shrink-0" />
-                <input
-                  type="text"
-                  value={globalSearch}
-                  onChange={(e) => setGlobalSearch(e.target.value)}
-                  placeholder="ابحث عن صنف بن أو توليفة أو مشروب..."
-                  className="w-full text-xs font-bold bg-transparent focus:outline-none text-[#1E1612] placeholder:text-[#9C8B7A]"
-                />
-              </div>
-
-              {globalSearchResults.length > 0 && (
-                <div className="absolute left-0 right-0 top-12 bg-white rounded-2xl shadow-xl border border-[#C59B27] z-30 divide-y divide-[#F0EAE0]">
-                  {globalSearchResults.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        setGlobalSearch("");
-                        setActiveScreen("inventory");
-                      }}
-                      className="w-full px-4 py-2.5 text-right hover:bg-[#FDF8EB] flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="text-xs font-extrabold text-[#1E1612]">
-                          {item.name}
-                        </div>
-                        <div className="text-[11px] text-[#7A6855]">
-                          الرصيد: {item.stock}{" "}
-                          {item.baseUnit === "kg" ? "كجم" : "وحدة"} • التكلفة:{" "}
-                          {item.costPrice} ج.م
-                        </div>
-                      </div>
-                      <span className="text-xs font-bold text-[#9E7918]">
-                        فتح &gt;
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* القسم الأول: تأسيس المنتجات والعمليات اليومية الأساسية */}
-            <div className="space-y-2">
-              <div className="text-xs font-black text-[#6E5D4F] px-1">
-                تأسيس المنتجات والعمليات اليومية
-              </div>
-
-              {/* كارت المنتجات والتسعير (الأساس الذي تعتمد عليه الدورة التشغيلية كلها) */}
-              <button
-                onClick={() => setActiveScreen("products")}
-                className="w-full bg-gradient-to-l from-[#1E1612] via-[#2A1F1A] to-[#1E1612] rounded-2xl p-3.5 border border-[#C59B27] shadow-md text-right transition flex items-center justify-between gap-3 group"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#9E7918] via-[#FBF5B7] to-[#C59B27] text-[#1E1612] flex items-center justify-center shrink-0 shadow group-hover:scale-105 transition">
-                    <Tag className="w-6 h-6" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-[#FBF5B7]">
-                        المنتجات والتسعير
-                      </span>
-                      <span className="text-[10px] font-black bg-white/10 text-[#D4AF37] border border-[#C59B27]/40 px-2 py-0.5 rounded-full">
-                        {items.length} منتج
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-[#D8CBB8] font-semibold mt-0.5 truncate">
-                      أساس الدورة التشغيلية: تعريف البن الخام والتوليفات
-                      والمشروبات وأسعارها
-                    </div>
-                  </div>
-                </div>
-                <ChevronLeft className="w-5 h-5 text-[#D4AF37] shrink-0" />
-              </button>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                {/* 1. فواتير الجملة */}
-                <button
-                  onClick={() => setActiveScreen("sales_pos")}
-                  className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm text-right transition flex items-start gap-3 group"
-                >
-                  <div className="w-11 h-11 rounded-xl bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition">
-                    <Calculator className="w-5 h-5 text-[#D4AF37]" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-black text-[#1E1612]">
-                      فواتير الجملة
-                    </div>
-                    <div className="text-[10px] text-[#8C7A6B] font-semibold mt-0.5 leading-tight">
-                      عميل مسجل وتوليفات بسعر متفق عليه
-                    </div>
-                  </div>
-                </button>
-
-                {/* 2. شيت الكاشير */}
-                <button
-                  onClick={() => setActiveScreen("cashier_sync")}
-                  className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm text-right transition flex items-start gap-3 group"
-                >
-                  <div className="w-11 h-11 rounded-xl bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition">
-                    <FolderSync className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-black text-[#1E1612]">
-                      تقارير يوم الكاشير
-                    </div>
-                    <div className="text-[10px] text-[#8C7A6B] font-semibold mt-0.5 leading-tight">
-                      تقرير مالي وتقرير أصناف
-                    </div>
-                  </div>
-                </button>
-
-                {/* 3. الإنتاج والوصفات */}
-                <button
-                  onClick={() => setActiveScreen("production")}
-                  className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm text-right transition flex items-start gap-3 group"
-                >
-                  <div className="w-11 h-11 rounded-xl bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition">
-                    <Flame className="w-5 h-5 text-[#D4AF37]" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-black text-[#1E1612]">
-                      الإنتاج والوصفات
-                    </div>
-                    <div className="text-[10px] text-[#8C7A6B] font-semibold mt-0.5 leading-tight">
-                      إنتاج التوليفات وإدارة الوصفات
-                    </div>
-                  </div>
-                </button>
-
-                {/* 4. جرد الميزان */}
-                <button
-                  onClick={() => setActiveScreen("stocktaking")}
-                  className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm text-right transition flex items-start gap-3 group"
-                >
-                  <div className="w-11 h-11 rounded-xl bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition">
-                    <Scale className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-black text-[#1E1612]">
-                      جرد الميزان
-                    </div>
-                    <div className="text-[10px] text-[#8C7A6B] font-semibold mt-0.5 leading-tight">
-                      مطابقة الرصيد الفعلي بالجرام
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* القسم الثاني: شبكة إدارة المخزن والحسابات والتقارير (3×3 بالتصميم الاحترافي الأول) */}
-            <div className="space-y-2">
-              <div className="text-xs font-black text-[#6E5D4F] px-1">
-                إدارة المخزون والحسابات والرقابة
-              </div>
-              <div className="grid grid-cols-3 gap-2.5">
-                {/* 1. مخزن البن */}
-                <button
-                  onClick={() => setActiveScreen("inventory")}
-                  className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
-                >
-                  <span className="absolute top-2 left-2 text-[9px] font-black bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-1.5 py-0.5 rounded-md">
-                    {items.length}
-                  </span>
-                  <div className="w-11 h-11 rounded-xl bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] flex items-center justify-center shadow-sm">
-                    <Package className="w-5 h-5 text-[#D4AF37]" />
-                  </div>
-                  <div className="text-xs font-black text-[#1E1612]">
-                    مخزن البن
-                  </div>
-                  <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    الخام والتوليفات
-                  </div>
-                </button>
-
-                {/* 2. المشتريات */}
-                <button
-                  onClick={() => setActiveScreen("purchase")}
-                  className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
-                >
-                  <span className="absolute top-2 left-2 text-[9px] font-black bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-1.5 py-0.5 rounded-md">
-                    {purchaseInvoices.length}
-                  </span>
-                  <div className="w-11 h-11 rounded-xl bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] flex items-center justify-center shadow-sm">
-                    <ShoppingBag className="w-5 h-5" />
-                  </div>
-                  <div className="text-xs font-black text-[#1E1612]">
-                    المشتريات
-                  </div>
-                  <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    إنشاء وسجل الفواتير
-                  </div>
-                </button>
-
-                {/* 3. فواتير البيع */}
-                <button
-                  onClick={() => setActiveScreen("sales_invoices")}
-                  className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
-                >
-                  <span className="absolute top-2 left-2 text-[9px] font-black bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-1.5 py-0.5 rounded-md">
-                    {salesInvoices.length}
-                  </span>
-                  <div className="w-11 h-11 rounded-xl bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] flex items-center justify-center shadow-sm">
-                    <FileText className="w-5 h-5 text-[#D4AF37]" />
-                  </div>
-                  <div className="text-xs font-black text-[#1E1612]">
-                    فواتير البيع
-                  </div>
-                  <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    سجل الجملة وأيام الكاشير
-                  </div>
-                </button>
-
-                {/* 4. الموردين */}
-                <button
-                  onClick={() => setActiveScreen("suppliers")}
-                  className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
-                >
-                  <span className="absolute top-2 left-2 text-[9px] font-black bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-1.5 py-0.5 rounded-md">
-                    {suppliers.length}
-                  </span>
-                  <div className="w-11 h-11 rounded-xl bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] flex items-center justify-center shadow-sm">
-                    <Truck className="w-5 h-5" />
-                  </div>
-                  <div className="text-xs font-black text-[#1E1612]">
-                    الموردين
-                  </div>
-                  <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    المشتريات ومقارنة الأسعار
-                  </div>
-                </button>
-
-                {/* 5. عملاء الجملة */}
-                <button
-                  onClick={() => setActiveScreen("customers")}
-                  className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
-                >
-                  <span className="absolute top-2 left-2 text-[9px] font-black bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-1.5 py-0.5 rounded-md">
-                    {customers.length}
-                  </span>
-                  <div className="w-11 h-11 rounded-xl bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] flex items-center justify-center shadow-sm">
-                    <Users className="w-5 h-5 text-[#D4AF37]" />
-                  </div>
-                  <div className="text-xs font-black text-[#1E1612]">
-                    عملاء الجملة
-                  </div>
-                  <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    المديونيات والتحصيل
-                  </div>
-                </button>
-
-                {/* 6. العمال والرواتب */}
-                <button
-                  onClick={() => setActiveScreen("staff_payroll")}
-                  className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
-                >
-                  <span className="absolute top-2 left-2 text-[9px] font-black bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] px-1.5 py-0.5 rounded-md">
-                    {employees.length}
-                  </span>
-                  <div className="w-11 h-11 rounded-xl bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] flex items-center justify-center shadow-sm">
-                    <UserCheck className="w-5 h-5" />
-                  </div>
-                  <div className="text-xs font-black text-[#1E1612]">
-                    العمال والرواتب
-                  </div>
-                  <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    السلف واليوميات
-                  </div>
-                </button>
-
-                {/* 7. التقارير والأرباح */}
-                <button
-                  onClick={() => setActiveScreen("reports")}
-                  className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5"
-                >
-                  <div className="w-11 h-11 rounded-xl bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] flex items-center justify-center shadow-sm">
-                    <BarChart3 className="w-5 h-5 text-[#D4AF37]" />
-                  </div>
-                  <div className="text-xs font-black text-[#1E1612]">
-                    التقارير والأرباح
-                  </div>
-                  <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    أرباح الشركاء ({partners.length})
-                  </div>
-                </button>
-
-                {/* 8. النواقص */}
-                <button
-                  onClick={() => setActiveScreen("shortages")}
-                  className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5 relative"
-                >
-                  {shortagesCount > 0 && (
-                    <span className="absolute top-2 left-2 text-[9px] font-black bg-red-600 text-white px-1.5 py-0.5 rounded-full">
-                      {shortagesCount}
-                    </span>
-                  )}
-                  <div className="w-11 h-11 rounded-xl bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] flex items-center justify-center shadow-sm">
-                    <AlertTriangle className="w-5 h-5" />
-                  </div>
-                  <div className="text-xs font-black text-[#1E1612]">
-                    النواقص
-                  </div>
-                  <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    حد الطلب والتوريد
-                  </div>
-                </button>
-
-                {/* 9. إدارة البيانات والنسخ الاحتياطي */}
-                <button
-                  onClick={() => {
-                    setMoreInitialTab("data_control");
-                    setActiveScreen("more");
-                  }}
-                  className="bg-white rounded-2xl p-3 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm transition flex flex-col items-center text-center gap-1.5"
-                >
-                  <div className="w-11 h-11 rounded-xl bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] flex items-center justify-center shadow-sm">
-                    <RotateCcw className="w-5 h-5 text-[#D4AF37]" />
-                  </div>
-                  <div className="text-xs font-black text-[#1E1612]">
-                    إدارة البيانات
-                  </div>
-                  <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    نسخ واسترجاع البيانات
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeScreen === "sections" && <SectionsHub
+          counts={{products:items.length,inventory:items.length,purchase:purchaseInvoices.length,sales_invoices:salesInvoices.length+cashierDays.filter(d=>d.status==='approved').length,customers:customers.length,suppliers:suppliers.length,staff_payroll:employees.length,shortages:shortagesCount}}
+          onNavigate={(screen)=>{
+            if(screen==='expenses'||screen==='data_control'){setMoreInitialTab(screen);setActiveScreen('more');}
+            else setActiveScreen(screen);
+          }}
+        />}
 
         {/* ================= الشاشات الفرعية ================= */}
         {activeScreen === "purchase" && (
@@ -2160,29 +1808,13 @@ export default function App() {
             }
             onDeleteItem={(id) => {
               safeAction(() => {
-                if (
-                  engine.snapshot.state.items.some((i) =>
-                    i.recipe?.some((r) => r.ingredientId === id),
-                  ) ||
-                  engine.snapshot.state.salesInvoices.some((i) =>
-                    i.items.some((l) => l.itemId === id),
-                  ) ||
-                  engine.snapshot.state.purchaseInvoices.some((i) =>
-                    i.items.some((l) => l.itemId === id),
-                  )
-                ) {
+                if (!canDeleteCatalogItem(engine.state,id)) {
                   showToast("لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.");
                   return;
                 }
                 setItems((prev) => prev.filter((i) => i.id !== id));
                 showToast("🗑️ تم حذف الصنف بنجاح");
               });
-            }}
-            onDeleteBatch={(batchId) => {
-              setProductionBatches((prev) =>
-                prev.filter((b) => b.id !== batchId),
-              );
-              showToast("🗑️ تم حذف تشغيلة الإنتاج");
             }}
             onBack={() => setActiveScreen("home")}
           />
@@ -2252,17 +1884,7 @@ export default function App() {
             }}
             onDeleteItem={(id) => {
               safeAction(() => {
-                if (
-                  engine.snapshot.state.items.some((i) =>
-                    i.recipe?.some((r) => r.ingredientId === id),
-                  ) ||
-                  engine.snapshot.state.salesInvoices.some((i) =>
-                    i.items.some((l) => l.itemId === id),
-                  ) ||
-                  engine.snapshot.state.purchaseInvoices.some((i) =>
-                    i.items.some((l) => l.itemId === id),
-                  )
-                ) {
+                if (!canDeleteCatalogItem(engine.state,id)) {
                   showToast("لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.");
                   return;
                 }
@@ -2329,17 +1951,7 @@ export default function App() {
             }}
             onDeleteItem={(id) => {
               safeAction(() => {
-                if (
-                  engine.snapshot.state.items.some((i) =>
-                    i.recipe?.some((r) => r.ingredientId === id),
-                  ) ||
-                  engine.snapshot.state.salesInvoices.some((i) =>
-                    i.items.some((l) => l.itemId === id),
-                  ) ||
-                  engine.snapshot.state.purchaseInvoices.some((i) =>
-                    i.items.some((l) => l.itemId === id),
-                  )
-                ) {
+                if (!canDeleteCatalogItem(engine.state,id)) {
                   showToast("لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.");
                   return;
                 }

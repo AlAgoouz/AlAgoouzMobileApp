@@ -57,4 +57,6 @@ for(let run=0;run<3;run++){
 }
 const median=key=>{const values=samples.map(s=>s[key]).filter(v=>typeof v==='number').sort((a,b)=>a-b);return values.length===3?values[1]:null;};
 const report={label,conditions:{invoices:10000,cpuSlowdown:6,downloadKbps:400,uploadKbps:200,latencyMs:400,viewport:'360x740',sampleLimitMs:90000,physicalPhoneTest:false},samples,median:Object.fromEntries(['homeReadyMs','invoiceReadyMs','nodes','renderedInvoices','lcpMs','refreshWireBytes'].map(k=>[k,median(k)]))};
-fs.writeFileSync(label+'-performance.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));if(failed)process.exitCode=1;
+fs.writeFileSync(label+'-performance.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+if(label==='current'&&!failed)await(await import('./design-review.mjs')).verifyDesign();
+if(failed)process.exitCode=1;

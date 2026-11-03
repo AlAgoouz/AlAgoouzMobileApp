@@ -14,7 +14,7 @@ export function authErrorMessage(error: unknown, action: 'signIn' | 'signUp' | '
     case 'email_not_confirmed':
       return 'البريد لم يُؤكَّد بعد؛ افتح رسالة التأكيد في بريدك ثم سجّل الدخول.';
     case 'invalid_credentials':
-      return 'البريد أو كلمة المرور غير صحيحين. لو دي أول مرة، اختر «إنشاء حساب المالك لأول مرة».';
+      return 'البريد أو كلمة المرور غير صحيحين. استخدم «نسيت كلمة المرور؟» لاستعادة الدخول، أو تواصل مع المالك لمراجعة حسابك.';
     case 'over_request_rate_limit':
     case 'over_email_send_rate_limit':
       return 'محاولات كثيرة خلال وقت قصير؛ انتظر بضع دقائق ثم حاول مرة أخرى.';
@@ -24,6 +24,7 @@ export function authErrorMessage(error: unknown, action: 'signIn' | 'signUp' | '
     case 'email_exists':
       return 'الحساب موجود بالفعل؛ ارجع لتسجيل الدخول بالبريد وكلمة المرور.';
     case 'signup_disabled':
+      return 'إنشاء الحسابات متاح عن طريق المالك فقط.';
     case 'email_provider_disabled':
       return 'التسجيل بالبريد غير متاح حاليًا؛ يلزم مراجعة إعدادات الدخول.';
   }

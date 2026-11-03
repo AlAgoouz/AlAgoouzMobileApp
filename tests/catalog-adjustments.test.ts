@@ -1,8 +1,18 @@
 import {it,expect} from 'vitest';
-import {adjustCatalogItem} from '../src/lib/catalogAdjustments';
+import {adjustCatalogItem,canDeleteCatalogItem} from '../src/lib/catalogAdjustments';
 import {emptyStore} from '../src/lib/storeState';
 import {INITIAL_ITEMS} from '../src/data/initialData';
 const bean={...INITIAL_ITEMS.find((item)=>item.category==='raw_bean')!,stock:10};
+it('protects item history in cashier reports, production and stocktaking before attempting a save',()=>{
+  const state={...emptyStore,items:[{...bean,stock:0}]};
+  const day={id:'day',date:'2026-11-03',status:'pending',itemsReport:{lines:[{itemId:bean.id}]}} as any;
+  const reported={...state,cashierDays:[day]};
+  expect(canDeleteCatalogItem(reported,bean.id)).toBe(false);
+  expect(()=>adjustCatalogItem(reported,bean.id,{category:'snack'},'Owner')).toThrow('حركات سابقة');
+  expect(canDeleteCatalogItem({...state,productionBatches:[{blendId:bean.id,ingredientsConsumed:[]} as any]},bean.id)).toBe(false);
+  expect(canDeleteCatalogItem({...state,stocktakingRecords:[{itemsAudited:[{itemId:bean.id}]} as any]},bean.id)).toBe(false);
+  expect(canDeleteCatalogItem(state,bean.id)).toBe(true);
+});
 it('records a manual stock edit as a complete adjustment and preserves its opening quantity',()=>{
   const state={...emptyStore,items:[{...bean,openingStock:10}]};
   const changed=adjustCatalogItem(state,bean.id,{stock:8,openingStock:999},'Owner');

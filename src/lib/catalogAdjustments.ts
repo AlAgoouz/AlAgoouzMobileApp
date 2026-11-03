@@ -4,6 +4,17 @@ import {businessDate} from './dates';
 import {recalculateRecipeCosts} from './itemCosts';
 import {isRecipeOnUse,requiresRecipe} from './itemPolicy';
 
+export function hasItemHistory(state:StoreState,id:string):boolean {
+  return state.salesInvoices.some(invoice=>invoice.items.some(line=>line.itemId===id))
+    || state.purchaseInvoices.some(invoice=>invoice.items.some(line=>line.itemId===id))
+    || state.productionBatches.some(batch=>batch.blendId===id||batch.ingredientsConsumed.some(line=>line.ingredientId===id))
+    || state.stocktakingRecords.some(record=>record.itemsAudited.some(line=>line.itemId===id))
+    || state.cashierDays.some(day=>day.itemsReport?.lines.some(line=>line.itemId===id)||day.consumption?.some(line=>line.itemId===id));
+}
+export function canDeleteCatalogItem(state:StoreState,id:string):boolean {
+  return !hasItemHistory(state,id) && !state.items.some(item=>item.recipe?.some(line=>line.ingredientId===id));
+}
+
 export function adjustCatalogItem(state:StoreState,id:string,patch:Partial<InventoryItem>,actor:string):StoreState {
   const before=state.items.find((item)=>item.id===id);
   if(!before)throw new Error('الصنف لم يعد موجودًا؛ حدّث الشاشة');
@@ -11,10 +22,7 @@ export function adjustCatalogItem(state:StoreState,id:string,patch:Partial<Inven
   if(before.costingVersion===2&&next.costPrice!==before.costPrice)throw Error('التكلفة تتحدث من فواتير الشراء أو الإنتاج بمتوسط متحرك؛ لا تعدلها يدويًا بعد تسجيل الدفعات');
   if(requiresRecipe(next.category)&&(!next.hasRecipe||!next.recipe?.length))throw Error('هذا النوع يحتاج وصفة؛ أضف صنفًا بوصفته أو أكمل الوصفة من قسم الوصفات');
   if(next.stock<0&&next.stock!==before.stock)throw Error('الرصيد السالب ينشأ من تقرير الكاشير فقط؛ الجرد الفعلي لا يقل عن صفر');
-  const historical=state.salesInvoices.some((invoice)=>invoice.items.some((line)=>line.itemId===id))
-    ||state.purchaseInvoices.some((invoice)=>invoice.items.some((line)=>line.itemId===id))
-    ||state.productionBatches.some((batch)=>batch.blendId===id||batch.ingredientsConsumed.some((line)=>line.ingredientId===id))
-    ||state.stocktakingRecords.some((record)=>record.itemsAudited.some((line)=>line.itemId===id));
+  const historical=hasItemHistory(state,id);
   if(historical&&(before.category!==next.category||before.baseUnit!==next.baseUnit))throw new Error('لا يمكن تغيير نوع أو وحدة صنف له حركات سابقة؛ عرّف صنفًا جديدًا');
   if(!isRecipeOnUse(before)&&before.stock!==0&&(before.baseUnit!==next.baseUnit||isRecipeOnUse(next)))throw new Error('صفّر رصيد الصنف بجرد مستقل قبل تغيير وحدته أو تحويله إلى وصفة عند البيع');
   if(before.category==='drink_recipe'&&next.category!=='drink_recipe'&&Math.abs(next.stock-999)<0.0001)next.stock=0;

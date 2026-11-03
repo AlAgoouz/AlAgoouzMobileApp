@@ -38,6 +38,7 @@ export class StoreEngine {
     | { state: StoreState; version: number; id: string; queueId?: string; restore?: boolean }
     | undefined;
   private epoch = 0;
+  private hydrated = false;
   private batchState: StoreState | undefined;
   private refreshInFlight: Promise<void> | undefined;
   constructor(
@@ -66,6 +67,7 @@ export class StoreEngine {
       const remote = await this.transport.load();
       if (epoch !== this.epoch) return;
       this.pending = undefined;
+      this.hydrated = true;
       this.publish({
         ...remote,
         state: validateStore(remote.state),
@@ -83,6 +85,7 @@ export class StoreEngine {
   }
   logout() {
     ++this.epoch;
+    this.hydrated = false;
     clearTimeout(this.timer);
     this.pending = undefined;
     this.publish({
@@ -212,7 +215,15 @@ export class StoreEngine {
       if (this.transport.getVersion) {
         const version = await this.transport.getVersion();
         if (!Number.isSafeInteger(version) || version < 0) throw new Error('لم يصل إصدار تحديث صالح');
-        if (epoch !== this.epoch || version <= this.snapshot.version) return;
+        if (epoch !== this.epoch) return;
+        if (version <= this.snapshot.version) {
+          // A failed background check must not leave a clean, hydrated store
+          // locked after connectivity returns. Failed initial loads still need
+          // a full reload; their error must not be cleared by a version probe.
+          if (this.snapshot.status === 'error' && !this.pending && this.hydrated)
+            this.publish({ ...this.snapshot, status: 'ready', error: '' });
+          return;
+        }
       }
       const remote = await this.transport.load();
       if (epoch !== this.epoch || remote.version <= this.snapshot.version)

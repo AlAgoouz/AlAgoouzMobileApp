@@ -236,18 +236,6 @@ export function useErpStore() {
     });
     if (error) throw new Error(authErrorMessage(error, 'signIn'));
   }
-  async function signUp(email: string, password: string) {
-    const sb = getSupabaseClient();
-    if (!sb) throw new Error('إعداد الاتصال غير صالح');
-    if (password.length < 12)
-      throw new Error('اختر كلمة مرور من 12 حرفًا على الأقل');
-    const { error } = await sb.auth.signUp({
-      email: email.trim(),
-      password,
-      options: { emailRedirectTo: window.location.origin },
-    });
-    if (error) throw new Error(authErrorMessage(error, 'signUp'));
-  }
   async function signOut() {
     if (engine.hasPending)
       throw new Error(
@@ -314,7 +302,6 @@ export function useErpStore() {
     updateRecoveredPassword,
     cancelPasswordRecovery,
     signIn,
-    signUp,
     signOut,
   };
 }
