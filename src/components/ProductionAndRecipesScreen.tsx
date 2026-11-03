@@ -360,7 +360,7 @@ export const ProductionAndRecipesScreen: React.FC<
         </button></OperationHeader>
 
       {/* شريط التبويبات */}
-      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-3 gap-2 sticky top-[58px] z-20">
+      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-3 gap-2 section-tabs sticky top-0 z-20">
         <button
           onClick={() => {
             setActiveTab("produce");

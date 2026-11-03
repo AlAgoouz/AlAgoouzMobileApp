@@ -512,7 +512,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
   return (
     <Modal title={<>كشف حساب:  {target.name}</>} description={<>{mode === 'supplier'
                 ? 'سجل فواتير التوريد والدفعات'
-                : 'سجل مسحوبات العميل والتحصيل'} {' '} •  {target.phone}</>} onClose={onClose}><div className="p-4 space-y-3.5 max-h-[78vh] overflow-y-auto bg-[#FAF8F4]">
+                : 'سجل مسحوبات العميل والتحصيل'} {' '} •  {target.phone}</>} onClose={onClose}><div className="space-y-3.5">
           {/* ملخص الرصيد */}
           <div className="rounded-2xl bg-gradient-to-br from-[#1E1612] to-[#2B201A] text-white p-3.5 border border-[#C59B27] grid grid-cols-3 gap-2 text-center">
             <div>

@@ -208,7 +208,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       <OperationHeader title={<>الجرد الفعلي على الميزان وكشف العجز</>} description={<>مقارنة أرصدة السيستم بالوزن الفعلي بالجرام والكيلو والعدد</>} icon={HeaderScale} onBack={onBack}></OperationHeader>
 
       {/* تبويبات الجرد */}
-      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 sticky top-[64px] z-20">
+      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 section-tabs sticky top-0 z-20">
         <button
           onClick={() => setActiveTab("new_audit")}
           className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
@@ -757,7 +757,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
         </button></OperationHeader>
 
       {/* التبويبات */}
-      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 sticky top-[64px] z-20">
+      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 section-tabs sticky top-0 z-20">
         <button
           onClick={() => setActiveTab("staff")}
           className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
