@@ -351,7 +351,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       )}
       {viewMode==='list'&&<RecordPagination {...invoicePage}/>}
       {/* هيدر قسم المشتريات */}
-      
+
 
       {/* ================= الوضع الأول: شاشة قسم المشتريات الرئيسية (سجل الفواتير + زر إنشاء فاتورة) ================= */}
       {viewMode === "list" && (

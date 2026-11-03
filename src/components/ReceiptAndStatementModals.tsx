@@ -296,7 +296,7 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
             <button disabled={pdfBusy} onClick={()=>void exportPdf(true)} className="border rounded-xl p-3 font-bold">مشاركة ملف الفاتورة</button>
           </div>}
           {pdfError&&<p role="status" className="text-xs">{pdfError}</p>}
-          
+
         </div></Modal>
   );
 };
@@ -694,7 +694,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
           </div>
 
           {/* أزرار إرسال كشف الحساب واتساب أو طباعته */}
-          
+
         </div></Modal>
   );
 };

@@ -19,7 +19,16 @@ export function Modal({title,description,onClose,busy=false,dismissible=true,wid
    if(previousFocus?.isConnected)previousFocus.focus({preventScroll:true});
   };
  },[]);
- return createPortal(<dialog ref={ref} dir="rtl" className={`agouz-modal${wide?' agouz-modal-wide':''}`} aria-labelledby={headingId} aria-describedby={description?descriptionId:undefined} aria-modal="true" aria-busy={busy||undefined} onCancel={e=>{e.preventDefault();if(dismissible&&!busy)onClose?.();}}>
+ const keepFocus=(event:React.KeyboardEvent<HTMLDialogElement>)=>{
+  if(event.key!=='Tab')return;
+  const dialog=ref.current!;
+  const controls=Array.from(dialog.querySelectorAll<HTMLElement>('button,input,select,textarea,a[href],[tabindex]')).filter(element=>element.tabIndex>=0&&!element.matches(':disabled')&&element.getClientRects().length>0);
+  const first=controls[0],last=controls.at(-1);
+  if(!first){event.preventDefault();dialog.focus();return;}
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last!.focus();}
+  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+ };
+ return createPortal(<dialog ref={ref} dir="rtl" className={`agouz-modal${wide?' agouz-modal-wide':''}`} aria-labelledby={headingId} aria-describedby={description?descriptionId:undefined} aria-modal="true" aria-busy={busy||undefined} onKeyDown={keepFocus} onCancel={e=>{e.preventDefault();if(dismissible&&!busy)onClose?.();}}>
   <header className="modal-heading"><span className="modal-symbol"><PanelTop size={21} aria-hidden="true"/></span><div><p className="modal-eyebrow">بُن العجوز</p><h2 id={headingId}>{title}</h2>{description&&<p id={descriptionId} className="modal-description">{description}</p>}</div>{dismissible&&onClose&&<button type="button" className="modal-close" aria-label="إغلاق النافذة" disabled={busy} onClick={onClose}><X size={20} aria-hidden="true"/></button>}</header>
   <div className="modal-body">{children}</div>
   {footer&&<footer className="modal-footer">{footer}</footer>}

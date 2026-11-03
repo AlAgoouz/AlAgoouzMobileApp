@@ -274,7 +274,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
         </p>
       )}
       {/* الهيدر */}
-      
+
 
       <div className="p-3.5 space-y-3.5">
         {/* التبديل بين بيع الجملة وبيع المحل */}
