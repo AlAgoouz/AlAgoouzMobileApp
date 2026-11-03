@@ -1523,7 +1523,7 @@ export default function App() {
                       <div className="bg-[#FAF8F4] rounded-xl p-2.5 border border-[#EDE6D8]">
                         <div className="flex items-center justify-center gap-1 text-[10px] font-extrabold text-[#1E1612]">
                           <span className="w-2 h-2 rounded-full bg-[#1F9D62]" />
-                          <span>شيت الكاشير</span>
+                          <span>يوم الكاشير</span>
                         </div>
                         <div className="text-xs font-black text-[#1E1612] mt-1">
                           {dashboardAnalytics.cashierSales.toLocaleString(
@@ -1830,10 +1830,10 @@ export default function App() {
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-black text-[#1E1612]">
-                      شيت الكاشير
+                      تقارير يوم الكاشير
                     </div>
                     <div className="text-[10px] text-[#8C7A6B] font-semibold mt-0.5 leading-tight">
-                      رفع الإكسيل وخصم الوصفات
+                      تقرير مالي وتقرير أصناف
                     </div>
                   </div>
                 </button>
@@ -1851,7 +1851,7 @@ export default function App() {
                       الإنتاج والوصفات
                     </div>
                     <div className="text-[10px] text-[#8C7A6B] font-semibold mt-0.5 leading-tight">
-                      تخليط التوليفات ومقادير المشروبات
+                      إنتاج التوليفات وإدارة الوصفات
                     </div>
                   </div>
                 </button>
@@ -1954,7 +1954,7 @@ export default function App() {
                     الموردين
                   </div>
                   <div className="text-[10px] text-[#8C7A6B] font-medium">
-                    الأرصدة وكشف حساب
+                    المشتريات ومقارنة الأسعار
                   </div>
                 </button>
 
