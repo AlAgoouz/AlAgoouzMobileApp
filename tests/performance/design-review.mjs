@@ -53,6 +53,9 @@ export async function verifyDesign(){
       await page.getByRole('heading',{name:'كل شغلك، بخطوة واحدة'}).waitFor();
     }
     await page.goto(origin+'/#type=recovery');
+    // A mail link opens a new document. A hash-only goto from this already-open
+    // SPA is same-document navigation and does not rerun its initial-link guard.
+    await page.reload();
     await page.getByRole('heading',{name:'اختر كلمة مرور جديدة'}).waitFor();
     await page.locator('.login-brand img').evaluate(img=>img.decode());
     await limit(page,'recovered-password-form');
