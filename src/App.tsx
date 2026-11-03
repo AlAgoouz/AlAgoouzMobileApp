@@ -1,11 +1,10 @@
-import {canView,canWrite} from './lib/userAccess';
+import {canView,canWrite,writePermissions} from './lib/userAccess';
 import {SectionsHub} from './components/SectionsHub';
 import type {QueuedCashierReport} from './components/CashierDayScreen';
 import {attachCashierReport,approveCashierDay,salesForReports} from './lib/cashierDays';
 import {isStockItem} from './lib/itemPolicy';
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  Settings,
   LayoutGrid,
   Search,
   AlertTriangle,
@@ -24,14 +23,11 @@ import {
   Unlock,
   Flame,
   FolderSync,
-  Sparkles,
   CheckCircle2,
-  LogOut,
   Home,
   ShieldCheck,
   Scale,
   UserCheck,
-  Trash2,
   Tag,
 } from "lucide-react";
 import {
@@ -1081,76 +1077,17 @@ export default function App() {
       )}
 
       {/* حاوية التطبيق بهوية بُن العجوز الفاتحة والذهبية */}
-      <div className="w-full max-w-[445px] min-h-screen bg-[#FAF8F4] text-[#1E1612] shadow-2xl relative pb-16">
+      <div className="app-workspace min-h-screen bg-[#FAF8F4] text-[#1E1612] relative pb-16">
         {/* ================= 1. الشاشة الرئيسية: لوحة الإحصائيات والرسوم البيانية الاحترافية ================= */}
         {activeScreen === "home" && (
-          <div className="px-4 pt-4 pb-24 space-y-4">
-            {/* الهيدر الاحترافي الأول بهوية الإسبريسو والذهبي وأيقونة الخروج في الرئيسية فقط */}
-            <div className="bg-white rounded-2xl p-3 border border-[#E6DEC8] shadow-sm flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#261C15] to-[#150F0C] border border-[#C59B27] p-1 flex items-center justify-center shadow-md shrink-0">
-                  <img
-                    src="/logo.png"
-                    alt="بُن العجوز"
-                    className="w-10 h-10 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]"
-                  />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-[#8C7A6B] font-bold">
-                      مساء الخير 👋
-                    </span>
-                    <span className="text-[10px] font-extrabold bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] px-2 py-0.5 rounded-full">
-                      {currentPartner.role}
-                    </span>
-                  </div>
-                  <div className="text-sm font-black text-[#1E1612] mt-0.5">
-                    {currentPartner.name}
-                  </div>
-                </div>
-              </div>
-
-              {/* أيقونات التحكم السريعة بدون نصوص (منها أيقونة تسجيل الخروج في الرئيسية فقط) */}
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setActiveScreen("insights")}
-                  className="p-2 rounded-xl bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] hover:bg-[#F5EBD0] transition"
-                  title="التحليلات الذكية"
-                >
-                  <Sparkles className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    setMoreInitialTab("data_control");
-                    setActiveScreen("more");
-                  }}
-                  className="p-2 rounded-xl bg-[#FAF8F4] text-[#7A6855] border border-[#E6DEC8] hover:text-red-600 transition"
-                  title="إدارة البيانات والنسخ الاحتياطي"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    setMoreInitialTab("menu");
-                    setActiveScreen("more");
-                  }}
-                  className="p-2 rounded-xl bg-[#FAF8F4] text-[#7A6855] border border-[#E6DEC8] hover:text-[#1E1612] transition"
-                  title="الإعدادات"
-                >
-                  <Settings className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 rounded-xl bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition"
-                  title="تسجيل الخروج"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+          <div className="home-workspace px-4 pt-4 pb-8">
+            <header className="home-header home-full">
+              <div className="flex items-center gap-3 min-w-0"><img src="/logo.png" alt="بُن العجوز" width="48" height="48" className="shrink-0"/><div className="min-w-0"><p className="text-xs text-[#8C7A6B]">أهلًا {currentPartner.name}</p><h1 className="font-black text-xl">نظرة على المحل</h1></div></div>
+              <time dateTime={businessDate()} className="text-xs text-[#80673e]">{new Date(businessDate()+'T12:00:00').toLocaleDateString('ar-EG',{day:'numeric',month:'long',year:'numeric'})}</time>
+            </header>
 
             {/* شريط البحث السريع */}
-            <div className="relative">
+            <div className="home-full relative">
               <div className="bg-white rounded-2xl border border-[#E6DEC8] focus-within:border-[#C59B27] px-3.5 py-2.5 flex items-center gap-2.5 shadow-sm">
                 <Search className="w-4 h-4 text-[#9E7918] shrink-0" />
                 <input
@@ -1196,7 +1133,7 @@ export default function App() {
             {shortagesCount > 0 && (
               <button
                 onClick={() => setActiveScreen("shortages")}
-                className="w-full bg-gradient-to-l from-[#FFF8E7] to-[#FDF2D0] border border-[#E5C158] rounded-2xl px-3.5 py-2.5 flex items-center justify-between shadow-sm transition"
+                className="home-full w-full bg-gradient-to-l from-[#FFF8E7] to-[#FDF2D0] border border-[#E5C158] rounded-2xl px-3.5 py-2.5 flex items-center justify-between shadow-sm transition"
               >
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-[#1E1612] text-[#FBF5B7] flex items-center justify-center shrink-0">
@@ -1215,8 +1152,10 @@ export default function App() {
               </button>
             )}
 
+            {(queuedReports.length>0||cashierDays.some(day=>day.status!=='approved'))&&<button type="button" className="home-full home-pending" onClick={()=>setActiveScreen('cashier_sync')}><FolderSync size={22}/><span><b>تقارير كاشير تنتظر المراجعة</b><small>{queuedReports.length} ملفات واردة · {cashierDays.filter(day=>day.status!=='approved').length} أيام غير معتمدة</small></span><ChevronLeft size={18}/></button>}
+
             {/* بطاقة المؤشرات المالية الفاخرة (Luxury Espresso & Gold Hero Card) */}
-            <div className="bg-gradient-to-br from-[#1E1612] via-[#2A1F1A] to-[#17110E] rounded-3xl p-4 text-[#FAF8F4] border border-[#C59B27]/60 shadow-xl space-y-3.5">
+            <div className="home-full home-summary bg-gradient-to-br from-[#1E1612] via-[#2A1F1A] to-[#17110E] rounded-3xl p-4 text-[#FAF8F4] border border-[#C59B27]/60 shadow-xl space-y-3.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-[#C59B27]/20 border border-[#C59B27]/50 flex items-center justify-center text-[#FBF5B7]">
@@ -1227,7 +1166,7 @@ export default function App() {
                       ملخص الإحصائيات والأرباح المباشر
                     </h2>
                     <p className="text-[10px] text-[#C59B27]">
-                      بُن العجوز — مزامنة بيانات المحل بين الأجهزة
+                      ملخص كامل السجل حتى الآن
                     </p>
                   </div>
                 </div>
@@ -1244,18 +1183,12 @@ export default function App() {
                       <Unlock className="w-3.5 h-3.5" />
                     )}
                   </button>
-                  <button
-                    onClick={() => setActiveScreen("sections")}
-                    className="bg-gradient-to-r from-[#C59B27] to-[#E5C158] text-[#1E1612] px-3 py-1.5 rounded-xl text-[11px] font-black shadow flex items-center gap-1"
-                  >
-                    <LayoutGrid className="w-3.5 h-3.5" />
-                    <span>الأقسام</span>
-                  </button>
+
                 </div>
               </div>
 
               {/* 4 مؤشرات رئيسية داخل البطاقة الفاخرة */}
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="home-metrics grid grid-cols-2 gap-2.5">
                 <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-3">
                   <div className="text-[10px] text-[#D8CBB8] font-bold">
                     إجمالي المبيعات ({dashboardAnalytics.invoicesCount} مستند بيع)
@@ -1663,12 +1596,12 @@ export default function App() {
             </div>
 
             {/* سجل حركات الشركاء الأربعة المباشر */}
-            <div className="bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-2.5">
+            <div className="home-full bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-[#9E7918]" />
                   <h3 className="text-xs font-black text-[#1E1612]">
-                    آخر حركات الشركاء بالمحل
+                    آخر حركات المحل
                   </h3>
                 </div>
                 <span className="text-[10px] font-bold text-[#8C7A6B]">
@@ -1677,6 +1610,7 @@ export default function App() {
               </div>
 
               <div className="divide-y divide-[#F2ECE1]">
+                {!auditLogs.length&&<p className="py-3 text-xs text-[#8C7A6B]">لم تُسجّل حركات بعد. ستظهر هنا آخر عمليات المحل.</p>}
                 {auditLogs.slice(0, 4).map((log) => (
                   <div
                     key={log.id}
@@ -2189,8 +2123,8 @@ export default function App() {
             items={items}
             salesInvoices={reportSales}
             customers={customers}
-            onNavigate={(sc) => setActiveScreen(sc)}
-            onBack={() => setActiveScreen("home")}
+            onNavigate={(sc) => {if(sc==='partners'){setMoreInitialTab('partners');setActiveScreen('more');}else setActiveScreen(sc);}}
+            onBack={() => setActiveScreen("reports")}
           />
         )}
 
@@ -2200,6 +2134,7 @@ export default function App() {
             salesInvoices={reportSales}
             expenses={expenses}
             partners={partners}
+            onInsights={()=>setActiveScreen('insights')}
             onBack={() => setActiveScreen("home")}
           />
         )}
@@ -2283,10 +2218,12 @@ export default function App() {
 
         {activeScreen === "more" && (
           <MoreMenuScreen
+            key={moreInitialTab}
             expenses={expenses}
             partners={partners}
             auditLogs={auditLogs}
             currentPartner={currentPartner}
+            accountPermissions={writePermissions.filter(permission=>canWrite(member,permission.id)).map(permission=>permission.label)}
             canManageData={member.isOwner}
             canEditPartners={canWrite(member,'partners')}
             onSavePartners={(next)=>safeAction(()=>{engine.field('partners',next);})}
@@ -2390,8 +2327,8 @@ export default function App() {
             onLogout={handleLogout}
             onNavigate={(sc) => setActiveScreen(sc)}
             onBack={() => {
+              setActiveScreen(moreInitialTab==='menu'?'home':'sections');
               setMoreInitialTab("menu");
-              setActiveScreen("home");
             }}
           />
         )}
@@ -2412,16 +2349,16 @@ export default function App() {
         )}
 
         {/* شريط القوائم السفلي المثبت دائماً في أسفل الشاشة مع قسم "الأقسام" بجانب "الرئيسية" */}
-        <nav aria-label="التنقل الرئيسي" style={{paddingBottom:'max(6px, env(safe-area-inset-bottom))'}} className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#E6DEC8] py-1.5 px-2 grid grid-cols-5 z-40 max-w-[445px] mx-auto shadow-[0_-4px_20px_rgba(30,22,18,0.06)]">
+        <nav aria-label="التنقل الرئيسي" style={{paddingBottom:'max(6px, env(safe-area-inset-bottom))'}} className="workspace-nav fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#E6DEC8] py-1.5 px-2 grid grid-cols-4 z-40 mx-auto shadow-[0_-4px_20px_rgba(30,22,18,0.06)]">
           {[
             { id: "home", label: "الرئيسية", icon: Home },
             { id: "sections", label: "الأقسام", icon: LayoutGrid },
-            { id: "production", label: "الإنتاج", icon: Flame },
-            { id: "inventory", label: "المخزن", icon: Package },
-            { id: "more", label: "المزيد", icon: Settings },
+            { id: "reports", label: "التقارير", icon: BarChart3 },
+            { id: "more", label: "حسابي", icon: UserCheck },
           ].map((tab) => {
             const IconComp = tab.icon;
-            const isActive = activeScreen === tab.id;
+            const navScreen=activeScreen==='more'?(moreInitialTab==='menu'?'more':'sections'):activeScreen==='insights'?'reports':['home','reports','sections'].includes(activeScreen)?activeScreen:'sections';
+            const isActive = navScreen === tab.id;
             return (
               <button
                 key={tab.id}

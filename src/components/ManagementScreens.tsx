@@ -1668,6 +1668,7 @@ export const SalesInvoicesAndReturnsScreen: React.FC<{
 // 5. شاشة الإدارة والتحكم في البيانات وتصفير البيانات التجريبية (MoreMenuScreen)
 // ============================================================================
 interface MoreMenuProps {
+  accountPermissions?:string[];
   expenses: Expense[];
   partners: Partner[];
   auditLogs: AuditLogEntry[];
@@ -1708,6 +1709,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   currentPartner,
   initialSubPage = "menu",
   showDemoTools = false,
+  accountPermissions=[],
   canManageData=true,canEditPartners=false,onSavePartners,
   selectedFinancialPartnerId,onSelectFinancialPartnerId,
   onAddExpense,
@@ -1749,7 +1751,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
       <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
         <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
           <button
-            onClick={() => setSubPage("menu")}
+            onClick={onBack}
             className="p-1.5 text-[#D4AF37]"
           >
             <ChevronRight className="w-6 h-6" />
@@ -1896,7 +1898,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
       <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
         <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
           <button
-            onClick={() => setSubPage("menu")}
+            onClick={onBack}
             className="p-1.5 text-[#D4AF37]"
           >
             <ChevronRight className="w-6 h-6" />
@@ -2045,14 +2047,14 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
     );
   }
 
-  if(subPage==='partners')return <FinancialPartnersScreen partners={partners} canEdit={canEditPartners&&!!onSavePartners} onSave={onSavePartners??(()=>false)} onBack={()=>setSubPage('menu')} onReports={()=>onNavigate('reports')}/>;
+  if(subPage==='partners')return <FinancialPartnersScreen partners={partners} canEdit={canEditPartners&&!!onSavePartners} onSave={onSavePartners??(()=>false)} onBack={onBack} onReports={()=>onNavigate('reports')}/>;
 
   if (subPage === "cloud") {
     return (
       <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
         <div className="bg-[#1E1612] text-[#FBF5B7] px-4 py-3.5 flex items-center justify-between border-b border-[#C59B27]/40">
           <button
-            onClick={() => setSubPage("menu")}
+            onClick={onBack}
             className="p-1.5 text-[#D4AF37]"
           >
             <ChevronRight className="w-6 h-6" />
@@ -2106,84 +2108,8 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
     );
   }
 
-  const menuItems = [
-    {
-      id: "data_control",
-      title: showDemoTools ? "النسخ الاحتياطي وحذف التجريبي" : "النسخ الاحتياطي والاسترجاع",
-      subtitle: showDemoTools ? "حفظ/استرجاع نسخة احتياطية • تصفير أو حذف التجريبي" : "تنزيل نسخة بيانات واسترجاعها",
-      icon: Database,
-      iconBg: "bg-red-50 text-red-600 border border-red-200",
-      action: () => setSubPage("data_control"),
-    },
-    {
-      id: "partners",
-      title: "الشركاء والحصص",
-      subtitle: "الملكية والمساهمات والمسحوبات",
-      icon: Shield,
-      iconBg: "bg-[#1E1612] text-[#FBF5B7]",
-      action: () => setSubPage("partners"),
-    },
-    {id:'users',title:'المستخدمين',subtitle:'حساب المالك وحسابات الدخول والصلاحيات',icon:UserCheck,iconBg:'bg-blue-50 text-blue-700',action:()=>onNavigate('users')},
-    {
-      id: "stocktaking",
-      title: "الجرد الفعلي بالميزان",
-      subtitle: "مطابقة الرصيد بالجرام والكيلو",
-      icon: ScanLine,
-      iconBg: "bg-[#FDF8EB] text-[#B38728] border border-[#E8D8A8]",
-      action: () => onNavigate("stocktaking"),
-    },
-    {
-      id: "staff_payroll",
-      title: "شؤون العمال والباريستا",
-      subtitle: "اليوميات والسلف والرواتب",
-      icon: UserCheck,
-      iconBg: "bg-[#1E1612] text-[#FBF5B7]",
-      action: () => onNavigate("staff_payroll"),
-    },
-    {
-      id: "production",
-      title: "قسم الإنتاج والوصفات",
-      subtitle: "تصنيع التوليفات ووصفات المشروبات",
-      icon: Flame,
-      iconBg: "bg-[#FDF8EB] text-[#B38728] border border-[#E8D8A8]",
-      action: () => onNavigate("production"),
-    },
-    {
-      id: "cashier_sync",
-      title: "مزامنة شيت الكاشير",
-      subtitle: "سحب مبيعات الكاشير أوتوماتيك",
-      icon: FolderSync,
-      iconBg: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-      action: () => onNavigate("cashier_sync"),
-    },
-    {
-      id: "expenses",
-      title: "المصروفات",
-      subtitle: "تسجيل وحذف مصروفات المحل",
-      icon: Wallet,
-      iconBg: "bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8]",
-      action: () => setSubPage("expenses"),
-    },
-    {
-      id: "reports",
-      title: "الأرباح وحصص الشركاء",
-      subtitle: "صافي الربح وتوزيع النسب",
-      icon: Receipt,
-      iconBg: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-      action: () => onNavigate("reports"),
-    },
-    {
-      id: "cloud",
-      title: "ربط Supabase السحابي",
-      subtitle: "مزامنة موبايلات الشركاء",
-      icon: Cloud,
-      iconBg: "bg-[#FAF8F4] text-[#5C4B3E] border border-[#DFD7C6]",
-      action: () => setSubPage("cloud"),
-    },
-  ];
-
   return (
-    <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
+    <div className="bg-[#FAF8F4] text-[#1E1612] pb-6">
       <div className="px-4 py-3.5 flex items-center justify-between sticky top-0 bg-[#1E1612] text-[#FBF5B7] z-30 border-b border-[#C59B27]/40 shadow-md">
         <button
           onClick={onBack}
@@ -2191,11 +2117,11 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
         >
           <ChevronRight className="w-6 h-6" />
         </button>
-        <h1 className="text-base font-extrabold">الإدارة والتحكم</h1>
+        <h1 className="text-base font-extrabold">حسابي</h1>
         <div className="w-8" />
       </div>
 
-      <div className="p-3.5 space-y-2.5">
+      <div className="account-content p-3.5">
         <div className="bg-gradient-to-l from-[#1E1612] via-[#2A1F19] to-[#1E1612] text-white border border-[#C59B27] rounded-2xl p-3.5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <img
@@ -2217,33 +2143,15 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
           </span>
         </div>
 
-        {menuItems.filter(item=>canManageData||!['data_control','cloud'].includes(item.id)).map((item) => {
-          const IconComponent = item.icon;
-          return (
-            <button
-              key={item.id}
-              onClick={item.action}
-              className="w-full bg-white hover:border-[#C59B27] border border-[#E6DEC8] rounded-2xl p-3.5 flex items-center justify-between transition text-right shadow-sm"
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${item.iconBg}`}
-                >
-                  <IconComponent className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-xs sm:text-sm font-extrabold text-[#1E1612]">
-                    {item.title}
-                  </div>
-                  <div className="text-[11px] text-[#7A6855]">
-                    {item.subtitle}
-                  </div>
-                </div>
-              </div>
-              <ChevronLeft className="w-4 h-4 text-[#A68429] shrink-0" />
-            </button>
-          );
-        })}
+        <section className="account-access bg-white border border-[#E6DEC8] rounded-2xl p-4 space-y-3" aria-label="صلاحيات حسابك">
+          <h2 className="font-black">صلاحيات حسابك</h2>
+          <p className="text-xs text-[#7A6855]">الاطلاع على بيانات المحل والحسابات والتقارير.</p>
+          <p className="text-xs font-bold">{accountPermissions.length?'الأقسام المسموح لك بالتعديل فيها':'حساب للعرض فقط'}</p>
+          <div className="flex flex-wrap gap-2">{accountPermissions.map(label=><span key={label} className="text-xs bg-[#FAF5E9] border border-[#E6DEC8] rounded-xl px-3 py-2">{label}</span>)}</div>
+          <p className="text-xs text-[#8C7A6B]">حساب الدخول مستقل عن الشراكة والحصص المالية. يدير المالك الرئيسي المستخدمين والصلاحيات من قسم المستخدمين.</p>
+        </section>
+        <button type="button" onClick={onLogout} className="account-signout w-full flex items-center justify-center gap-2 min-h-[48px] rounded-xl bg-red-50 text-red-700 border border-red-200 font-bold"><LogOut size={18}/>تسجيل الخروج</button>
+
       </div>
     </div>
   );

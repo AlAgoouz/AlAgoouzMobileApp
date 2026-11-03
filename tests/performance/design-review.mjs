@@ -5,7 +5,7 @@ import fs from 'node:fs';
 export async function verifyDesign(){
   assert.equal(process.env.CI,'true','DESIGN_REVIEW_REQUIRES_ISOLATED_CI');
   const browser=await chromium.launch({headless:true});
-  const evidence={login:false,recovery:false,resend:false,recoveredPasswordForm:false,sections:[],widths:[],pageErrors:[],layoutErrors:[]};
+  const evidence={login:false,recovery:false,resend:false,recoveredPasswordForm:false,sections:[],widths:[],workspaceWidths:[],accountHasNoSectionMenu:false,reportTabsAccessible:false,pageErrors:[],layoutErrors:[]};
   const origin='http://127.0.0.1:5284';
   const limit=async (page,stage)=>{
     const layout=await page.evaluate(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width&& (r.right>innerWidth+1||r.left< -1);}).slice(0,12).map(e=>({tag:e.tagName,classes:e.className,text:e.textContent?.slice(0,90)}))}));
@@ -33,10 +33,25 @@ export async function verifyDesign(){
       localStorage.setItem('sb-127-auth-token',JSON.stringify({access_token:encode({alg:'HS256',typ:'JWT'})+'.'+encode({sub:user.id,role:'authenticated',aud:'authenticated',iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+3600})+'.fixture',refresh_token:'fixture',expires_at:Math.floor(Date.now()/1000)+3600,token_type:'bearer',user}));
     });
     await page.reload();await page.getByText('ملخص الإحصائيات والأرباح المباشر',{exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'الأقسام',exact:true}).count(),1,'Home must not duplicate the section directory');
+    assert.equal(await page.getByRole('button',{name:'المزيد',exact:true}).count(),0);
+    for(const width of [320,360,430,768,1024,1440]){
+      await page.setViewportSize({width,height:900});await limit(page,`home-${width}`);
+      const used=await page.locator('.app-workspace').evaluate(e=>e.getBoundingClientRect().width);evidence.workspaceWidths.push({viewport:width,used});
+      if(width>=768)assert.ok(used>=Math.min(width,1280)-2,'Workspace must use the available desktop/tablet width');
+    }
+    await page.screenshot({path:'design-home-desktop-mobile.png',fullPage:true});
+    await page.getByRole('button',{name:'حسابي',exact:true}).click();await page.getByRole('heading',{name:'حسابي',exact:true}).waitFor();
+    assert.equal(await page.locator('.section-tile').count(),0);
+    assert.equal(await page.getByRole('button',{name:/قسم الإنتاج|شؤون العمال|المستخدمين|الشركاء والحصص/}).count(),0);
+    await page.getByRole('heading',{name:'صلاحيات حسابك',exact:true}).waitFor();
+    evidence.accountHasNoSectionMenu=true;await limit(page,'account-desktop');
+    await page.screenshot({path:'design-account-desktop-mobile.png',fullPage:true});
+    await page.setViewportSize({width:360,height:800});await limit(page,'account-mobile');
     await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
     await page.getByRole('heading',{name:'كل شغلك، بخطوة واحدة'}).waitFor();
     await page.screenshot({path:'design-sections-mobile.png',fullPage:true});
-    for(const width of [320,360,430,1024]){
+    for(const width of [320,360,430,768,1024,1440]){
       await page.setViewportSize({width,height:800});await limit(page,`sections-${width}`);evidence.widths.push(width);
     }
     await page.setViewportSize({width:360,height:800});
@@ -47,6 +62,21 @@ export async function verifyDesign(){
       await page.getByText('جارٍ تحميل الشاشة…',{exact:true}).waitFor({state:'hidden'});
       assert.equal(await page.getByText('تعذر فتح الشاشة',{exact:false}).count(),0);
       await limit(page,title);
+      if(title==='المصاريف'){
+        await page.getByRole('button',{name:'حسابي',exact:true}).click();
+        await page.getByRole('heading',{name:'حسابي',exact:true}).waitFor();
+        await page.getByRole('button',{name:'الأقسام',exact:true}).click();
+        await page.locator('.section-tile').filter({has:page.locator('.section-tile-title',{hasText:title})}).click();
+        await page.getByText('جارٍ تحميل الشاشة…',{exact:true}).waitFor({state:'hidden'});
+      }
+      if(title==='التقارير والأرباح'){
+        for(const tab of ['حصص الشركاء','ربحية الأصناف','الفواتير','الملخص']){
+          const button=page.getByRole('button',{name:tab,exact:true});await button.click();
+          assert.equal(await button.getAttribute('aria-pressed'),'true');
+          const rect=await button.boundingBox();assert.ok(rect&&rect.y<450,'Report tabs must be reachable above the primary navigation');
+        }
+        evidence.reportTabsAccessible=true;
+      }
       evidence.sections.push(title);
       await page.screenshot({path:`design-section-${evidence.sections.length}-mobile.png`,fullPage:true});
       await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();

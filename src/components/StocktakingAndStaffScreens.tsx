@@ -562,7 +562,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
 
       {/* شريط الاعتماد السفلي فوق شريط القوائم المثبت */}
       {activeTab === "new_audit" && (
-        <div className="fixed bottom-[58px] left-0 right-0 bg-white border-t border-[#E6DEC8] p-3 flex items-center gap-2.5 z-30 max-w-[445px] mx-auto shadow-md">
+        <div className="workspace-actions fixed left-0 right-0 bg-white border-t border-[#E6DEC8] p-3 flex items-center gap-2.5 z-30 mx-auto shadow-md">
           <button
             onClick={handleSaveAudit}
             className="flex-1 bg-[#1E1612] hover:bg-[#2E221A] text-[#FBF5B7] border border-[#C59B27] font-extrabold py-3 rounded-xl shadow-md flex items-center justify-center gap-2"
