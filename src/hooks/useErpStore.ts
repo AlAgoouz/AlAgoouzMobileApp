@@ -97,6 +97,7 @@ export function useErpStore() {
     }
     const resolveUser = async () => {
       const run = ++generation.current;
+      try {
       const {
         data: { user },
         error,
@@ -149,6 +150,12 @@ export function useErpStore() {
         await engine.load();
       }
       if (!disposed) setAuthReady(true);
+      } catch (failure) {
+        if (disposed || run !== generation.current) return;
+        setAuthError(authErrorMessage(failure, 'signIn'));
+        if (!activeUser.current) { setMember(null); engine.logout(); }
+        setAuthReady(true);
+      }
     };
     void resolveUser();
     const {

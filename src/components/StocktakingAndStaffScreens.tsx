@@ -159,6 +159,10 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
 
   const handleSaveAudit = () => {
     setAuditError("");
+    if (auditableItems.some(item=>item.stock<0 && typedActuals[item.id]===undefined)) {
+      setAuditError('أدخل الرصيد الفعلي لكل صنف رصيده بالسالب قبل اعتماد الجرد؛ لا يمكن افتراض أن العجز يساوي صفرًا.');
+      return;
+    }
     if (
       Object.values(rawInputs).some(
         (value) =>

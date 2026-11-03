@@ -4,7 +4,21 @@ import {afterEach,it,expect,vi} from 'vitest';
 import {cleanup,render,screen,fireEvent,waitFor} from '@testing-library/react';
 import {LoginScreen} from '../src/components/LoginScreen';
 import {SectionsHub} from '../src/components/SectionsHub';
+import {ProductsCatalogScreen} from '../src/components/ManagementScreens';
+import {INITIAL_ITEMS} from '../src/data/initialData';
 afterEach(cleanup);
+it('filters all seven approved categories and keeps legacy ingredients under direct products',()=>{
+ const raw=INITIAL_ITEMS.find(i=>i.category==='raw_bean')!;
+ const directDrink={...raw,id:'direct-drink',code:'DD',name:'Test bottled drink',category:'direct_drink' as const};
+ const snack={...raw,id:'snack',code:'SN',name:'Test snack',category:'snack' as const};
+ const legacy={...raw,id:'legacy',code:'LE',name:'Test legacy sugar',category:'raw_spice' as const};
+ const noop=vi.fn();
+ render(<ProductsCatalogScreen items={[raw,directDrink,snack,legacy]} onAddNewItem={noop} onUpdateItem={noop} onDeleteItem={noop} onNavigateToProduction={noop} onNavigateToInventory={noop} onNavigateToPurchase={noop} onBack={noop}/>);
+ fireEvent.click(screen.getByRole('button',{name:'مشروبات بيع مباشر',exact:true}));
+ expect(screen.getByText(directDrink.name)).toBeTruthy();expect(screen.queryByText(snack.name)).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'سناكس',exact:true}));expect(screen.getByText(snack.name)).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'منتج مباشر',exact:true}));expect(screen.getByText(legacy.name)).toBeTruthy();
+});
 it('offers sign in and styled recovery without self-registration',()=>{
  render(<LoginScreen onSignIn={vi.fn()} onRequestPasswordReset={vi.fn()} onResendConfirmation={vi.fn()}/>);
  expect(screen.queryByText(/إنشاء حساب|بوابة الدخول الآمن/)).toBeNull();

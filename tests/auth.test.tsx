@@ -186,3 +186,12 @@ it('never directs a rejected login to removed public registration',()=>{
  expect(authErrorMessage({code:'invalid_credentials'},'signIn')).not.toContain('إنشاء حساب');
  expect(authErrorMessage({code:'signup_disabled'},'signUp')).toContain('المالك فقط');
 });
+
+it('shows a retryable login screen if session verification unexpectedly rejects',async()=>{
+ const {sb}=client('partner',null);
+ sb.auth.getUser.mockRejectedValueOnce(new TypeError('network down'));
+ const {result}=renderHook(()=>useErpStore());
+ await waitFor(()=>expect(result.current.authReady).toBe(true));
+ expect(result.current.member).toBeNull();expect(result.current.authError).toContain('تعذر الاتصال');
+ expect(sb.from).not.toHaveBeenCalled();
+});

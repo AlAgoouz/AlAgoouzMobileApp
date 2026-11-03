@@ -2397,7 +2397,7 @@ export default function App() {
         )}
 
         {/* شريط القوائم السفلي المثبت دائماً في أسفل الشاشة مع قسم "الأقسام" بجانب "الرئيسية" */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#E6DEC8] py-1.5 px-2 grid grid-cols-5 z-40 max-w-[445px] mx-auto shadow-[0_-4px_20px_rgba(30,22,18,0.06)]">
+        <nav aria-label="التنقل الرئيسي" style={{paddingBottom:'max(6px, env(safe-area-inset-bottom))'}} className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#E6DEC8] py-1.5 px-2 grid grid-cols-5 z-40 max-w-[445px] mx-auto shadow-[0_-4px_20px_rgba(30,22,18,0.06)]">
           {[
             { id: "home", label: "الرئيسية", icon: Home },
             { id: "sections", label: "الأقسام", icon: LayoutGrid },
@@ -2410,11 +2410,12 @@ export default function App() {
             return (
               <button
                 key={tab.id}
+                aria-current={isActive ? 'page' : undefined}
                 onClick={() => {
                   if (tab.id === "more") setMoreInitialTab("menu");
                   setActiveScreen(tab.id);
                 }}
-                className="flex flex-col items-center justify-center gap-0.5 py-0.5 transition"
+                className="min-h-[44px] flex flex-col items-center justify-center gap-0.5 py-0.5 transition"
               >
                 <div
                   className={`px-3.5 py-1 rounded-full transition-all ${
@@ -2437,7 +2438,7 @@ export default function App() {
               </button>
             );
           })}
-        </div>
+        </nav>
       </div>
     </div>
   );
