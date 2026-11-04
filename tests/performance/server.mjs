@@ -25,7 +25,7 @@ const server=http.createServer(async(req,res)=>{
   if(u.pathname==='/rest/v1/rpc/bon_erp_list_users')return send([{user_id:user.id,partner_id:'p1',username:'owner',display_name:'مالك الاختبار',role:'partner',is_owner:true,permissions:{view:true},email:user.email,disabled:false,deleted:false,created_at:user.created_at}]);
   if(u.pathname==='/rest/v1/erp_members')return send({partner_id:'p1',role:'partner'});
   if(u.pathname==='/rest/v1/bon_elagouz_store')return send(u.searchParams.get('select')==='version'?{version:0}:row,u.searchParams.get('select')==='version'?'version':'full');
-  if(u.pathname==='/rest/v1/cashier_sync_queue')return send([]);
+  if(u.pathname==='/rest/v1/cashier_sync_queue'){if(req.method==='HEAD'){res.writeHead(200,{'Content-Range':'*/0','Cache-Control':'no-store'});return res.end();}return send([]);}
   if(u.pathname.startsWith('/rest/')||u.pathname.startsWith('/auth/')){res.writeHead(403);return res.end('Fixture is read-only');}
   const file=path.resolve(root,'.'+(u.pathname==='/'?'/index.html':u.pathname));
   if(!file.startsWith(root+path.sep)||!fs.existsSync(file)){res.writeHead(404);return res.end();}
