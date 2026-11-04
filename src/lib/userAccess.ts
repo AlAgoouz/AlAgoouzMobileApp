@@ -32,6 +32,7 @@ export function assertUserChanges(before:StoreState,after:StoreState,access:User
  if(!writePermissions.some(p=>canWrite(access,p.id)))throw Error('الحساب للعرض فقط؛ لا يمكن حفظ تعديلات');
  const require=(key:WritePermission)=>{if(!canWrite(access,key))throw Error('ليس لديك تصريح لتنفيذ هذه العملية؛ راجع المالك');};
  const changed=(key:keyof StoreState)=>!same(before[key],after[key]);
+ if(changed('catalogNameDrafts'))require('catalog');
  if(changed('financialOpenings'))throw Error('رصيد أول المدة متاح لمالك النظام فقط');
  const direct:Partial<Record<keyof StoreState,WritePermission>>={purchaseInvoices:'purchases',salesInvoices:'sales',cashierDays:'cashier',productionBatches:'production',stocktakingRecords:'stocktaking',accountPayments:'collections',employees:'staff',employeeTransactions:'staff'};
  for(const [field,permission] of Object.entries(direct))if(changed(field as keyof StoreState))require(permission!);

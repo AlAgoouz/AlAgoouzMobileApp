@@ -9,6 +9,7 @@ import {adjustCatalogItem} from '../src/lib/catalogAdjustments';
 import {businessDate} from '../src/lib/dates';
 import {receiveStock} from '../src/lib/costing';
 import {recordFinancialOpening} from '../src/lib/financialOpening';
+import {completeCatalogNameDraft} from '../src/lib/catalogNameDrafts';
 import {attachCashierReport,approveCashierDay} from '../src/lib/cashierDays';
 import {salesForReports} from '../src/lib/cashierDays';
 import {buildReport,reportRange,reportPoints} from '../src/lib/reporting';
@@ -138,6 +139,25 @@ it.skipIf(!active)('keeps read APIs caller-authorized and immediately refuses di
 function save(value:any){return sql(`begin;set local request.jwt.claim.sub='${owner}';set local role authenticated;select public.bon_erp_save_store(0,${literal(value)},gen_random_uuid(),null);rollback;`);}
 const accept=(store:StoreState)=>expect(save(toCloud(store))).toContain('"version": 1');
 const reject=(store:StoreState,reason:string)=>{expect(()=>save(toCloud(store))).toThrow(reason);expect(sql("select version from public.bon_elagouz_store where id='main_store'")).toBe('0');};
+const nameDraft={id:'legacy-draft',name:'Imported name',sourceRepository:'AlAgoouz/Erp-AlAgoouz',sourceCommit:'a'.repeat(40),sourcePath:'source.ts',importedAt:'2026-11-05T00:00:00.000Z'};
+it.skipIf(!active)('keeps pending names separate from accounting and enforces catalog access on the server',()=>{
+ seed(stockState());const next={...stockState(),catalogNameDrafts:[nameDraft]};accept(next);
+ const employee='22222222-2222-4222-8222-222222220095';userAccessFixture(employee,{view:true,expenses:true});
+ expect(()=>asUser(employee,`select public.bon_erp_save_store(0,${literal(toCloud(next))},'${crypto.randomUUID()}')`)).toThrow('USER_PERMISSION_DENIED');
+ const catalog='22222222-2222-4222-8222-222222220096';userAccessFixture(catalog,{view:true,catalog:true});
+ expect(()=>asUser(catalog,`select public.bon_erp_save_store(0,${literal(toCloud(next))},'${crypto.randomUUID()}')`)).not.toThrow();
+ const duplicate={...next,catalogNameDrafts:[nameDraft,{...nameDraft,id:'dup'}]};reject(duplicate,'DUPLICATE_CATALOG_DRAFT');
+});
+it.skipIf(!active)('activates one completed definition atomically and preserves pending names for old clients',()=>{
+ seed(stockState());const pending={...stockState(),catalogNameDrafts:[nameDraft]};
+ sql(`begin;set local request.jwt.claim.sub='${owner}';update public.bon_elagouz_store set catalog_name_drafts=${literal(pending.catalogNameDrafts)};commit;`);
+ const {id,...definition}={...bean,name:nameDraft.name,code:'NEW-1',stock:0,openingStock:0};
+ const ready=completeCatalogNameDraft(pending,nameDraft.id,definition);accept(ready);
+ const result=readJson(`select public.bon_erp_save_store(0,${literal(toCloud(ready))},'${crypto.randomUUID()}');select jsonb_build_object('drafts',catalog_name_drafts,'items',jsonb_array_length(items),'sales',sales_invoices,'expenses',expenses,'partners',partners) from public.bon_elagouz_store`);
+ expect(result).toMatchObject({drafts:[],items:2,sales:[],expenses:[],partners:state.partners});
+ const legacy=toCloud(stockState());delete legacy.catalog_name_drafts;
+ expect(readJson(`select public.bon_erp_save_store(0,${literal(legacy)},'${crypto.randomUUID()}');select catalog_name_drafts from public.bon_elagouz_store`)).toEqual(pending.catalogNameDrafts);
+});
 it.skipIf(!active)('accepts an actual complete store through the versioned API',()=>expect(save(toCloud(state))).toContain('"version": 1'));
 it.skipIf(!active)('records a settled opening asset once without changing revenue, profit, partners or debt',()=>{
  const next=recordFinancialOpening(stockState(),'2026-11-01',1000,'ترحيل رصيد أكتوبر بعد التسوية',{id:owner,name:'Owner'});seed(stockState());accept(next);

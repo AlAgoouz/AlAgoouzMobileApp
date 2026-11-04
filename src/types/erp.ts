@@ -50,6 +50,15 @@ export interface InventoryItem {
   costHistory?: ItemCostRecord[];
 }
 
+export interface CatalogNameDraft {
+  id:string;
+  name:string;
+  sourceRepository:string;
+  sourceCommit:string;
+  sourcePath:string;
+  importedAt:string;
+}
+
 export interface ItemCostRecord {
   id:string;
   date:string;

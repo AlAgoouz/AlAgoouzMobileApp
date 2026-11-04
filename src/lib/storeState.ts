@@ -17,6 +17,7 @@ import type {
   AccountPaymentRecord,
   CashierDay,
   FinancialOpening,
+  CatalogNameDraft,
 } from "../types/erp";
 
 export interface StoreState {
@@ -36,6 +37,7 @@ export interface StoreState {
   accountPayments: AccountPaymentRecord[];
   cashierDays: CashierDay[];
   financialOpenings: FinancialOpening[];
+  catalogNameDrafts: CatalogNameDraft[];
 }
 export const emptyStore: StoreState = {
   items: [],
@@ -54,6 +56,7 @@ export const emptyStore: StoreState = {
   accountPayments: [],
   cashierDays: [],
   financialOpenings: [],
+  catalogNameDrafts: [],
 };
 export const cloudFields: Record<keyof StoreState, string> = {
   items: "items",
@@ -72,6 +75,7 @@ export const cloudFields: Record<keyof StoreState, string> = {
   accountPayments: "account_payments",
   cashierDays: "cashier_days",
   financialOpenings: "financial_openings",
+  catalogNameDrafts: "catalog_name_drafts",
 };
 const text = z.string(),
   id = text.min(1),
@@ -152,6 +156,7 @@ const invoice = base
   })
   .passthrough();
 export const schema = z.object({
+  catalogNameDrafts:z.array(base.extend({name:text.trim().min(1).max(200),sourceRepository:text.min(1).max(200),sourceCommit:text.regex(/^[a-f0-9]{40}$/),sourcePath:text.min(1).max(500),importedAt:text.datetime()})).max(2000).default([]),
   financialOpenings:z.array(base.extend({date:id,account:z.literal('treasury'),amount:money.max(999999999999.99),priorPeriodSettled:z.literal(true),history:z.array(z.object({id,recordedAt:id,actorId:id,actorName:id,amount:money.max(999999999999.99),reason:text.min(6).max(500)})).min(1).max(1000)})).max(1).default([]),
   cashierDays:z.array(base.extend({date:id,status:z.enum(['pending','approved']),
     financialReport:z.object({fileName:id,sha256:text.regex(/^[a-f0-9]{64}$/),uploadedAt:id,sourceQueueId:id.optional(),totalRevenue:money}).optional(),
@@ -407,6 +412,7 @@ export function validateStore(value: unknown): StoreState {
     );
   }
   const parsed = result.data;
+  if(new Set(parsed.catalogNameDrafts.map(d=>d.name.normalize('NFC').trim().replace(/\s+/g,' ').toLocaleLowerCase())).size!==parsed.catalogNameDrafts.length)throw Error('أسماء مستوردة مكررة؛ راجع قائمة الاستكمال');
   for(const opening of parsed.financialOpenings){
     if(new Set(opening.history.map(h=>h.id)).size!==opening.history.length)throw Error('سجل رصيد البداية يحتوي على تعديلات مكررة');
     if(!/^\d{4}-\d{2}-\d{2}$/.test(opening.date)||!Number.isFinite(Date.parse(opening.date+'T12:00:00Z'))||new Date(opening.date+'T12:00:00Z').toISOString().slice(0,10)!==opening.date||opening.history[opening.history.length-1]?.amount!==opening.amount||!Number.isSafeInteger(Math.round(opening.amount*100))||Math.abs(opening.amount*100-Math.round(opening.amount*100))>0.0001)throw Error('رصيد أول المدة أو سجل تعديلاته غير صالح');
