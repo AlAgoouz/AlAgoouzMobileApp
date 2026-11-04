@@ -2,6 +2,53 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
+    "catalog_name_drafts": {
+      "default": [],
+      "maxItems": 2000,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "sourceRepository": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "sourceCommit": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "sourcePath": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "importedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "sourceRepository",
+          "sourceCommit",
+          "sourcePath",
+          "importedAt"
+        ],
+        "additionalProperties": false
+      }
+    },
     "financial_openings": {
       "default": [],
       "maxItems": 1,
@@ -2040,6 +2087,7 @@
     }
   },
   "required": [
+    "catalog_name_drafts",
     "financial_openings",
     "cashier_days",
     "items",

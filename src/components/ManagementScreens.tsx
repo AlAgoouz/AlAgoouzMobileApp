@@ -8,6 +8,8 @@ import {SupplierPurchasePanels} from './SupplierPurchasePanels';
 import {supplierPurchaseHistory} from '../lib/supplierPurchases';
 import {ContactEditModal} from './ContactEditModal';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
+import {CatalogNameDraftPanel} from './CatalogNameDraftPanel';
+import type {CatalogNameDraft} from '../types/erp';
 import {categoryLabel,itemCategories,requiresRecipe,isStockItem,isRecipeOnUse} from '../lib/itemPolicy';
 import React, { useState, useMemo } from "react";
 import {RecordPagination,useRecordPage} from './RecordPagination';
@@ -59,6 +61,8 @@ function allValidNumbers(values: string[]): boolean {
 // 0. شاشة المنتجات والتسعير (ProductsCatalogScreen) - الأساس الذي تعتمد عليه الدورة التشغيلية كلها
 // ============================================================================
 interface ProductsCatalogScreenProps {
+  nameDrafts?:CatalogNameDraft[];
+  onCompleteNameDraft?:(id:string,item:Omit<InventoryItem,'id'>)=>Promise<void>;
   items: InventoryItem[];
   onAddNewItem: (item: Omit<InventoryItem, "id">) => void|boolean;
   onUpdateItem: (id: string, patch: Partial<InventoryItem>) => void | boolean;
@@ -70,6 +74,7 @@ interface ProductsCatalogScreenProps {
 }
 
 export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
+  nameDrafts=[],onCompleteNameDraft,
   items,
   onAddNewItem,
   onUpdateItem,
@@ -194,6 +199,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
         </button></OperationHeader>
 
       <div className="p-3.5 space-y-3.5">
+        <CatalogNameDraftPanel drafts={nameDrafts} items={items} onComplete={onCompleteNameDraft}/>
         {/* كارت الملخص التوضيحي للدورة التشغيلية وزر إضافة منتج */}
         <div className="bg-gradient-to-br from-[#1E1612] via-[#2A1F1A] to-[#17110E] rounded-3xl p-4 text-[#FAF8F4] border border-[#C59B27]/60 shadow-xl space-y-3">
           <div className="flex items-center justify-between">

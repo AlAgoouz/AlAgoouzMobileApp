@@ -1,5 +1,6 @@
 import {useDashboardRead} from './hooks/useDashboardRead';
 import {saveFinancialOpening} from './lib/financialOpening';
+import {saveCatalogNameDraft} from './lib/catalogNameDrafts';
 import {PagedSalesHistory} from './components/PagedSalesHistory';
 import {ScreenLoading} from './components/ScreenLoading';
 import {Modal} from './components/Modal';
@@ -1131,6 +1132,8 @@ export default function App() {
 
         {activeScreen === "products" && (
           <ProductsCatalogScreen
+            nameDrafts={cloud.state.catalogNameDrafts}
+            onCompleteNameDraft={canWrite(member,'catalog')?(id,item)=>saveCatalogNameDraft(engine,id,item,{name:currentPartner.name,id:member?.userId}):undefined}
             items={items}
             onAddNewItem={(newItem) => {
               return safeAction(() => {
