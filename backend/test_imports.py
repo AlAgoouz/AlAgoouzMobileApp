@@ -33,7 +33,7 @@ class ParserTests(unittest.TestCase):
         sheet.append([0, '=1+999'])
         stream = io.BytesIO()
         workbook.save(stream)
-        result = parse_report(stream.getvalue(), 'money.xlsx', 'financial')
+        result = parse_report(stream.getvalue(), 'money.xlsx', 'items')
         self.assertEqual(result['rows'][0]['total'], 0)
         self.assertEqual(result['rows'][0]['notes'], '')
 
@@ -56,7 +56,7 @@ class ParserTests(unittest.TestCase):
                 self.assertEqual(localized_number(value), expected)
 
     def test_formula_csv_is_text_and_flagged(self):
-        result = parse_report(b'total,notes\n5,=1+1', 'money.csv', 'financial')
+        result = parse_report(b'total,notes\n5,=1+1', 'money.csv', 'items')
         self.assertEqual(result['rows'][0]['notes'], '=1+1')
         self.assertIn('FORMULA_TEXT_REQUIRES_REVIEW', result['warnings'])
 
@@ -145,10 +145,10 @@ class PublisherTests(unittest.TestCase):
 class WorkerTests(unittest.IsolatedAsyncioTestCase):
     async def test_processing_completes_pending_preview_only(self):
         calls = AsyncMock(side_effect=[{'path':'safe.csv','downloadToken':'fixture','bytes':7,'fileName':'safe.csv','kind':'financial','attempt':1}, {'status':'ready'}])
-        with patch.object(worker,'rpc',calls), patch.object(worker,'download',AsyncMock(return_value=b'total\n5')):
+        with patch.object(worker,'rpc',calls), patch.object(worker,'download',AsyncMock(return_value=b'Begun\n5.00')):
             await worker.process_import(worker.ImportMessage(job_id=JOB,worker_token=KEY))
         self.assertEqual([c.args[1] for c in calls.await_args_list],['bon_erp_claim_import','bon_erp_finish_import'])
-        self.assertEqual(calls.await_args_list[1].args[2]['p_result']['rows'],[{'total':'5'}])
+        self.assertEqual(calls.await_args_list[1].args[2]['p_result']['rows'],[{'metric':'Begun','amount':'5.00','businessDate':None,'sourceRow':1}])
 
     async def test_duplicate_delivery_is_idempotent_and_active_lease_is_respected(self):
         for job in [None, {'busy':True}]:
@@ -163,7 +163,7 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
         calls = AsyncMock(side_effect=[{'path':'safe.csv','downloadToken':'fixture','bytes':1,'fileName':'safe.csv','kind':'financial','attempt':1}, {'status':'failed'}])
         with patch.object(worker,'rpc',calls), patch.object(worker,'download',AsyncMock(return_value=b'x')):
             await worker.process_import(worker.ImportMessage(job_id=JOB,worker_token=KEY))
-            self.assertEqual(calls.await_args_list[1].args[2]['p_error'],'EMPTY_REPORT')
+            self.assertEqual(calls.await_args_list[1].args[2]['p_error'],'BEGUN_NOT_FOUND')
         with patch.object(worker,'rpc',AsyncMock(side_effect=RuntimeError('network'))):
             self.assertEqual(await worker.process_import(worker.ImportMessage(job_id=JOB,worker_token=KEY)), 'retry')
 

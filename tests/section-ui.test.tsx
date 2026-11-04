@@ -19,7 +19,7 @@ it('reviews server-parsed paired reports, posts one day with a shortage, and rej
  vi.mocked(imports.listImports).mockImplementation(async()=>[...jobs]);
  vi.mocked(imports.readImport).mockImplementation(async id=>jobs.find(j=>j.id===id)!);
  vi.mocked(imports.uploadImport).mockImplementation(async(file,kind,date)=>{
-  const rows=kind==='financial'?[{total:file.name==='duplicate.csv'?'600':'500'}]:[{code:'R1',quantity:'2000',unit:'gram'}];
+  const rows=kind==='financial'?[{metric:'Begun',amount:file.name==='duplicate.csv'?'600.00':'500.00',businessDate:date}]:[{code:'R1',quantity:'2000',unit:'gram'}];
   const n=jobs.length+1,id=`11111111-1111-4111-8111-${String(n).padStart(12,'0')}`;
   jobs.push({id,file_name:file.name,sale_date:date,kind,status:'ready',created_at:'2026-11-04',updated_at:'2026-11-04',error_code:null,reviewed:false,queue_id:id,result:{rows,sha256:String(n).repeat(64)}});return id;
  });
@@ -35,7 +35,7 @@ it('reviews server-parsed paired reports, posts one day with a shortage, and rej
   await screen.findByText('مراجعة '+name);
  };
  await upload('financial.csv');
- fireEvent.change(screen.getByLabelText('عمود إيراد اليوم'),{target:{value:'total'}});
+ expect(screen.queryByLabelText('عمود إيراد اليوم')).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:'حفظ التقرير لهذا اليوم'}));await waitFor(()=>expect(attach).toHaveBeenCalledTimes(1));
  expect(live.items[0].stock).toBe(1);expect(salesForReports(live)).toHaveLength(0);
  fireEvent.change(screen.getByLabelText('نوع التقرير'),{target:{value:'items'}});
@@ -46,12 +46,21 @@ it('reviews server-parsed paired reports, posts one day with a shortage, and rej
  expect(live.cashierDays[0].shortages).toEqual([{itemId:'raw',shortage:1}]);
  expect(salesForReports(live).reduce((sum,i)=>sum+i.totalAmount,0)).toBe(500);
  fireEvent.change(screen.getByLabelText('نوع التقرير'),{target:{value:'financial'}});
- await upload('duplicate.csv');fireEvent.change(screen.getByLabelText('عمود إيراد اليوم'),{target:{value:'total'}});
+ await upload('duplicate.csv');
  fireEvent.click(screen.getByRole('button',{name:'حفظ التقرير لهذا اليوم'}));await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain('معتمد بالفعل'));
  expect(live.cashierDays).toHaveLength(1);expect(live.items[0].stock).toBe(-1);expect(salesForReports(live)[0].totalAmount).toBe(500);
  expect(imports.uploadImport).toHaveBeenCalledWith(expect.any(File),'items',expect.any(String));
 });
 const raw={...INITIAL_ITEMS.find(i=>i.category==='raw_bean')!,id:'raw',code:'R1',name:'Raw bean',stock:10,costPrice:100,lastPurchasePrice:100};
+it('blocks financial files without a confirmed Begun amount and offers no alternative total selector',async()=>{
+ const attach=vi.fn();
+ render(<CashierDayScreen items={[raw]} days={[]} queued={[{id:'old-queue',file_name:'wrong-financial.csv',sale_date:'2026-11-01',content_hash:'d'.repeat(64),report_kind:'financial',raw_rows:[{total:99999}]}]} onAttach={attach} onApprove={vi.fn()} onBack={vi.fn()}/>);
+ fireEvent.click(screen.getByRole('button',{name:'2026-11-01 — wrong-financial.csv'}));
+ await screen.findByText('مراجعة wrong-financial.csv');
+ expect(screen.getByRole('alert').textContent).toContain('Begun');
+ expect((screen.getByRole('button',{name:'حفظ التقرير لهذا اليوم'}) as HTMLButtonElement).disabled).toBe(true);
+ expect(screen.queryByLabelText('عمود إيراد اليوم')).toBeNull();expect(attach).not.toHaveBeenCalled();
+});
 const blend={...raw,id:'blend',code:'BL1',name:'Blend',category:'manufactured_blend' as const,hasRecipe:true,recipe:[{ingredientId:raw.id,ingredientName:raw.name,quantity:1000,unit:'gram' as const}]};
 const customer={...INITIAL_CUSTOMERS[0],id:'customer',name:'Customer',phone:'01012345678',area:'Cairo'};
 it('shows exactly seven categories and saves the recipe with the new blend',()=>{

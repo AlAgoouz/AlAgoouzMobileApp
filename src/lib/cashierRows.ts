@@ -94,6 +94,10 @@ export function mapRawCashierRows(
   rows: Record<string, unknown>[],
   catalog: InventoryItem[],
 ): ParsedCashierRow[] {
+  const names=catalog.map(item=>({item,name:normalize(item.name)}));
+  const codes=new Map<string,InventoryItem[]>(),barcodes=new Map<string,InventoryItem[]>(),byName=new Map<string,InventoryItem[]>();
+  const add=(index:Map<string,InventoryItem[]>,key:string,item:InventoryItem)=>{if(!key)return;const group=index.get(key);if(group)group.push(item);else index.set(key,[item]);};
+  for(const {item,name} of names){add(codes,normalize(item.code),item);if(item.barcode)add(barcodes,item.barcode,item);add(byName,name,item);}
   return rows
     .filter((row) => Object.values(row).some((v) => String(v ?? '').trim()))
     .map((row) => {
@@ -133,10 +137,7 @@ export function mapRawCashierRows(
       )
         error = 'سعر الوحدة غير صالح';
       let candidates = rawCode
-        ? catalog.filter(
-            (i) =>
-              normalize(i.code) === normalize(rawCode) || i.barcode === rawCode,
-          )
+        ? [...new Set([...(codes.get(normalize(rawCode))??[]),...(barcodes.get(rawCode)??[])])]
         : [];
       const nameWithoutWeight = rawName
         .replace(/\([^)]*\)/g, '')
@@ -144,19 +145,11 @@ export function mapRawCashierRows(
         .replace(/ثمن|تمن|ربع|نصف|نص\s|كيلو|كجم|جرام|جم/g, '')
         .trim();
       if (!rawCode) {
-        const exact = catalog.filter(
-          (i) =>
-            normalize(i.name) === normalize(rawName) ||
-            normalize(i.name) === normalize(nameWithoutWeight),
-        );
+        const exact = [...new Set([...(byName.get(normalize(rawName))??[]),...(byName.get(normalize(nameWithoutWeight))??[])])];
         candidates = exact.length
           ? exact
           : normalize(nameWithoutWeight).length >= 4
-            ? catalog.filter(
-                (i) =>
-                  normalize(i.name).includes(normalize(nameWithoutWeight)) ||
-                  normalize(nameWithoutWeight).includes(normalize(i.name)),
-              )
+            ? names.filter(({name})=>name.includes(normalize(nameWithoutWeight))||normalize(nameWithoutWeight).includes(name)).map(({item})=>item)
             : [];
       }
       const matchedItem = candidates.length === 1 ? candidates[0] : undefined;
@@ -247,4 +240,19 @@ export async function cashierSourceId(
   return Array.from(new Uint8Array(digest), (b) =>
     b.toString(16).padStart(2, '0'),
   ).join('');
+}
+
+export type CashierReview=Record<number,{itemId:string;unit:ParsedCashierRow['unitHint']|''}>;
+export function reviewedCashierRows(rows:Record<string,unknown>[],catalog:InventoryItem[],choices:CashierReview){
+ const nonempty=rows.filter(row=>Object.values(row).some(value=>String(value??'').trim()));
+ const parsed=mapRawCashierRows(nonempty,catalog);
+ return nonempty.map((row,index)=>{
+  const base=parsed[index],choice=choices[index];
+  if(!choice)return base;
+  const selected=catalog.find(item=>item.id===choice.itemId);
+  if(!selected||!choice.unit)return {...base,matchedItem:undefined,error:'اختر الصنف ووحدة الكمية لتأكيد المطابقة'};
+  const preserved=Object.fromEntries(Object.entries(row).filter(([key])=>!['code','name','unit'].some(field=>aliases[field].some(alias=>normalize(alias)===normalize(key)))));
+  const result=mapRawCashierRows([{...preserved,code:selected.code,name:selected.name,unit:choice.unit}],catalog)[0];
+  return {...result,rawName:base.rawName,rawCode:base.rawCode};
+ });
 }

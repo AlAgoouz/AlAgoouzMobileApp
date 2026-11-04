@@ -4,8 +4,13 @@ version = "1.0.0"
 requires-python = ">=3.12,<3.15"
 dependencies = [
   "fastapi==0.162.0", "httpx==0.28.1", "openpyxl==3.1.5",
-  "xlrd==2.0.2", "defusedxml==0.7.1"
+  "xlrd==2.0.2", "defusedxml==0.7.1",
+  "rapidfuzz==3.14.6", "XlsxWriter==3.3.1", "polars==2.1.0",
+  "pandera[polars]==0.35.0", "weasyprint==70.0"
 ]
+
+[project.optional-dependencies]
+test = ["hypothesis==6.170.14", "pypdf==6.21.4"]
 
 [tool.vercel]
 entrypoint = "main:app"

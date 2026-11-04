@@ -16,7 +16,7 @@ def settings():
     return root, key
 
 
-async def rpc(client, name, args, bearer=None):
+async def rpc(client, name, args, bearer=None, *, decimal=False):
     root, key = settings()
     headers = {"apikey": key}
     if bearer or key.startswith("eyJ"):
@@ -26,6 +26,9 @@ async def rpc(client, name, args, bearer=None):
         raise PermissionError("IMPORT_PERMISSION_DENIED")
     if not response.is_success:
         raise BackendUnavailable("IMPORT_BACKEND_UNAVAILABLE")
+    if decimal:
+        from decimal import Decimal
+        return response.json(parse_float=Decimal)
     return response.json()
 
 

@@ -1,4 +1,5 @@
 import {Sparkles as HeaderSparkles,ChartNoAxesCombined as HeaderChartNoAxesCombined} from 'lucide-react';
+import {ReportExportButtons} from './ReportExportButtons';
 import {ReportEvidence} from './ReportEvidence';
 import {OperationHeader} from './OperationHeader';
 import {initialPeriod,reportRange,inReportRange,buildReport,type PeriodSelection} from '../lib/reporting';
@@ -477,7 +478,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
             </div>
 
             {/* كارت الرسم البياني اليومي */}
-            <TrendChart points={periodReport.points}/><ReportEvidence sales={salesInvoices} expenses={expenses} range={range}/>
+            <ReportExportButtons range={range}/><TrendChart points={periodReport.points}/><ReportEvidence sales={salesInvoices} expenses={expenses} range={range}/>
 
           </>
         )}

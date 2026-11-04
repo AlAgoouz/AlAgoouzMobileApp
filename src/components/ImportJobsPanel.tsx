@@ -13,7 +13,7 @@ export function ImportJobsPanel({onReview}:{onReview?:(job:ImportJob)=>void}){
   <h2 className="font-bold">رفع تقرير جديد</h2><p className="operation-note">ارفع كل تقرير على حدة. بعد تأكيد بدء المعالجة، تقدر تقفل الصفحة وترجع تتابع النتيجة. الرفع وحده لا يعتمد المبيعات أو يخصم المخزون.</p>
   <form className="grid gap-3 sm:grid-cols-2" onSubmit={e=>{e.preventDefault();if(file)void act(async()=>{await uploadImport(file,kind,date);setFile(null);if(input.current)input.current.value='';setNotice('تم إرسال الملف للمعالجة؛ تابع حالته أدناه.');});}}>
    <label>يوم العمل<input required disabled={busy} type="date" className="operation-input w-full" value={date} onChange={e=>setDate(e.target.value)}/></label>
-   <label>نوع التقرير<select disabled={busy} className="operation-input w-full" value={kind} onChange={e=>setKind(e.target.value as ImportKind)}><option value="financial">الأرقام المالية — إيراد اليوم</option><option value="items">الأصناف المباعة — الكميات</option></select></label>
+   <label>نوع التقرير<select disabled={busy} className="operation-input w-full" value={kind} onChange={e=>setKind(e.target.value as ImportKind)}><option value="financial">المبيعات — قيمة Begun</option><option value="items">الأصناف المباعة — الكميات</option></select></label>
    <label className="min-w-0">ملف التقرير<input ref={input} disabled={busy} type="file" accept=".csv,.xls,.xlsx" className="block w-full min-w-0 max-w-full" onChange={e=>setFile(e.target.files?.[0]??null)}/></label>
    <button type="submit" disabled={busy||!file} className="record-action">{busy?'جارٍ تنفيذ الطلب…':'رفع وبدء المعالجة'}</button>
   </form>

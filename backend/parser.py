@@ -118,13 +118,13 @@ def matrix_rows(data, extension):
         raise InvalidReport("UNSUPPORTED_IMPORT_FORMAT")
 
 
-def parse_report(data: bytes, filename: str, kind: str, catalog=None):
+def parse_report(data: bytes, filename: str, kind: str, catalog=None, expected_date=None):
     if not data or len(data) > MAX_BYTES:
         raise InvalidReport("REPORT_SIZE_LIMIT")
     extension = filename.rsplit(".", 1)[-1].lower()
-    matrix, cells = [], 0
+    matrix, row_numbers, cells = [], [], 0
     try:
-        for row in matrix_rows(data, extension):
+        for source_index,row in enumerate(matrix_rows(data, extension),1):
             row = [cell_value(value) for value in row]
             while row and row[-1] == "":
                 row.pop()
@@ -134,10 +134,17 @@ def parse_report(data: bytes, filename: str, kind: str, catalog=None):
             if len(row) > MAX_COLUMNS or cells > MAX_CELLS or len(matrix) > MAX_ROWS + 20:
                 raise InvalidReport("REPORT_SIZE_LIMIT")
             matrix.append(row)
+            row_numbers.append(source_index)
     except InvalidReport:
         raise
     except Exception:
         raise InvalidReport("INVALID_WORKBOOK") from None
+    if kind == 'financial':
+        if not matrix:
+            raise InvalidReport('EMPTY_REPORT')
+        from financial_report import begun_report
+        financial=begun_report(matrix,expected_date,InvalidReport,localized_number,row_numbers)
+        return {'rows':[financial],'columns':list(financial),'rowCount':1,'headerRow':financial['sourceRow'],'sha256':hashlib.sha256(data).hexdigest(),'warnings':[],'matches':[]}
     if len(matrix) < 2:
         raise InvalidReport("EMPTY_REPORT")
     header_index = 0
@@ -179,6 +186,9 @@ def parse_report(data: bytes, filename: str, kind: str, catalog=None):
     if any(isinstance(value, str) and value.startswith("=") for row in rows for value in row.values()):
         warnings.append("FORMULA_TEXT_REQUIRES_REVIEW")
     result = {"rows": rows, "columns": columns, "rowCount": len(rows), "headerRow": header_index + 1, "sha256": hashlib.sha256(data).hexdigest(), "warnings": warnings, "matches": matches}
+    if kind == 'items' and catalog:
+        from suggestions import suggest_rows
+        result['suggestions'] = suggest_rows(rows,columns,catalog,ALIASES,normalize)
     if len(json.dumps(result, ensure_ascii=False).encode("utf-8")) > MAX_RESULT:
         raise InvalidReport("REPORT_RESULT_TOO_LARGE")
     return result
