@@ -3,8 +3,14 @@ import {assertUserChanges,canView,type UserAccess} from '../src/lib/userAccess';
 import {emptyStore} from '../src/lib/storeState';
 import {INITIAL_ITEMS,INITIAL_PARTNERS} from '../src/data/initialData';
 import {recordExpense} from '../src/lib/ledger';
+import {recordFinancialOpening} from '../src/lib/financialOpening';
 const user:UserAccess={userId:'user',partnerId:null,displayName:'Employee',username:'employee',role:'partner',isOwner:false,permissions:{view:true}};
 const state={...emptyStore,items:[INITIAL_ITEMS[0]],partners:INITIAL_PARTNERS};
+it('reserves opening changes to the master even with financial section permissions',()=>{
+ const next=recordFinancialOpening(state,'2026-11-01',0,'تأكيد الرصيد الافتتاحي',{id:user.userId,name:'Employee'});
+ expect(()=>assertUserChanges(state,next,{...user,permissions:{view:true,partners:true,expenses:true}})).toThrow('مالك');
+ expect(()=>assertUserChanges(state,next,{...user,isOwner:true})).not.toThrow();
+});
 it('lets an unlinked user view the store without manufacturing a financial partner',()=>{
  expect(canView(user)).toBe(true);expect(user.partnerId).toBeNull();expect(state.partners).toBe(INITIAL_PARTNERS);
 });

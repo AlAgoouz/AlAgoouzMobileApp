@@ -1,5 +1,7 @@
 import {Sparkles as HeaderSparkles,ChartNoAxesCombined as HeaderChartNoAxesCombined} from 'lucide-react';
 import {ReportExportButtons} from './ReportExportButtons';
+import {FinancialOpeningPanel} from './FinancialOpeningPanel';
+import type {StoreState} from '../lib/storeState';
 import {ReportEvidence} from './ReportEvidence';
 import {OperationHeader} from './OperationHeader';
 import {initialPeriod,reportRange,inReportRange,buildReport,type PeriodSelection} from '../lib/reporting';
@@ -299,6 +301,8 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
 // شاشة تقارير الأرباح وتوزيع الشركاء الأربعة (ProfitReportsScreen)
 // ============================================================================
 interface ProfitReportsProps {
+  financeState?:StoreState;
+  onSaveOpening?:(date:string,amount:number,reason:string)=>Promise<void>;
   period?:PeriodSelection;onPeriod?:(next:PeriodSelection)=>void;
   onInsights?:()=>void;
   items: InventoryItem[];
@@ -309,6 +313,7 @@ interface ProfitReportsProps {
 }
 
 export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
+  financeState,onSaveOpening,
   period,onPeriod,
   onInsights,
   items,
@@ -478,6 +483,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
             </div>
 
             {/* كارت الرسم البياني اليومي */}
+            {financeState&&<FinancialOpeningPanel state={financeState} range={range} onSave={onSaveOpening}/>}
             <ReportExportButtons range={range}/><TrendChart points={periodReport.points}/><ReportEvidence sales={salesInvoices} expenses={expenses} range={range}/>
 
           </>

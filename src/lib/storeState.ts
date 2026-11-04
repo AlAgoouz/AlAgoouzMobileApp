@@ -16,6 +16,7 @@ import type {
   StocktakingAuditRecord,
   AccountPaymentRecord,
   CashierDay,
+  FinancialOpening,
 } from "../types/erp";
 
 export interface StoreState {
@@ -34,6 +35,7 @@ export interface StoreState {
   stocktakingRecords: StocktakingAuditRecord[];
   accountPayments: AccountPaymentRecord[];
   cashierDays: CashierDay[];
+  financialOpenings: FinancialOpening[];
 }
 export const emptyStore: StoreState = {
   items: [],
@@ -51,6 +53,7 @@ export const emptyStore: StoreState = {
   stocktakingRecords: [],
   accountPayments: [],
   cashierDays: [],
+  financialOpenings: [],
 };
 export const cloudFields: Record<keyof StoreState, string> = {
   items: "items",
@@ -68,6 +71,7 @@ export const cloudFields: Record<keyof StoreState, string> = {
   stocktakingRecords: "stocktaking_records",
   accountPayments: "account_payments",
   cashierDays: "cashier_days",
+  financialOpenings: "financial_openings",
 };
 const text = z.string(),
   id = text.min(1),
@@ -148,6 +152,7 @@ const invoice = base
   })
   .passthrough();
 export const schema = z.object({
+  financialOpenings:z.array(base.extend({date:id,account:z.literal('treasury'),amount:money.max(999999999999.99),priorPeriodSettled:z.literal(true),history:z.array(z.object({id,recordedAt:id,actorId:id,actorName:id,amount:money.max(999999999999.99),reason:text.min(6).max(500)})).min(1).max(1000)})).max(1).default([]),
   cashierDays:z.array(base.extend({date:id,status:z.enum(['pending','approved']),
     financialReport:z.object({fileName:id,sha256:text.regex(/^[a-f0-9]{64}$/),uploadedAt:id,sourceQueueId:id.optional(),totalRevenue:money}).optional(),
     itemsReport:z.object({fileName:id,sha256:text.regex(/^[a-f0-9]{64}$/),uploadedAt:id,sourceQueueId:id.optional(),lines:z.array(z.object({itemId:id,quantity:number.positive(),unitLabel:id,normalizedQtyInBaseUnit:number.positive()})).min(1)}).optional(),
@@ -402,6 +407,10 @@ export function validateStore(value: unknown): StoreState {
     );
   }
   const parsed = result.data;
+  for(const opening of parsed.financialOpenings){
+    if(new Set(opening.history.map(h=>h.id)).size!==opening.history.length)throw Error('سجل رصيد البداية يحتوي على تعديلات مكررة');
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(opening.date)||!Number.isFinite(Date.parse(opening.date+'T12:00:00Z'))||new Date(opening.date+'T12:00:00Z').toISOString().slice(0,10)!==opening.date||opening.history[opening.history.length-1]?.amount!==opening.amount||!Number.isSafeInteger(Math.round(opening.amount*100))||Math.abs(opening.amount*100-Math.round(opening.amount*100))>0.0001)throw Error('رصيد أول المدة أو سجل تعديلاته غير صالح');
+  }
   if(new Set(parsed.cashierDays.map(d=>d.date)).size!==parsed.cashierDays.length)throw Error('يوجد يوم كاشير مكرر');
   for(const day of parsed.cashierDays){
     if(!day.financialReport&&!day.itemsReport)throw Error('يوم الكاشير بلا تقارير');

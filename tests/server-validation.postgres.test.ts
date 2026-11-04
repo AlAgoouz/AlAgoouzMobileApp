@@ -8,6 +8,7 @@ import {deductInventory} from '../src/lib/inventory';
 import {adjustCatalogItem} from '../src/lib/catalogAdjustments';
 import {businessDate} from '../src/lib/dates';
 import {receiveStock} from '../src/lib/costing';
+import {recordFinancialOpening} from '../src/lib/financialOpening';
 import {attachCashierReport,approveCashierDay} from '../src/lib/cashierDays';
 import {salesForReports} from '../src/lib/cashierDays';
 import {buildReport,reportRange,reportPoints} from '../src/lib/reporting';
@@ -138,6 +139,25 @@ function save(value:any){return sql(`begin;set local request.jwt.claim.sub='${ow
 const accept=(store:StoreState)=>expect(save(toCloud(store))).toContain('"version": 1');
 const reject=(store:StoreState,reason:string)=>{expect(()=>save(toCloud(store))).toThrow(reason);expect(sql("select version from public.bon_elagouz_store where id='main_store'")).toBe('0');};
 it.skipIf(!active)('accepts an actual complete store through the versioned API',()=>expect(save(toCloud(state))).toContain('"version": 1'));
+it.skipIf(!active)('records a settled opening asset once without changing revenue, profit, partners or debt',()=>{
+ const next=recordFinancialOpening(stockState(),'2026-11-01',1000,'ترحيل رصيد أكتوبر بعد التسوية',{id:owner,name:'Owner'});seed(stockState());accept(next);
+ const result=readJson(`select public.bon_erp_save_store(0,${literal(toCloud(next))},'${crypto.randomUUID()}');select jsonb_build_object('report',public.bon_erp_dashboard('2026-11-01','2026-11-30')->'report','opening',(select financial_openings->0->'amount' from public.bon_elagouz_store),'partners',(select partners from public.bon_elagouz_store),'expenses',(select expenses from public.bon_elagouz_store))`);
+ expect(result.opening).toBe(1000);expect(result.report.revenue).toBe(0);expect(result.report.net).toBe(0);expect(result.expenses).toEqual([]);expect(result.partners).toEqual(state.partners);
+});
+it.skipIf(!active)('requires the master and immutable correction history for opening changes',()=>{
+ const id='22222222-2222-4222-8222-222222220094';userAccessFixture(id,{view:true,partners:true});
+ const next=recordFinancialOpening(stockState(),'2026-11-01',1000,'رصيد مؤكد في خزنة الشركة',{id:owner,name:'Owner'});
+ expect(()=>asUser(id,`select public.bon_erp_save_store(0,${literal(toCloud(next))},'${crypto.randomUUID()}')`)).toThrow();
+ const forged=structuredClone(next);forged.financialOpenings[0].history[0].actorId=id;reject(forged,'OPENING_HISTORY_REQUIRED');
+ const changed=structuredClone(next);changed.financialOpenings[0].amount=2000;reject(changed,'OPENING_HISTORY_REQUIRED');
+ sql(`begin;set local request.jwt.claim.sub='${owner}';update public.bon_elagouz_store set financial_openings=${literal(next.financialOpenings)};commit;`);
+ const correction=recordFinancialOpening(next,'2026-11-01',1200,'تصحيح مثبت من عد الخزنة',{id:owner,name:'Owner'});accept(correction);
+ const tampered=structuredClone(correction);tampered.financialOpenings[0].history[0].reason='تغيير السجل السابق';reject(tampered,'OPENING_HISTORY_IMMUTABLE');
+ reject({...next,financialOpenings:[]},'OPENING_IMMUTABLE');
+ const legacy=toCloud(stockState());delete legacy.financial_openings;
+ const preserved=readJson(`select public.bon_erp_save_store(0,${literal(legacy)},'${crypto.randomUUID()}');select financial_openings from public.bon_elagouz_store`);
+ expect(preserved).toEqual(next.financialOpenings);
+});
 it.skipIf(!active)('publishes a small protected version row in the same financial transaction',()=>{
   expect(sql(`begin;set local request.jwt.claim.sub='${owner}';set local role authenticated;select public.bon_erp_save_store(0,${literal(toCloud(state))},gen_random_uuid(),null);select version from public.bon_erp_store_versions where id='main_store';rollback;`)).toContain('\n1');
   expect(sql("select version from public.bon_erp_store_versions where id='main_store'")).toBe('0');

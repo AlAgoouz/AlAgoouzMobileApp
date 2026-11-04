@@ -58,10 +58,12 @@ def pdf_bytes(title,period,sections):
 def report_pdf(report):
     from reporting import number
     labels={'revenue':'المبيعات المسجلة','cost':'تكلفة البضاعة','gross':'مجمل الربح','spent':'مصروفات التشغيل','net':'صافي الربح'}
+    opening=report.source.get('financial_openings',[])
+    extra=[('رصيد أول المدة المستقل عن الربح',['التاريخ','خزنة الشركة'],[[opening[0]['date'],number(opening[0],'amount',nonnegative=True)]])] if opening else []
     return pdf_bytes('ملخص النتائج المالية','من '+report.from_date+' إلى '+report.to_date,[
         ('ملخص الفترة',['البيان','جنيه مصري'],[[label,number(report.summary['report'],key)] for key,label in labels.items()]),
         ('الأيام المسجلة',['التاريخ','المبيعات','الصافي'],[[r['date'],r['sales'],r['profit']] for r in report.daily]),
-        ('نطاق التقرير',['ملاحظات'],[['المبيعات تستبعد المرتجعات وتضم أيام الكاشير المعتمدة مرة واحدة.'],['الصافي بعد مصروفات التشغيل، دون المسحوبات الشخصية.'],['إصدار البيانات: '+str(report.source['version'])]])])
+        ('نطاق التقرير',['ملاحظات'],[['المبيعات تستبعد المرتجعات وتضم أيام الكاشير المعتمدة مرة واحدة.'],['الصافي بعد مصروفات التشغيل، دون المسحوبات الشخصية.'],['إصدار البيانات: '+str(report.source['version'])]])]+extra)
 
 
 def invoice_pdf(invoice):

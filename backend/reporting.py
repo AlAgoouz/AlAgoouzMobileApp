@@ -131,6 +131,11 @@ def workbook_bytes(report):
     sheet('الموردون',['المورد','الهاتف','العنوان','المندوب','إجمالي المشتريات المسجل'],[[text(r,'name'),text(r,'phone',True),text(r,'address',True),text(r,'representativeName',True),number(r,'totalPurchases')] for r in records(report.source,'suppliers')])
     sheet('المشتريات',['الفاتورة','التاريخ','المورد','الصافي دون الضريبة','الضريبة المنفصلة','الإجمالي','الحالة'],[[text(r,'invoiceNumber'),business_day(r),text(r,'supplierName'),number(r,'netAmount',True),number(r,'taxAmount',True),number(r,'totalAmount'),'ملغاة' if r.get('isCancelled') else 'معتمدة'] for r in records(report.source,'purchase_invoices')])
     sheet('حصص الشركاء',['الشريك','النسبة %','حصة ربح الفترة فقط','المدفوع من الجيب حاليًا','المسحوبات حاليًا'],[[text(r,'name'),number(r,'sharePercent'),number(report.summary['report'],'net')*number(r,'sharePercent')/100,number(r,'totalPaidFromPocket'),number(r,'totalWithdrawals')] for r in records(report.source,'partners')])
+    openings=records(report.source,'financial_openings') if 'financial_openings' in report.source else []
+    if len(openings)>1:raise ValueError('INVALID_FINANCIAL_OPENING')
+    if openings:
+        r=openings[0]
+        sheet('بداية المدة',['تاريخ بداية التشغيل','مكان الرصيد','الرصيد الافتتاحي الحالي','المعالجة'],[[business_day(r),'خزنة الشركة',number(r,'amount',nonnegative=True),'رصيد مرحّل مستقل عن المبيعات والأرباح وحصص الشركاء']])
     book.close()
     data=output.getvalue()
     if len(data)>8*1024*1024:raise ValueError('EXPORT_SIZE_LIMIT')
