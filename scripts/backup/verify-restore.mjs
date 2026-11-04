@@ -2,6 +2,7 @@ import {execFileSync,spawnSync} from 'node:child_process';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {resolve,join,sep} from 'node:path';
 import {randomBytes,createHash,createHmac} from 'node:crypto';
+import {Worker} from 'node:worker_threads';
 import {sha256,decryptFile} from './archive.mjs';
 import {validateArchiveEntries,storageSnapshotSQL,vaultSnapshotSQL,vaultRecoverySQL,storagePath,resourceFile,downloadStorage} from './resources.mjs';
 import {validateProviderSettings} from './provider-settings.mjs';
@@ -23,6 +24,7 @@ const receipt=JSON.parse(readFileSync(join(work,'receipt.json'),'utf8'));
 let manifest,proof,providerSettingsVerified=false,providerSettingsSections=0;
 const inputs=join(restore,'inputs');mkdirSync(inputs,{mode:0o700});
 let pgEnv,createdNetwork=false,createdDB=false,createdAuth=false,createdVolume=false,createdStorage=false,createdStorageVolume=false;
+const localProxies=[];
 function run(exe,args,env=process.env,input){
   try{return execFileSync(exe,args,{encoding:'utf8',env,input,windowsHide:true,timeout:180000,maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe']});}
   catch(error){writeFileSync(join(restore,'failure.private.log'),error.stderr || String(error.code),{mode:0o600});if(exe==='docker')console.error('RESTORE_DOCKER_FAILED: '+String(error.stderr||error.code).split('\n')[0].replaceAll(password,'[redacted]').replaceAll(jwtSecret,'[redacted]'));throw new Error('RESTORE_TOOL_FAILED: '+exe.split(/[\\/]/).pop());}
@@ -30,10 +32,16 @@ function run(exe,args,env=process.env,input){
 const pgTool=(name)=>join(pg,name+(process.platform==='win32'?'.exe':''));
 function sql(query,db=database){return run(pgTool('psql'),['-XqAt','-v','ON_ERROR_STOP=1','-d',db],pgEnv,query).trim();}
 const literal=(s)=>"'"+s.replaceAll("'","''")+"'";
-function port(container,internal){
-  const value=run('docker',['port',container,internal+'/tcp']).trim();
-  const match=value.match(/^127\.0\.0\.1:(\d+)$/);
-  if(!match)throw new Error('RESTORE_PORT_NOT_LOOPBACK');return match[1];
+async function port(container,internal){
+  // Internal Docker networks do not publish ports. A loopback-only host
+  // proxy reaches the exact isolated container while it has no Internet route.
+  const info=JSON.parse(run('docker',['inspect',container]))[0];
+  if(info.Config.Labels?.['app.agouz.purpose']!=='isolated-recovery'||!container.startsWith(prefix))throw Error('RESTORE_PROXY_TARGET_REFUSED');
+  const host=info.NetworkSettings.Networks?.[network]?.IPAddress;
+  if(typeof host!=='string'||!/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host))throw Error('RESTORE_PRIVATE_NETWORK_REQUIRED');
+  const worker=new Worker(new URL('./restore-proxy.mjs',import.meta.url),{workerData:{host,port:internal}});
+  localProxies.push(worker);
+  return await new Promise((resolve,reject)=>{worker.once('error',reject);worker.once('message',message=>resolve(String(message.port)));});
 }
 async function waitUntil(check){
   for(let i=0;i<180;i++){if(await check())return;await new Promise((resolve)=>setTimeout(resolve,1000));}
@@ -80,8 +88,9 @@ try{
   const serverCommand=imageConfig.Cmd;
   if(!Array.isArray(serverCommand)||!serverCommand.some(value=>String(value).endsWith('postgres')))throw Error('RESTORE_POSTGRES_COMMAND_UNSUPPORTED');
   run('docker',['run','-d','--pull','never','--name',dbContainer,'--label','app.agouz.purpose=isolated-recovery','--network',network,'--env-file',dbEnv,'--mount','type=volume,source='+volume+',target=/var/lib/postgresql/data','--publish','127.0.0.1::5432',image,...serverCommand,'-c','cron.database_name='+database,'-c','cron.launch_active_jobs=off','-c','pg_net.database_name=agouz_restore_network_disabled']);createdDB=true;
-  pgEnv={...process.env,PGHOST:'127.0.0.1',PGPORT:port(dbContainer,5432),PGUSER:'supabase_admin',PGPASSWORD:password,PGSSLMODE:'disable',PGCONNECT_TIMEOUT:'3',PGOPTIONS:'-c timezone=UTC'};
+  pgEnv={...process.env,PGHOST:'127.0.0.1',PGPORT:await port(dbContainer,5432),PGUSER:'supabase_admin',PGPASSWORD:password,PGSSLMODE:'disable',PGCONNECT_TIMEOUT:'3',PGOPTIONS:'-c timezone=UTC'};
   await waitUntil(()=>{try{sql('select 1;','postgres');return true;}catch{return false;}});
+  if(sql("select current_setting('cron.launch_active_jobs');",'postgres')!=='off'||sql("select current_setting('pg_net.database_name');",'postgres')!=='agouz_restore_network_disabled')throw Error('RESTORE_BACKGROUND_EXECUTION_NOT_DISABLED');
   if(!/^agouz_recovery_[a-f0-9]{12}$/.test(database))throw new Error('RESTORE_DATABASE_REFUSED');
   sql('create database '+database+' template template0;','postgres');
   const roles=Array.from(readFileSync(join(inputs,'roles.sql'),'utf8').matchAll(/^CREATE ROLE (.+);$/gm),m=>m[1].replace(/^"|"$/g,'').replaceAll('""','"'));
@@ -124,7 +133,7 @@ try{
       'UPLOAD_FILE_SIZE_LIMIT=524288000','FILE_SIZE_LIMIT=524288000',
     ].join('\n')+'\n',{mode:0o600});
     run('docker',['run','-d','--pull','never','--name',storageContainer,'--label','app.agouz.purpose=isolated-recovery','--network',network,'--env-file',storageEnv,'--mount','type=volume,source='+storageVolume+',target=/var/lib/storage','--publish','127.0.0.1::5000','public.ecr.aws/supabase/storage-api:v1.87.2']);createdStorage=true;
-    const baseURL='http://127.0.0.1:'+port(storageContainer,5000);
+    const baseURL='http://127.0.0.1:'+await port(storageContainer,5000);
     await waitUntil(async()=>{try{return(await fetch(baseURL+'/status',{signal:AbortSignal.timeout(2000)})).ok;}catch{return false;}});
     for(const object of storage.objects){
       const bytes=readFileSync(join(inputs,resourceFile(object.id)));
@@ -145,7 +154,7 @@ try{
     'GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated','GOTRUE_EXTERNAL_EMAIL_ENABLED=true','GOTRUE_MAILER_AUTOCONFIRM=true','GOTRUE_DISABLE_SIGNUP=false',
   ].join('\n')+'\n',{mode:0o600});
   run('docker',['run','-d','--pull','never','--name',authContainer,'--label','app.agouz.purpose=isolated-recovery','--network',network,'--env-file',authEnv,'--publish','127.0.0.1::9999','public.ecr.aws/supabase/gotrue:v2.197.0']);createdAuth=true;
-  const authURL='http://127.0.0.1:'+port(authContainer,9999);
+  const authURL='http://127.0.0.1:'+await port(authContainer,9999);
   await waitUntil(async()=>{try{return(await fetch(authURL+'/health',{signal:AbortSignal.timeout(2000)})).ok;}catch{return false;}});
   const testEmail='restore-'+nonce+'@example.test',testPassword=randomBytes(24).toString('base64url');
   const created=await fetch(authURL+'/admin/users',{method:'POST',headers:{Authorization:'Bearer '+jwt(),'Content-Type':'application/json'},body:JSON.stringify({email:testEmail,password:testPassword,email_confirm:true}),signal:AbortSignal.timeout(15000)});
@@ -169,13 +178,14 @@ try{
   const oldLogin=await fetch(authURL+'/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:testEmail,password:testPassword}),signal:AbortSignal.timeout(15000)});
   const newLogin=await fetch(authURL+'/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:testEmail,password:newPassword}),signal:AbortSignal.timeout(15000)});
   if(oldLogin.ok||!newLogin.ok)throw new Error('RESTORE_RECOVERY_NEW_LOGIN_FAILED');
-  proof={generation:receipt.generation,verifiedAt:new Date().toISOString(),encryptedSha256:receipt.encryptedSha256,allTableDataMatched:true,tablesCompared:Object.keys(expected).length-1,authUsersRestored:authUsers,syntheticAuthLoginVerified:true,syntheticPasswordRecoveryVerified:true,restoredFromDownloadedArchive:true,resourcesVerified:manifest.version===2,storageFilesVerified:storage.objects.length,vaultSecretsVerified:vault.length,storageOwnershipMatched:true,productionWrites:false,restoreVerified:true};
+  proof={generation:receipt.generation,verifiedAt:new Date().toISOString(),encryptedSha256:receipt.encryptedSha256,allTableDataMatched:true,tablesCompared:Object.keys(expected).length-1,authUsersRestored:authUsers,syntheticAuthLoginVerified:true,syntheticPasswordRecoveryVerified:true,restoredFromDownloadedArchive:true,resourcesVerified:manifest.version===2,storageFilesVerified:storage.objects.length,vaultSecretsVerified:vault.length,storageOwnershipMatched:true,productionWrites:false,externalNetworkBlocked:true,scheduledJobsDisabled:true,restoreVerified:true};
   proof.providerSettingsVerified=providerSettingsVerified;proof.providerSettingsSections=providerSettingsSections;
 }catch(error){
   for(const name of [dbContainer,authContainer,storageContainer]){try{const logs=spawnSync('docker',['logs','--tail','100',name],{encoding:'utf8',windowsHide:true,timeout:15000});writeFileSync(join(restore,name+'.private.log'),(logs.stdout||'')+(logs.stderr||''),{mode:0o600});}catch{}}
   console.error(error.message);process.exitCode=1;
 }
 finally{
+  for(const worker of localProxies)await worker.terminate();
   for(const [name,created]of [[storageContainer,createdStorage],[authContainer,createdAuth],[dbContainer,createdDB]]){
     if(!created)continue;
     try{const label=run('docker',['inspect','--format','{{index .Config.Labels "app.agouz.purpose"}}',name]).trim();if(label!=='isolated-recovery'||!name.startsWith(prefix))throw new Error('RESTORE_CLEANUP_REFUSED');run('docker',['rm','-f',name]);}catch{console.error('RESTORE_CLEANUP_FAILED');process.exitCode=1;}
