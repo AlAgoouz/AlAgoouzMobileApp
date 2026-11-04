@@ -22,7 +22,7 @@ export function ImportJobsPanel({onReview}:{onReview?:(job:ImportJob)=>void}){
   <div className="record-grid">{jobs?.map(job=><article key={job.id} className="record-card"><div className="record-heading"><h4 className="break-words">{job.file_name}</h4><span className="record-badge">{job.reviewed&&job.status==='ready'?'مرتبط بيوم مسجل':labels[job.status]}</span></div><p>{job.sale_date} · {job.kind==='financial'?'تقرير مالي':'تقرير أصناف'}</p>
    {job.status==='failed'&&<p>{job.error_code==='UPLOAD_EXPIRED'?'لم يكتمل الرفع؛ ارفع الملف مجددًا.':importError(job.error_code??'')}</p>}
    {(['queued','processing'] as string[]).includes(job.status)&&Date.now()-Date.parse(job.updated_at)>10*60*1000&&<p>المعالجة متأخرة؛ أعد إرسال الطلب.</p>}
-   <div className="flex flex-wrap gap-2">{job.status==='ready'&&!job.reviewed&&onReview&&<button disabled={busy} className="record-action" onClick={()=>void act(async()=>onReview(await readImport(job.id)))}>مراجعة التقرير</button>}
+   <div className="record-actions">{job.status==='ready'&&!job.reviewed&&onReview&&<button disabled={busy} className="record-action" onClick={()=>void act(async()=>onReview(await readImport(job.id)))}>مراجعة التقرير</button>}
    {(['uploading','queued','processing','failed'] as string[]).includes(job.status)&&job.error_code!=='UPLOAD_EXPIRED'&&<button disabled={busy} className="record-action" onClick={()=>void act(()=>enqueueImport(job.id))}>إعادة المحاولة</button>}
    {job.status!=='cancelled'&&!job.reviewed&&<button disabled={busy} onClick={()=>void act(()=>cancelImport(job.id))}>إلغاء الملف الخطأ</button>}</div>
   </article>)}</div>

@@ -11,6 +11,13 @@
 .record-badge{font-size:11px;border:1px solid #dfcda7;background:#f6eddc;color:#84652f;padding:4px 8px;border-radius:9px;flex-shrink:0}
 .record-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;border-block:1px solid #e7dcc9;padding-block:12px;margin-bottom:14px}.record-facts dt{font-size:11px;color:#82705a}.record-facts dd{font-size:14px;font-weight:800;overflow-wrap:anywhere}
 .record-action{min-height:44px;width:100%;border:1px solid #d7c29d;background:#f4e9d2;border-radius:12px;font-size:12px;font-weight:800;color:#745428}
+.record-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px}
+.record-actions>button{min-height:44px;border:1px solid #dccbae;border-radius:12px;padding:8px 12px;font-size:12px}
+.operation-input{display:block;min-height:46px;min-width:0;width:100%;margin-top:8px;border:1px solid #dfd0b8;border-radius:14px;background:#fffdfa;padding:11px 13px;color:#352719;font-size:13px}
+.operation-input:focus-visible,.record-action:focus-visible,.record-actions>button:focus-visible{outline:2px solid #aa7c35;outline-offset:3px}
+.operation-input:disabled,.record-action:disabled,.record-actions>button:disabled{opacity:.55;cursor:wait}
+.record-workspace input[type=file]{min-height:46px;padding:9px;border:1px dashed #cbb38c;border-radius:14px;background:#fcf7ed;font-size:12px}
+.record-workspace input[type=file]::file-selector-button{border:0;border-radius:9px;background:#eaddc4;color:#60472b;padding:8px 12px;margin-inline-end:10px;font:inherit}
 .record-state{padding:22px;border:1px dashed #d9c5a3;border-radius:18px;background:#fcf7ee;font-size:13px;line-height:1.9;color:#7c684a}.record-state button{min-height:44px;padding:8px 14px;border:1px solid #c9ac78;border-radius:12px;margin-top:10px}
 @media(min-width:768px){.record-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.record-workspace{padding-inline:22px}}
 @media print{.record-tabs,.record-search,.record-action{display:none}.record-card{break-inside:avoid;box-shadow:none}}

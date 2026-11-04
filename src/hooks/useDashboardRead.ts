@@ -17,7 +17,7 @@ export function useDashboardRead(userId:string|undefined,enabled:boolean,period:
   const check=async()=>{
    if(!alive||checking||document.visibilityState==='hidden'||!navigator.onLine)return;
    checking=true;
-   try{const sb=getSupabaseClient();if(!sb)return;const [response,queue]=await Promise.all([sb.from('bon_elagouz_store').select('version').eq('id','main_store').single(),sb.from('cashier_sync_queue').select('id',{count:'exact',head:true}).eq('processed',false)]);if(response.error||queue.error||queue.count===null)throw Error('VERSION_CHECK_FAILED');if(alive&&version!==undefined&&(Number(response.data.version)!==version||queue.count!==queueCount))await load();}
+   try{const sb=getSupabaseClient();if(!sb)return;const [response,queue]=await Promise.all([sb.from('bon_elagouz_store').select('version').eq('id','main_store').single(),sb.from('cashier_sync_queue').select('id',{count:'exact',head:true}).eq('processed',false)]);if(response.error||queue.error||queue.count===null)throw Error('VERSION_CHECK_FAILED');if(alive&&version!==undefined&&(Number(response.data.version)!==version||queue.count!==queueCount))await load();else if(alive)setResult(previous=>previous.key===key&&previous.error?{...previous,error:''}:previous);}
    catch{if(alive)setResult(previous=>previous.key===key?{...previous,error:'تعذر التحقق من أحدث البيانات؛ المعروض هو آخر ملخص وصل بنجاح.'}:previous);}
    finally{checking=false;}
   };
