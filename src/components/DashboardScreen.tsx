@@ -1,3 +1,4 @@
+import {OperationalHealth} from './OperationalHealth';
 import {ScreenLoading} from './ScreenLoading';
 import React,{useMemo,useState} from 'react';
 import {ArrowUpLeft,ArrowDownLeft,Wallet,Package,Receipt,Eye,EyeOff,AlertTriangle,FolderSync,Users,Clock3,Search,ChevronLeft,CheckCircle2} from 'lucide-react';
@@ -27,8 +28,9 @@ export function DashboardScreen({model,error,onRetry,period,onPeriod,name,onNavi
  {label:'قيمة المخزون الحالية',value:balances.inventory,icon:Package,detail:'رصيد الآن · لا يتغير بفلتر الفترة',tone:'neutral'}];
  return <main className="dashboard-screen" dir="rtl">
   {intro}
+  {error&&<p role="alert" className="record-state">{error} <button onClick={onRetry}>إعادة المحاولة</button></p>}
   <div className="dashboard-section-heading"><div><h2>ملخص الإحصائيات والأرباح المباشر</h2><p>{range.label} · حسب المستندات المسجلة وحالة المرتجعات والإلغاءات الحالية</p></div><button type="button" className="quiet-button" onClick={()=>setHide(v=>!v)} aria-pressed={hide} aria-label={hide?'إظهار الأرباح':'إخفاء الأرباح'}>{hide?<Eye size={18}/>:<EyeOff size={18}/>}<span>{hide?'إظهار':'إخفاء'} الأرباح</span></button></div>
-  <section className="metric-grid" aria-label="مؤشرات المحل">{metrics.map(m=><article className={`metric-card metric-${hide&&m.private?'neutral':m.tone}`} key={m.label}><span className="metric-icon"><m.icon size={21}/></span><p>{m.label}</p><strong className={m.value<0&&!(hide&&m.private)?'value-negative':''}>{display(m.value,m.private)}<small>ج.م</small></strong><span className="metric-detail">{m.detail}</span></article>)}</section>
+  <section className="metric-grid" aria-label="مؤشرات المحل">{metrics.map(m=><article className={`metric-card metric-${hide&&m.private?'neutral':m.tone}`} key={m.label}><span className="metric-icon"><m.icon size={21}/></span><p>{m.label}</p><strong className={m.value<0&&!(hide&&m.private)?'value-negative':''}>{display(m.value,m.private)}<small>ج.م</small></strong><span className="metric-detail">{m.detail}</span><button className="quiet-button" onClick={()=>onNavigate(m.label==='قيمة المخزون الحالية'?'inventory':'reports')}>عرض التفاصيل</button></article>)}</section>
   <div className={`coverage-note ${approved?'coverage-confirmed':''}`}><CheckCircle2 size={18}/><p>{approved?`${approved} يوم كاشير معتمد داخل الفترة.`:'لا يوجد تقرير كاشير معتمد داخل الفترة.'} الأرقام تعكس المسجل حتى الآن؛ اكتمال بيع المحل يتطلب اعتماد تقاريره.</p></div>
   <section className="attention-grid" aria-label="ما يحتاج انتباهك">
    <button type="button" className="attention-card" onClick={()=>onNavigate('cashier_sync')}><span className="attention-icon"><FolderSync size={21}/></span><span><b>مراجعة الكاشير</b><small>{queued} ملفات واردة · {pending} أيام غير معتمدة</small></span><strong>{queued+pending}</strong><ChevronLeft size={17}/></button>
@@ -36,7 +38,7 @@ export function DashboardScreen({model,error,onRetry,period,onPeriod,name,onNavi
    <button type="button" className="attention-card" onClick={()=>onNavigate('customers')}><span className="attention-icon"><Users size={21}/></span><span><b>مديونيات العملاء الحالية</b><small>رصيد الآن · فتح كشف الحساب والتحصيل</small></span><strong>{money(balances.debts)}<small> ج.م</small></strong><ChevronLeft size={17}/></button>
   </section>
   <div className="dashboard-panels"><div className="dashboard-column">
-   <TrendChart points={report.points} hide={hide}/>
+   <TrendChart points={report.points} hide={hide}/><OperationalHealth onCashier={()=>onNavigate('cashier_sync')}/>
    <ComparisonChart hide={hide} values={[{label:'المبيعات',value:report.revenue,tone:'fill-gold'},{label:'تكلفة البضاعة',value:report.cost,private:true,tone:'fill-brown'},{label:'المصروفات',value:report.spent,tone:'fill-amber'},{label:'الصافي',value:report.net,private:true,tone:'fill-green'}]}/>
   </div><div className="dashboard-column">
    <section className="visual-card"><div className="card-heading"><span className="card-icon"><Receipt size={20}/></span><div><h2>مصادر المبيعات</h2><p>قنوات البيع المسجلة خلال الفترة</p></div></div>{report.revenue===0?<EmptyChart>تظهر نسب القنوات بعد تسجيل مبيعات في الفترة.</EmptyChart>:<><div className="channel-track" aria-hidden="true">{channels.map(c=><span key={c.id} className={'channel-'+c.id} style={{width:`${c.value/report.revenue*100}%`}}/>)}</div><div className="channel-list">{channels.map(c=><div key={c.id}><span><i className={'channel-dot channel-'+c.id}/>{c.label}</span><b>{money(c.value)} ج.م <small>{money(c.value/report.revenue*100)}%</small></b></div>)}</div></>}</section>

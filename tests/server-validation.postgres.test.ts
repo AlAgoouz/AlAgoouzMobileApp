@@ -266,7 +266,7 @@ function importJob(user=owner,date='2026-11-01',kind='financial'){
 }
 function workerCall(job:any,action='claim',result:any={rows:[{total:5}],sha256:'a'.repeat(64)},attempt:number|null=1){
  const query=action==='claim'?`public.bon_erp_claim_import('${job.id}','${job.key}')`:`public.bon_erp_finish_import('${job.id}','${job.key}',${attempt??'null'},${literal(result)},null)`;
- return JSON.parse(sql(`begin;set local role anon;select ${query};commit;`));
+ return JSON.parse(sql(`begin;set local role anon;select ${query};commit;`)||'null');
 }
 it.skipIf(!active)('parses into a pending cashier queue exactly once without changing money or stock',()=>{
  const job=importJob(),before=sql("select row_to_json(s)::text from public.bon_elagouz_store s");
@@ -293,7 +293,7 @@ it.skipIf(!active)('rejects null, wrong and replayed import credentials, result 
 });
 it.skipIf(!active)('keeps cashier jobs and storage private and stops processing after account revocation',()=>{
  const cashier='22222222-2222-4222-8222-222222220041',other='22222222-2222-4222-8222-222222220042';userAccessFixture(cashier,{},'cashier');userAccessFixture(other,{},'cashier');const job=importJob(cashier);
- expect(JSON.parse(importAs(other,`select public.bon_erp_read_import('${job.id}')`))).toBeNull();
+ expect(JSON.parse(importAs(other,`select public.bon_erp_read_import('${job.id}')`)||'null')).toBeNull();
  expect(()=>importAs(other,`select public.bon_erp_prepare_import('${job.id}','${'x'.repeat(30)}')`)).toThrow('USER_PERMISSION_DENIED');
  expect(()=>importAs(other,`select public.bon_erp_cancel_import('${job.id}')`)).toThrow('USER_PERMISSION_DENIED');
  expect(workerCall(job).catalog).toEqual([]);
@@ -318,4 +318,21 @@ it.skipIf(!active)('validates import reservations and requires an actual stored 
  expect(()=>importAs(owner,`select public.bon_erp_prepare_import('${job.id}',null)`)).toThrow('IMPORT_UPLOAD_MISSING');
  expect(()=>importAs(owner,`select public.bon_erp_prepare_import('${job.id}','${'x'.repeat(30)}')`)).toThrow('IMPORT_UPLOAD_MISSING');
  expect(()=>sql(`begin;set local role anon;select public.bon_erp_read_import();rollback;`)).toThrow('permission denied');
+});
+
+it.skipIf(!active)('reports recovery health through a narrow backup-only receipt while preserving the previous verified archive',()=>{
+ const reader='33333333-3333-4333-8333-333333333334';
+ sql(`insert into auth.users values('${reader}','health@local.test',now());insert into bon_erp_private.storage_backup_principal values(true,'${reader}')`);
+ const sha='d'.repeat(40),generation='2026-11-04T01-00-00-000Z-12345678';
+ const report=(state:string,run:string)=>importAs(reader,`select public.bon_erp_report_recovery_health('${state}','${run}','${sha}','${generation}')`);
+ expect(()=>importAs(owner,`select public.bon_erp_report_recovery_health('running','1','${sha}')`)).toThrow('BACKUP_PRINCIPAL_REQUIRED');
+ expect(()=>importAs(reader,`select public.bon_erp_report_recovery_health('success',null,'${sha}')`)).toThrow('INVALID_RECOVERY_STATUS');
+ report('running','1');report('success','1');const verified=JSON.parse(importAs(owner,'select public.bon_erp_operational_health()')).backup;
+ expect(verified.state).toBe('success');expect(verified.last_verified_run).toBe('1');
+ report('running','2');report('failed','2');const failed=JSON.parse(importAs(owner,'select public.bon_erp_operational_health()')).backup;
+ expect(failed.last_verified_at).toBe(verified.last_verified_at);expect(failed.last_verified_run).toBe('1');expect(failed.state).toBe('failed');
+ expect(()=>report('success','1')).toThrow('RECOVERY_RUN_CHANGED');
+ expect(()=>importAs(reader,'select public.bon_erp_operational_health()')).toThrow('USER_PERMISSION_DENIED');
+ expect(importAs(reader,"select count(*) from public.bon_elagouz_store")).toBe('0');
+ sql(`delete from bon_erp_private.storage_backup_principal where user_id='${reader}';delete from auth.users where id='${reader}'`);
 });

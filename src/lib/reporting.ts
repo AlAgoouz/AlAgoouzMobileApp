@@ -16,6 +16,14 @@ export function reportRange(period:PeriodSelection,today=businessDate()):ReportR
  return {from,to,label,valid:validCalendarDate(from)&&validCalendarDate(to)&&from<=to};
 }
 export const inReportRange=(date:string,range:ReportRange)=>range.valid&&date>=range.from&&date<=range.to;
+export function previousReportRange(range:ReportRange):ReportRange|null{
+ if(!range.valid||range.from==='0001-01-01'||range.to==='9999-12-31')return null;
+ const start=Date.parse(range.from+'T12:00:00Z'),end=Date.parse(range.to+'T12:00:00Z'),days=(end-start)/86400000+1;
+ if(days<1||days>731)return null;
+ const previousStart=new Date(start-days*86400000),previousEnd=new Date(start-86400000);
+ if(previousStart.getUTCFullYear()<1)return null;
+ return {from:previousStart.toISOString().slice(0,10),to:previousEnd.toISOString().slice(0,10),valid:true,label:'الفترة السابقة'};
+}
 export function chartDomain(values:number[]){const min=Math.min(0,...values),max=Math.max(0,...values);return min===max?{min:0,max:1}:{min,max};}
 export interface TrendPoint {date:string;sales:number;profit:number;recorded:boolean;}
 export function buildReport(sales:SalesInvoice[],expenses:Expense[],range:ReportRange){
