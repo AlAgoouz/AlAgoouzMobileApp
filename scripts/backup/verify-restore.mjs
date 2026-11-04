@@ -25,7 +25,7 @@ const inputs=join(restore,'inputs');mkdirSync(inputs,{mode:0o700});
 let pgEnv,createdNetwork=false,createdDB=false,createdAuth=false,createdVolume=false,createdStorage=false,createdStorageVolume=false;
 function run(exe,args,env=process.env,input){
   try{return execFileSync(exe,args,{encoding:'utf8',env,input,windowsHide:true,timeout:180000,maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe']});}
-  catch(error){writeFileSync(join(restore,'failure.private.log'),error.stderr || String(error.code),{mode:0o600});throw new Error('RESTORE_TOOL_FAILED: '+exe.split(/[\\/]/).pop());}
+  catch(error){writeFileSync(join(restore,'failure.private.log'),error.stderr || String(error.code),{mode:0o600});if(exe==='docker')console.error('RESTORE_DOCKER_FAILED: '+String(error.stderr||error.code).split('\n')[0].replaceAll(password,'[redacted]').replaceAll(jwtSecret,'[redacted]'));throw new Error('RESTORE_TOOL_FAILED: '+exe.split(/[\\/]/).pop());}
 }
 const pgTool=(name)=>join(pg,name+(process.platform==='win32'?'.exe':''));
 function sql(query,db=database){return run(pgTool('psql'),['-XqAt','-v','ON_ERROR_STOP=1','-d',db],pgEnv,query).trim();}
@@ -75,7 +75,11 @@ try{
   run('docker',['network','create','--internal','--label','app.agouz.purpose=isolated-recovery',network]);createdNetwork=true;
   run('docker',['volume','create','--label','app.agouz.purpose=isolated-recovery',volume]);createdVolume=true;
   const dbEnv=join(restore,'database.env');writeFileSync(dbEnv,'POSTGRES_PASSWORD='+password+'\nPOSTGRES_USER=supabase_admin\n',{mode:0o600});
-  run('docker',['run','-d','--pull','never','--name',dbContainer,'--label','app.agouz.purpose=isolated-recovery','--network',network,'--env-file',dbEnv,'--mount','type=volume,source='+volume+',target=/var/lib/postgresql/data','--publish','127.0.0.1::5432','public.ecr.aws/supabase/postgres:17.11.0.004','-c','cron.database_name='+database,'-c','cron.launch_active_jobs=off','-c','pg_net.database_name=agouz_restore_network_disabled']);createdDB=true;
+  const image='public.ecr.aws/supabase/postgres:17.11.0.004';
+  const imageConfig=JSON.parse(run('docker',['image','inspect','--format','{{json .Config}}',image]));
+  const serverCommand=imageConfig.Cmd;
+  if(!Array.isArray(serverCommand)||!serverCommand.some(value=>String(value).endsWith('postgres')))throw Error('RESTORE_POSTGRES_COMMAND_UNSUPPORTED');
+  run('docker',['run','-d','--pull','never','--name',dbContainer,'--label','app.agouz.purpose=isolated-recovery','--network',network,'--env-file',dbEnv,'--mount','type=volume,source='+volume+',target=/var/lib/postgresql/data','--publish','127.0.0.1::5432',image,...serverCommand,'-c','cron.database_name='+database,'-c','cron.launch_active_jobs=off','-c','pg_net.database_name=agouz_restore_network_disabled']);createdDB=true;
   pgEnv={...process.env,PGHOST:'127.0.0.1',PGPORT:port(dbContainer,5432),PGUSER:'supabase_admin',PGPASSWORD:password,PGSSLMODE:'disable',PGCONNECT_TIMEOUT:'3',PGOPTIONS:'-c timezone=UTC'};
   await waitUntil(()=>{try{sql('select 1;','postgres');return true;}catch{return false;}});
   if(!/^agouz_recovery_[a-f0-9]{12}$/.test(database))throw new Error('RESTORE_DATABASE_REFUSED');
