@@ -2,6 +2,91 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
+    "financial_openings": {
+      "default": [],
+      "maxItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "minLength": 1
+          },
+          "account": {
+            "type": "string",
+            "const": "treasury"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 999999999999.99
+          },
+          "priorPeriodSettled": {
+            "type": "boolean",
+            "const": true
+          },
+          "history": {
+            "minItems": 1,
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "recordedAt": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "actorId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "actorName": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "amount": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 999999999999.99
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 6,
+                  "maxLength": 500
+                }
+              },
+              "required": [
+                "id",
+                "recordedAt",
+                "actorId",
+                "actorName",
+                "amount",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "account",
+          "amount",
+          "priorPeriodSettled",
+          "history"
+        ],
+        "additionalProperties": false
+      }
+    },
     "cashier_days": {
       "default": [],
       "type": "array",
@@ -1955,6 +2040,7 @@
     }
   },
   "required": [
+    "financial_openings",
     "cashier_days",
     "items",
     "production_batches",

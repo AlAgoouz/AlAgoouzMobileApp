@@ -238,6 +238,15 @@ export interface Partner {
   lastLogin?: string;
 }
 
+export interface FinancialOpening {
+  id:string;
+  date:string;
+  account:'treasury';
+  amount:number;
+  priorPeriodSettled:true;
+  history:{id:string;recordedAt:string;actorId:string;actorName:string;amount:number;reason:string}[];
+}
+
 export interface AuditLogEntry {
   id: string;
   timestamp: string;

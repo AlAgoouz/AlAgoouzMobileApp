@@ -22,6 +22,16 @@ def fixture():
 
 
 class ReportTests(unittest.TestCase):
+    def test_opening_cash_is_exported_separately_without_changing_profit(self):
+        source,summary=fixture()
+        source['financial_openings']=[dict(id='opening',date='2026-11-01',account='treasury',amount=Decimal('1234.50'))]
+        report=prepare_report(source,summary,'2026-11-01','2026-11-30')
+        book=load_workbook(io.BytesIO(workbook_bytes(report)))
+        self.assertEqual(len(book.sheetnames),10)
+        self.assertEqual(book['بداية المدة']['C2'].value,1234.5)
+        self.assertEqual(book['حصص الشركاء']['C2'].value,14.13)
+        self.assertEqual(report.summary['report']['net'],Decimal('14.13'))
+
     def test_decimal_totals_reconcile_and_invalid_snapshots_fail_closed(self):
         source, summary = fixture()
         report = prepare_report(source, summary, '2026-11-01', '2026-11-30')
