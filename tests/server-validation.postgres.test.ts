@@ -92,7 +92,7 @@ it.skipIf(!active)('checks live report export access and refuses unbounded array
  sql(`update public.erp_members set disabled_at=now() where user_id='${viewer}'`);
  expect(()=>asUser(viewer,query)).toThrow('USER_PERMISSION_DENIED');
  expect(()=>sql(`begin;set local role anon;${query};rollback;`)).toThrow('permission denied');
- sql("update public.bon_elagouz_store set suppliers=(select jsonb_agg(jsonb_build_object('id',n)) from generate_series(1,10001)n) where id='main_store'");
+ sql("update public.bon_elagouz_store set suppliers=(select jsonb_agg(jsonb_build_object('id',n::text,'name','Supplier '||n,'phone','01012345678','address','Cairo','representativeName','Agent','category','Coffee','balance',0,'totalPurchases',0,'invoicesCount',0)) from generate_series(1,10001)n) where id='main_store'");
  expect(()=>asUser(owner,query)).toThrow('EXPORT_ROW_LIMIT');
 });
 it.skipIf(!active)('matches bounded dashboard figures to the established financial reporting rules',()=>{
