@@ -24,7 +24,7 @@ async def process_import(payload: ImportMessage) -> str:
                 return "busy"
             try:
                 data = await download(client, job["path"], job["downloadToken"], job["bytes"])
-                result = await asyncio.to_thread(parse_report, data, job["fileName"], job["kind"], job.get("catalog"))
+                result = await asyncio.to_thread(parse_report, data, job["fileName"], job["kind"], job.get("catalog"), expected_date=job.get('saleDate'))
                 error = None
             except InvalidReport as exc:
                 result, error = None, str(exc)
