@@ -4,6 +4,7 @@ import io
 import os
 import unittest
 import zipfile
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 import httpx
 from fastapi.testclient import TestClient
@@ -35,6 +36,13 @@ class ParserTests(unittest.TestCase):
         result = parse_report(stream.getvalue(), 'money.xlsx', 'financial')
         self.assertEqual(result['rows'][0]['total'], 0)
         self.assertEqual(result['rows'][0]['notes'], '')
+
+    def test_real_legacy_xls_bytes_from_an_independent_writer(self):
+        data = (Path(__file__).parent / 'fixtures' / 'cashier-legacy.xls').read_bytes()
+        result = parse_report(data, 'legacy.xls', 'items', [{'id':'raw','code':'R1'}])
+        self.assertEqual(result['matches'][0]['itemId'], 'raw')
+        self.assertEqual(result['matches'][0]['quantity'], '2.5')
+        self.assertFalse(result['matches'][0]['requiresReview'])
 
     def test_titles_and_ambiguous_catalog_are_flagged(self):
         result = parse_report(b'Daily report\ncode,quantity\nR1,3', 'items.csv', 'items', [{'id': 'one', 'code': 'R1'}, {'id': 'two', 'code': 'R1'}])
