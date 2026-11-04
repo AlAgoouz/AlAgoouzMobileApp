@@ -71,6 +71,30 @@ function seed(store:StoreState){
 }
 beforeEach(()=>{if(active){seed(state);sql('truncate table bon_erp_private.import_jobs,public.cashier_sync_queue;delete from storage.objects where bucket_id=\'agouz-cashier-imports\';');}});
 afterAll(()=>{if(active)dispose();});
+it.skipIf(!active)('exports only the requested period with matching authoritative totals and no write effects',()=>{
+ const today=businessDate(),invoices=[{...sale(),id:'in-range',date:today},{...sale(),id:'outside',date:'2020-01-01'}];
+ const source={...stockState(),salesInvoices:invoices};seed(source);
+ const before=sql("select row_to_json(s)::text from public.bon_elagouz_store s where id='main_store'");
+ const report=readJson(`select public.bon_erp_export_report('${today}','${today}')`);
+ expect(report.sales_invoices.map((row:SalesInvoice)=>row.id)).toEqual(['in-range']);
+ expect(report.summary).toEqual(readJson(`select public.bon_erp_dashboard('${today}','${today}')`));
+ expect(report.summary.report.revenue).toBe(invoices[0].totalAmount);
+ expect(report.version).toBe(report.summary.version);
+ expect(sql("select row_to_json(s)::text from public.bon_elagouz_store s where id='main_store'")).toBe(before);
+ expect(()=>asUser(owner,"select public.bon_erp_export_report('2026-02-30','2026-03-01')")).toThrow();
+});
+it.skipIf(!active)('checks live report export access and refuses unbounded arrays',()=>{
+ const viewer='22222222-2222-4222-8222-222222220091',cashier='22222222-2222-4222-8222-222222220092';
+ userAccessFixture(viewer,{view:true});userAccessFixture(cashier,{},'cashier');
+ const query="select public.bon_erp_export_report('0001-01-01','9999-12-31')";
+ expect(()=>asUser(viewer,query)).not.toThrow();
+ expect(()=>asUser(cashier,query)).toThrow('USER_PERMISSION_DENIED');
+ sql(`update public.erp_members set disabled_at=now() where user_id='${viewer}'`);
+ expect(()=>asUser(viewer,query)).toThrow('USER_PERMISSION_DENIED');
+ expect(()=>sql(`begin;set local role anon;${query};rollback;`)).toThrow('permission denied');
+ sql("update public.bon_elagouz_store set suppliers=(select jsonb_agg(jsonb_build_object('id',n)) from generate_series(1,10001)n) where id='main_store'");
+ expect(()=>asUser(owner,query)).toThrow('EXPORT_ROW_LIMIT');
+});
 it.skipIf(!active)('matches bounded dashboard figures to the established financial reporting rules',()=>{
  const paired=cashierPair().posted;
  const invoices=[{...sale(),id:'active',date:businessDate()},{...sale(),id:'returned',isReturned:true,date:businessDate()}];

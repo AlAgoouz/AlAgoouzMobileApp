@@ -1,3 +1,4 @@
+import {serverInvoicePdf} from '../lib/reportExports';
 import {Modal} from './Modal';
 import React, { useState, useMemo } from 'react';
 import { escapePrintData } from '../lib/safeHtml';
@@ -39,8 +40,8 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
   const exportPdf=async(share:boolean)=>{
     if(pdfBusy)return;setPdfBusy(true);setPdfError('');
     try{
-      const {invoicePdfFile,downloadInvoiceFile}=await import('../lib/invoicePdf');
-      const file=await invoicePdfFile(invoice);
+      const {downloadInvoiceFile}=await import('../lib/invoicePdf');
+      const file=await serverInvoicePdf(invoice.id);
       if(share&&navigator.canShare?.({files:[file]})&&navigator.share){try{await navigator.share({files:[file],title:`فاتورة ${invoice.invoiceNumber}`});}catch(error){if((error as Error).name==='AbortError')return;downloadInvoiceFile(file);setPdfError('تم تنزيل الفاتورة؛ افتح محادثة العميل من زر واتساب وأرفق الملف.');}}
       else {downloadInvoiceFile(file);if(share)setPdfError('تم تنزيل الفاتورة؛ افتح محادثة العميل من زر واتساب وأرفق الملف.');}
     }catch(error){if((error as Error).name!=='AbortError')setPdfError((error as Error).message);}finally{setPdfBusy(false);}

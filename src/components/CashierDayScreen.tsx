@@ -1,22 +1,28 @@
 import React,{useState,useMemo} from 'react';
 import {FolderSync} from 'lucide-react';
+import type {ImportJob} from '../lib/importJobs';
 import {queuedRows} from '../lib/importJobs';
+import {CashierRowReview} from './CashierRowReview';
 import {ImportJobsPanel} from './ImportJobsPanel';
 import {OperationHeader} from './OperationHeader';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import type {CashierDay,InventoryItem} from '../types/erp';
 import {businessDate} from '../lib/dates';
-import {mapRawCashierRows,parseLocalizedNumber} from '../lib/cashierRows';
+import {reviewedCashierRows,parseLocalizedNumber,type CashierReview} from '../lib/cashierRows';
 import {convertToBaseUnit} from '../lib/itemCosts';
 import type {attachCashierReport} from '../lib/cashierDays';
 type Report=Parameters<typeof attachCashierReport>[2];
 export type QueuedCashierReport={id:string;file_name:string;sale_date:string;content_hash:string;report_kind?:'financial'|'items';import_job_id?:string;raw_rows?:Record<string,unknown>[]};
 export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack}: {items:InventoryItem[];days:CashierDay[];queued?:QueuedCashierReport[];onAttach:(date:string,report:Report)=>Promise<void>;onApprove:(id:string)=>Promise<void>;onBack:()=>void}){
  const [date,setDate]=useState(businessDate()),[type,setType]=useState<'financial'|'items'>('financial');
- const [preview,setPreview]=useState<{name:string;sha256:string;rows:Record<string,unknown>[];sourceQueueId?:string} | null>(null);
+ const [preview,setPreview]=useState<{name:string;sha256:string;rows:Record<string,unknown>[];sourceQueueId?:string;suggestions?:NonNullable<ImportJob['result']>['suggestions']} | null>(null);
  const [rowIndex,setRowIndex]=useState('0'),[column,setColumn]=useState('');
  const [error,setError]=useState(''),[busy,setBusy]=useState(false);
- const parsed=useMemo(()=>preview&&type==='items'?mapRawCashierRows(preview.rows,items):[],[preview,type,items]);
+ const [review,setReview]=useState<{hash:string;choices:CashierReview}>({hash:'',choices:{}});
+ const choices=review.hash===preview?.sha256?review.choices:{};
+ const parsed=useMemo(()=>preview&&type==='items'?reviewedCashierRows(preview.rows,items,choices):[],[preview,type,items,review]);
+ const matchPage=useRecordPage(parsed,preview?.sha256);
+ const choose=(row:number,change:Partial<CashierReview[number]>)=>{if(!preview)return;setReview({hash:preview.sha256,choices:{...choices,[row]:{itemId:choices[row]?.itemId??'',unit:choices[row]?.unit??'',...change}}});};
  const [historySearch,setHistorySearch]=useState('');
  const history=useMemo(()=>[...days].filter(d=>d.date.includes(historySearch)).sort((a,b)=>b.date.localeCompare(a.date)),[days,historySearch]);
  const page=useRecordPage(history,historySearch);
@@ -39,7 +45,7 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
   <OperationHeader title="تقارير يوم الكاشير" description="تقرير مالي + تقرير أصناف، لحساب يومك بدقة." icon={FolderSync} onBack={onBack} busy={busy}/>
   <p className="operation-note">ارفع التقريرين لنفس اليوم. يتسجل الإيراد مرة واحدة، وتُخصم المكونات عند اعتماد اليوم بعد اكتمال التقريرين.</p>
   {!!queued.length&&<section className="border rounded-xl p-3"><h2 className="font-bold">ملفات وصلت من جهاز الكاشير وتنتظر المراجعة</h2><p>افتح الملف لمراجعته.</p>{queued.some(q=>!q.report_kind)&&<label>نوع الملف القديم<select value={type} onChange={e=>{setType(e.target.value as typeof type);setPreview(null);}}><option value="financial">تقرير مالي</option><option value="items">تقرير أصناف</option></select></label>}{queued.map(q=><button key={q.id} disabled={busy} className="block p-2 underline" onClick={()=>void act(async()=>{const rows=q.raw_rows??await queuedRows(q.id);setDate(q.sale_date);if(q.report_kind)setType(q.report_kind);setPreview({name:q.file_name,sha256:q.content_hash,rows,sourceQueueId:q.id});setColumn('');setRowIndex('0');})}>{q.sale_date} — {q.file_name}</button>)}</section>}
-  <ImportJobsPanel onReview={job=>{if(!job.result)return;setDate(job.sale_date);setType(job.kind);setPreview({name:job.file_name,sha256:job.result.sha256,rows:job.result.rows,sourceQueueId:job.queue_id??undefined});setColumn('');setRowIndex('0');}}/>
+  <ImportJobsPanel onReview={job=>{if(!job.result)return;setDate(job.sale_date);setType(job.kind);setPreview({name:job.file_name,sha256:job.result.sha256,rows:job.result.rows,sourceQueueId:job.queue_id??undefined,suggestions:job.result.suggestions});setColumn('');setRowIndex('0');}}/>
   {preview&&<p>يوم العمل: {date} — {type==='financial'?'تقرير مالي':'تقرير أصناف'}</p>}
   {preview&&<section className="border rounded-xl p-3 space-y-3"><h2 className="font-bold">مراجعة {preview.name}</h2>
    {type==='financial'?<>
@@ -47,7 +53,7 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
     <p className="text-sm break-words">الصف المختار: {Object.entries(preview.rows[Number(rowIndex)]??{}).map(([key,value])=>`${key}: ${String(value)}`).join(' — ')||'اختر صفًا داخل الملف'}</p>
     <label className="block">عمود إيراد اليوم<select disabled={busy} className={input} value={column} onChange={e=>setColumn(e.target.value)}><option value="">اختر العمود</option>{Object.keys(preview.rows[Number(rowIndex)]??{}).map(c=><option key={c}>{c}</option>)}</select></label>
     <p>إيراد اليوم المختار: {revenue===undefined?'غير محدد':revenue.toLocaleString('ar-EG')+' ج.م'}</p><p className="text-sm">اختر إجمالي المبيعات النهائي لليوم؛ لا تجمع صف الإجمالي مع تفاصيله.</p>
-   </>:<><p>{parsed.length} صف أصناف؛ {parsed.filter(r=>r.error).length} أخطاء مطابقة.</p>{parsed.slice(0,30).map((r,i)=><p key={i} className={r.error?'text-red-700':''}>{r.matchedItem?.name||r.rawName}: {r.quantity} {r.unitHint} {r.error}</p>)}{parsed.length>30&&<p>معروض أول 30 صفًا؛ تُراجع جميع الصفوف قبل الحفظ.</p>}</>}
+   </>:<><p>{parsed.length} صف أصناف؛ {parsed.filter(r=>r.error).length} تحتاج تصحيحًا.</p><p className="operation-note">اقتراحات تشابه الاسم للمساعدة فقط. اختيار الصنف ووحدة الكمية يحتاج تأكيدك؛ الكميات والأسعار الأصلية تظل تحت التحقق.</p><RecordPagination {...matchPage}/>{matchPage.visible.map((r,n)=>{const i=matchPage.page*matchPage.pageSize+n,suggestions=preview.suggestions?.find(s=>s.row===i)?.candidates??[];return <article key={i} className="record-card"><p>{r.rawName||r.rawCode}: {r.quantity} {r.unitHint}</p><p>{r.matchedItem?.name} {r.error}</p>{(r.error||choices[i])&&<CashierRowReview index={i} choice={choices[i]} items={items} suggestions={suggestions} busy={busy} onChange={change=>choose(i,change)}/>}</article>;})}</>}
    <button disabled={busy} onClick={()=>void act(attach)} className="bg-[#1E1612] text-white rounded-xl p-3">حفظ التقرير لهذا اليوم</button>
   </section>}
   {error&&<p role="alert" className="text-red-700">{error}</p>}

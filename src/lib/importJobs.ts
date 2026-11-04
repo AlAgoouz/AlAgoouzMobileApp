@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {getSupabaseClient} from './supabaseSync';
 export type ImportKind='financial'|'items';
-const resultSchema=z.object({rows:z.array(z.record(z.string(),z.unknown())).max(10000),sha256:z.string().regex(/^[a-f0-9]{64}$/),warnings:z.array(z.string()).optional()});
+const resultSchema=z.object({rows:z.array(z.record(z.string(),z.unknown())).max(10000),sha256:z.string().regex(/^[a-f0-9]{64}$/),warnings:z.array(z.string()).optional(),suggestions:z.array(z.object({row:z.number().int().nonnegative(),candidates:z.array(z.object({itemId:z.string(),name:z.string(),code:z.string(),score:z.number().min(0).max(100)})).max(3)})).max(500).optional()});
 const jobSchema=z.object({id:z.string().uuid(),file_name:z.string(),sale_date:z.string(),kind:z.enum(['financial','items']),status:z.enum(['uploading','queued','processing','ready','failed','cancelled']),created_at:z.string(),updated_at:z.string(),error_code:z.string().nullable(),reviewed:z.boolean(),queue_id:z.string().uuid().nullable(),result:resultSchema.nullable().optional()});
 export type ImportJob=z.infer<typeof jobSchema>;
 const messages:Record<string,string>={CASHIER_IMPORT_ALREADY_PENDING:'يوجد ملف من نفس النوع لهذا اليوم؛ راجعه أو ألغِ الملف الخطأ أولًا.',CASHIER_REPORT_ALREADY_EXISTS:'هذا التقرير مسجل بالفعل لهذا اليوم.',IMPORT_RATE_LIMIT:'وصلت للحد المؤقت للرفع؛ حاول لاحقًا.',IMPORT_STORAGE_LIMIT:'مساحة التقارير المخصصة ممتلئة؛ تواصل مع المالك.',DUPLICATE_IMPORT_FILE:'هذا الملف وصل بالفعل. استخدم التقرير المسجل.',IMPORT_ALREADY_REVIEWED:'التقرير مرتبط بيوم مسجل، ولا يمكن إلغاء ملفه هنا.'};

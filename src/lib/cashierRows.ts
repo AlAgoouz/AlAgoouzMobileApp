@@ -248,3 +248,17 @@ export async function cashierSourceId(
     b.toString(16).padStart(2, '0'),
   ).join('');
 }
+
+export type CashierReview=Record<number,{itemId:string;unit:ParsedCashierRow['unitHint']|''}>;
+export function reviewedCashierRows(rows:Record<string,unknown>[],catalog:InventoryItem[],choices:CashierReview){
+ const nonempty=rows.filter(row=>Object.values(row).some(value=>String(value??'').trim()));
+ return nonempty.map((row,index)=>{
+  const base=mapRawCashierRows([row],catalog)[0],choice=choices[index];
+  if(!choice)return base;
+  const selected=catalog.find(item=>item.id===choice.itemId);
+  if(!selected||!choice.unit)return {...base,matchedItem:undefined,error:'اختر الصنف ووحدة الكمية لتأكيد المطابقة'};
+  const preserved=Object.fromEntries(Object.entries(row).filter(([key])=>!['code','name','unit'].some(field=>aliases[field].some(alias=>normalize(alias)===normalize(key)))));
+  const result=mapRawCashierRows([{...preserved,code:selected.code,name:selected.name,unit:choice.unit}],catalog)[0];
+  return {...result,rawName:base.rawName,rawCode:base.rawCode};
+ });
+}
