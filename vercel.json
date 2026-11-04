@@ -9,7 +9,7 @@
     },
     "imports": {
       "root": "backend",
-      "entrypoint": "main:app"
+      "entrypoint": "pyproject.toml"
     }
   },
   "rewrites": [
