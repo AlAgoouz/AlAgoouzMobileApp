@@ -1,8 +1,22 @@
 {
+  "services": {
+    "frontend": {
+      "root": ".",
+      "framework": "vite",
+      "buildCommand": "npm run build",
+      "outputDirectory": "dist",
+      "rewrites": [{"source": "/(.*)", "destination": "/index.html"}]
+    },
+    "imports": {
+      "root": "backend",
+      "entrypoint": "pyproject.toml"
+    }
+  },
   "rewrites": [
+    {"source": "/api/(.*)", "destination": {"service": "imports"}},
     {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": {"service": "frontend"}
     }
   ]
 }

@@ -488,6 +488,14 @@ export function cloudStoreInput(row: Record<string, unknown>): unknown {
 export function fromCloud(row: Record<string, unknown>): StoreState {
   return validateStore(cloudStoreInput(row));
 }
+export function invoiceDetail(value:unknown):SalesInvoice {
+ const invoice=schema.shape.salesInvoices.element.parse(value);
+ if(Math.abs(invoice.totalAmount-invoice.paidAmount-invoice.remainingAmount)>0.011)throw Error('إجمالي الفاتورة لا يطابق المدفوع والمتبقي');
+ return invoice as unknown as SalesInvoice;
+}
+export function cashierDayDetail(value:unknown):CashierDay {
+ return schema.shape.cashierDays.unwrap().element.parse(value) as CashierDay;
+}
 export function toCloud(state: StoreState) {
   return Object.fromEntries(
     Object.entries(cloudFields).map(([local, cloud]) => [

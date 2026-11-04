@@ -1,5 +1,5 @@
 import {it,expect} from 'vitest';
-import {buildReport,chartDomain,reportRange,validCalendarDate,type PeriodSelection} from '../src/lib/reporting';
+import {buildReport,previousReportRange,chartDomain,reportRange,validCalendarDate,type PeriodSelection} from '../src/lib/reporting';
 import type {SalesInvoice,Expense} from '../src/types/erp';
 const invoice=(date:string,netProfit=30,extra:Partial<SalesInvoice>={}):SalesInvoice=>({id:date,invoiceNumber:date,date,saleType:'wholesale',customerName:'Test',items:[],subtotal:100,discount:0,totalAmount:100,totalCost:100-netProfit,netProfit,paidAmount:100,remainingAmount:0,paymentMethod:'نقدي',partnerName:'Test',...extra});
 const expense=(date:string,amount=50,extra:Partial<Expense>={}):Expense=>({id:date,date,title:'Test',category:'نثريات أخرى',amount,partnerName:'Test',paidFrom:'درج المحل',...extra});
@@ -29,4 +29,11 @@ it('uses bounded aggregation for a long history without rounding away money or c
  const report=buildReport([invoice('2020-01-02',0.25),invoice('2026-11-03',0.5)],[],reportRange(selection('all')));
  expect(report.points).toHaveLength(7);expect(report.points.filter(p=>p.recorded).map(p=>p.date)).toEqual(['2020','2026']);expect(report.points[1].recorded).toBe(false);expect(report.net).toBe(.75);
  expect(buildReport([],[],reportRange(selection('month'))).points).toEqual([]);
+});
+
+it('compares equal inclusive day counts across month and leap-year boundaries without inventing a baseline for all history',()=>{
+ expect(previousReportRange({from:'2028-03-01',to:'2028-03-03',valid:true,label:''})).toMatchObject({from:'2028-02-27',to:'2028-02-29'});
+ expect(previousReportRange({from:'2026-11-01',to:'2026-11-01',valid:true,label:''})).toMatchObject({from:'2026-10-31',to:'2026-10-31'});
+ expect(previousReportRange(reportRange(selection('all')))).toBeNull();
+ expect(previousReportRange({from:'0001-01-02',to:'0001-01-10',valid:true,label:''})).toBeNull();
 });

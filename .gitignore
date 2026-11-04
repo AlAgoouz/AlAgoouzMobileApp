@@ -17,6 +17,9 @@ tmp/
 !.env.example
 
 supabase/.temp/
+.venv/
+__pycache__/
+*.pyc
 *.local.sql
 *.local.json
 audit/*.local.jpg

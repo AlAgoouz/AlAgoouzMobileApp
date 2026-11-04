@@ -1,5 +1,7 @@
 import React,{useState,useMemo} from 'react';
 import {FolderSync} from 'lucide-react';
+import {queuedRows} from '../lib/importJobs';
+import {ImportJobsPanel} from './ImportJobsPanel';
 import {OperationHeader} from './OperationHeader';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import type {CashierDay,InventoryItem} from '../types/erp';
@@ -8,7 +10,7 @@ import {mapRawCashierRows,parseLocalizedNumber} from '../lib/cashierRows';
 import {convertToBaseUnit} from '../lib/itemCosts';
 import type {attachCashierReport} from '../lib/cashierDays';
 type Report=Parameters<typeof attachCashierReport>[2];
-export type QueuedCashierReport={id:string;file_name:string;sale_date:string;content_hash:string;raw_rows:Record<string,unknown>[]};
+export type QueuedCashierReport={id:string;file_name:string;sale_date:string;content_hash:string;report_kind?:'financial'|'items';import_job_id?:string;raw_rows?:Record<string,unknown>[]};
 export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack}: {items:InventoryItem[];days:CashierDay[];queued?:QueuedCashierReport[];onAttach:(date:string,report:Report)=>Promise<void>;onApprove:(id:string)=>Promise<void>;onBack:()=>void}){
  const [date,setDate]=useState(businessDate()),[type,setType]=useState<'financial'|'items'>('financial');
  const [preview,setPreview]=useState<{name:string;sha256:string;rows:Record<string,unknown>[];sourceQueueId?:string} | null>(null);
@@ -20,14 +22,6 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
  const page=useRecordPage(history,historySearch);
  const revenue=preview?parseLocalizedNumber(preview.rows[Number(rowIndex)]?.[column]):undefined;
  const act=async(fn:()=>Promise<void>)=>{if(busy)return;setBusy(true);setError('');try{await fn();}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
- const readFile=async(file:File)=>{
-  if(file.size>10*1024*1024)throw Error('الحد الأقصى للملف 10 ميجابايت');
-  const bytes=await file.arrayBuffer();const XLSX=await import('xlsx');const wb=XLSX.read(bytes,{type:'array'});
-  const rows=XLSX.utils.sheet_to_json<Record<string,unknown>>(wb.Sheets[wb.SheetNames[0]],{defval:''});
-  if(!rows.length||rows.length>10000)throw Error('الملف فارغ أو يزيد على 10000 صف');
-  const digest=await crypto.subtle.digest('SHA-256',bytes);const sha256=Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
-  setPreview({name:file.name,sha256,rows});setColumn('');setRowIndex('0');
- };
  const attach=async()=>{
   if(!preview)throw Error('اختر ملف التقرير');
   const file={fileName:preview.name,sha256:preview.sha256,uploadedAt:new Date().toISOString(),...(preview.sourceQueueId?{sourceQueueId:preview.sourceQueueId}:{})};
@@ -44,10 +38,9 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
  return <main dir="rtl" className="operation-screen min-h-screen bg-[#FAF8F4] p-4 pb-28 space-y-4">
   <OperationHeader title="تقارير يوم الكاشير" description="تقرير مالي + تقرير أصناف، لحساب يومك بدقة." icon={FolderSync} onBack={onBack} busy={busy}/>
   <p className="operation-note">ارفع التقريرين لنفس اليوم. يتسجل الإيراد مرة واحدة، وتُخصم المكونات عند اعتماد اليوم بعد اكتمال التقريرين.</p>
-  {!!queued.length&&<section className="border rounded-xl p-3"><h2 className="font-bold">ملفات وصلت من جهاز الكاشير وتنتظر المراجعة</h2><p>حدد نوع التقرير ثم افتح الملف لمراجعته.</p>{queued.map(q=><button key={q.id} disabled={busy} className="block p-2 underline" onClick={()=>{setDate(q.sale_date);setPreview({name:q.file_name,sha256:q.content_hash,rows:q.raw_rows,sourceQueueId:q.id});setColumn('');setRowIndex('0');}}>{q.sale_date} — {q.file_name}</button>)}</section>}
-  <label className="block">يوم العمل<input disabled={busy} className={input} type="date" value={date} onChange={e=>{setDate(e.target.value);setPreview(null);}}/></label>
-  <label className="block">نوع التقرير<select disabled={busy} className={input} value={type} onChange={e=>{setType(e.target.value as typeof type);setPreview(null);}}><option value="financial">الأرقام المالية — إيراد اليوم</option><option value="items">الأصناف المباعة — الكميات</option></select></label>
-  <label className="block min-w-0">ملف التقرير<input className="block w-full min-w-0 max-w-full rounded-xl border border-[#E6DEC8] bg-white p-2 text-xs file:me-2 file:rounded-lg file:border-0 file:bg-[#F5EDDD] file:p-2 file:text-[#795D25]" type="file" accept=".xlsx,.xls,.csv" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(file)void act(()=>readFile(file));e.target.value='';}}/></label>
+  {!!queued.length&&<section className="border rounded-xl p-3"><h2 className="font-bold">ملفات وصلت من جهاز الكاشير وتنتظر المراجعة</h2><p>افتح الملف لمراجعته.</p>{queued.some(q=>!q.report_kind)&&<label>نوع الملف القديم<select value={type} onChange={e=>{setType(e.target.value as typeof type);setPreview(null);}}><option value="financial">تقرير مالي</option><option value="items">تقرير أصناف</option></select></label>}{queued.map(q=><button key={q.id} disabled={busy} className="block p-2 underline" onClick={()=>void act(async()=>{const rows=q.raw_rows??await queuedRows(q.id);setDate(q.sale_date);if(q.report_kind)setType(q.report_kind);setPreview({name:q.file_name,sha256:q.content_hash,rows,sourceQueueId:q.id});setColumn('');setRowIndex('0');})}>{q.sale_date} — {q.file_name}</button>)}</section>}
+  <ImportJobsPanel onReview={job=>{if(!job.result)return;setDate(job.sale_date);setType(job.kind);setPreview({name:job.file_name,sha256:job.result.sha256,rows:job.result.rows,sourceQueueId:job.queue_id??undefined});setColumn('');setRowIndex('0');}}/>
+  {preview&&<p>يوم العمل: {date} — {type==='financial'?'تقرير مالي':'تقرير أصناف'}</p>}
   {preview&&<section className="border rounded-xl p-3 space-y-3"><h2 className="font-bold">مراجعة {preview.name}</h2>
    {type==='financial'?<>
     <label className="block">رقم صف إجمالي اليوم (من {preview.rows.length} صف)<input disabled={busy} className={input} type="number" min="1" max={preview.rows.length} value={Number(rowIndex)+1} onChange={e=>setRowIndex(String(Number(e.target.value)-1))}/></label>

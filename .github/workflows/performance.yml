@@ -27,7 +27,7 @@ jobs:
           VITE_SUPABASE_URL: http://127.0.0.1:5284
           VITE_SUPABASE_PUBLISHABLE_KEY: fixture-only-public-key
         run: |
-          git worktree add --detach "$RUNNER_TEMP/agouz-baseline" 06388ff0ffb089fc19064f8bd6f6487974543bd8
+          git worktree add --detach "$RUNNER_TEMP/agouz-baseline" bccd915a059f264ceb7e245adee3ef14a6ecd8a5
           npm ci --prefix "$RUNNER_TEMP/agouz-baseline"
           (cd "$RUNNER_TEMP/agouz-baseline" && npm run build)
           npm run build

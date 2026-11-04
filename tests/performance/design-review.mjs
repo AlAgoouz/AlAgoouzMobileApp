@@ -100,6 +100,12 @@ export async function verifyDesign(){
       await limit(page,title);
       assert.equal(await page.locator('.operation-header').count(),1,'Every internal section must share one header');
       assert.equal(await page.locator('.operation-header h1').count(),1);
+      if(title==='فواتير البيع'){
+        await page.getByRole('button',{name:'السجل السابق',exact:true}).click();
+        await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).first().waitFor();
+        await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).first().click();
+        await page.getByRole('dialog').waitFor();await page.getByRole('button',{name:'إغلاق النافذة',exact:true}).click();
+      }
       const addDialogs={'المنتجات والتسعير':'منتج جديد','الإنتاج والوصفات':'جديد','مخزن البن':'إضافة','عملاء الجملة':'إضافة','الموردين':'إضافة','المستخدمين':'إضافة مستخدم','العمال والرواتب':'عامل جديد'};
       if(addDialogs[title])await reviewModal(page,page.getByRole('button',{name:addDialogs[title],exact:true}),String(evidence.sections.length+1),title==='المستخدمين');
       if(title==='المصاريف'){
@@ -116,6 +122,7 @@ export async function verifyDesign(){
           const rect=await button.boundingBox();assert.ok(rect&&rect.y<450,'Report tabs must be reachable above the primary navigation');
         }
         evidence.reportTabsAccessible=true;
+        await reviewModal(page,page.getByRole('button',{name:'مصادر صافي الربح',exact:true}),'report-sources');
         await page.getByRole('button',{name:'تحليلات المحل والتنبيهات',exact:true}).click();
         await page.getByRole('heading',{name:'تحليلات وذكاء بُن العجوز',exact:true}).waitFor();
         assert.equal(await page.getByRole('button',{name:'كل السجل',exact:true}).getAttribute('aria-pressed'),'true','Insights must retain the selected report range');

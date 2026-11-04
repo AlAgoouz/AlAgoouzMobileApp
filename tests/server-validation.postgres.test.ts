@@ -9,10 +9,14 @@ import {adjustCatalogItem} from '../src/lib/catalogAdjustments';
 import {businessDate} from '../src/lib/dates';
 import {receiveStock} from '../src/lib/costing';
 import {attachCashierReport,approveCashierDay} from '../src/lib/cashierDays';
+import {salesForReports} from '../src/lib/cashierDays';
+import {buildReport,reportRange,reportPoints} from '../src/lib/reporting';
+import {dashboardSchema,salesPageSchema} from '../src/lib/readModels';
 import type {StoreState} from '../src/lib/storeState';
 import type {SalesInvoice,InventoryItem} from '../src/types/erp';
 const active=!!process.env.AGOUZ_TEST_PG_CONTAINER;
 const owner='11111111-1111-4111-8111-111111111111';
+function readJson(query:string){return JSON.parse(asUser(owner,query).split('\n').at(-1)!);}
 const state={...emptyStore,partners:[{...INITIAL_PARTNERS[0],id:'p1',sharePercent:100,totalPaidFromPocket:0,totalWithdrawals:0}]};
 function asUser(id:string,query:string){return sql(`begin;select set_config('request.jwt.claim.sub','${id}',true);set local role authenticated;${query};rollback;`);}
 function userAccessFixture(id:string,permissions:Record<string,boolean>,role='partner',disabled=false){
@@ -65,8 +69,47 @@ function seed(store:StoreState){
   const fields=Object.entries(toCloud(store));
   sql(`delete from public.bon_elagouz_store;insert into public.bon_elagouz_store(id,version,${fields.map(([name])=>name).join(',')})values('main_store',0,${fields.map(([,value])=>literal(value)).join(',')});`);
 }
-beforeEach(()=>{if(active)seed(state);});
+beforeEach(()=>{if(active){seed(state);sql('truncate table bon_erp_private.import_jobs,public.cashier_sync_queue;delete from storage.objects where bucket_id=\'agouz-cashier-imports\';');}});
 afterAll(()=>{if(active)dispose();});
+it.skipIf(!active)('matches bounded dashboard figures to the established financial reporting rules',()=>{
+ const paired=cashierPair().posted;
+ const invoices=[{...sale(),id:'active',date:businessDate()},{...sale(),id:'returned',isReturned:true,date:businessDate()}];
+ const expenses=[{id:'exp',title:'Daily',date:businessDate(),category:'إيجار',amount:3,paidFrom:'درج المحل',partnerName:'Owner'},{id:'withdrawal',title:'Owner',date:businessDate(),category:'مسحوبات شركاء',amount:999,paidFrom:'درج المحل',partnerName:'Owner'},{id:'cancelled',title:'Cancelled',date:businessDate(),category:'إيجار',amount:999,paidFrom:'درج المحل',partnerName:'Owner',isCancelled:true}] as StoreState['expenses'];
+ const source={...paired,salesInvoices:invoices,expenses};seed(source);
+ const range=reportRange({kind:'all',from:'',to:''}),expected=buildReport(salesForReports(source),expenses,range);
+ const result=dashboardSchema.parse(readJson("select public.bon_erp_dashboard('0001-01-01','9999-12-31')"));
+ for(const field of ['revenue','cost','gross','spent','net','margin'] as const)expect(result.report[field]).toBeCloseTo(expected[field],8);
+ expect(result.report.count).toBe(expected.active.length);expect(result.balances.inventory).toBe(-0.5);expect(result.approved).toBe(1);
+ expect(reportPoints(result.report.entries,range,result.report.firstDate,result.report.lastDate)).toEqual(expected.points);
+ expect(result.products[0].revenue).toBe(invoices[0].items[0].totalPrice);
+ expect(JSON.stringify(result)).not.toContain('financial.xlsx');
+});
+it.skipIf(!active)('preserves sparse month and year charts without returning invoice history',()=>{
+ for(const dates of [['2026-01-01','2026-12-31'],['2000-01-01','2026-12-31'],['1800-01-01','2026-12-31']]){
+  const invoices=dates.map((date,i)=>({...sale(),date,id:'chart-'+i}));seed({...stockState(),salesInvoices:invoices});
+  const range=reportRange({kind:'all',from:'',to:''}),expected=buildReport(invoices,[],range);
+  const model=dashboardSchema.parse(readJson("select public.bon_erp_dashboard('0001-01-01','9999-12-31')"));
+  expect(reportPoints(model.report.entries,range,model.report.firstDate,model.report.lastDate)).toEqual(expected.points);
+  expect(model.report.entries.length).toBeLessThanOrEqual(2);
+ }
+});
+it.skipIf(!active)('bounds invoice pages and searches line names across the entire history',()=>{
+ const invoices=Array.from({length:121},(_,i)=>({...sale(),id:'history-'+String(i).padStart(3,'0'),invoiceNumber:'SEARCH-'+i,items:[{...sale().items[0],itemName:i===120?'Unique ingredient':'Ordinary'}]}));seed({...stockState(),salesInvoices:invoices});
+ const first=salesPageSchema.parse(readJson("select public.bon_erp_sales_page('legacy','',0,50)"));expect(first.total).toBe(121);expect(first.rows).toHaveLength(50);expect(first.rows[0].items).toBeUndefined();
+ const second=salesPageSchema.parse(readJson("select public.bon_erp_sales_page('legacy','',50,50)"));expect(second.rows[0].id).not.toBe(first.rows[0].id);
+ const searched=salesPageSchema.parse(readJson("select public.bon_erp_sales_page('legacy','Unique ingredient',0,50)"));expect(searched.total).toBe(1);expect(searched.rows[0].id).toBe('history-120');
+ const detail=readJson("select public.bon_erp_sale_detail('history-120','invoice')");expect(detail.items[0].itemName).toBe('Unique ingredient');
+ expect(()=>asUser(owner,"select public.bon_erp_sales_page('legacy','',0,51)")).toThrow('INVALID_PAGE');
+ expect(()=>asUser(owner,"select public.bon_erp_dashboard('2026-02-30','2026-03-01')")).toThrow();
+});
+it.skipIf(!active)('keeps read APIs caller-authorized and immediately refuses disabled and cashier accounts',()=>{
+ const viewer='22222222-2222-4222-8222-222222229101',cashier='22222222-2222-4222-8222-222222229102';userAccessFixture(viewer,{view:true});userAccessFixture(cashier,{},'cashier');
+ const query="select public.bon_erp_dashboard('0001-01-01','9999-12-31')";
+ expect(()=>asUser(viewer,query)).not.toThrow();expect(()=>asUser(cashier,query)).toThrow('USER_PERMISSION_DENIED');
+ sql(`update public.erp_members set disabled_at=now() where user_id='${viewer}'`);expect(()=>asUser(viewer,query)).toThrow('USER_PERMISSION_DENIED');
+ expect(()=>sql('set role anon;'+query)).toThrow('permission denied');
+ expect(sql("select bool_and(not p.prosecdef) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and proname in ('bon_erp_dashboard','bon_erp_sales_page','bon_erp_sale_detail','bon_erp_item_search')")).toBe('t');
+});
 function save(value:any){return sql(`begin;set local request.jwt.claim.sub='${owner}';set local role authenticated;select public.bon_erp_save_store(0,${literal(value)},gen_random_uuid(),null);rollback;`);}
 const accept=(store:StoreState)=>expect(save(toCloud(store))).toContain('"version": 1');
 const reject=(store:StoreState,reason:string)=>{expect(()=>save(toCloud(store))).toThrow(reason);expect(sql("select version from public.bon_elagouz_store where id='main_store'")).toBe('0');};
@@ -213,4 +256,104 @@ it.skipIf(!active)('requires separate purchase tax, full payment, moving average
 it.skipIf(!active)('rejects negative initial stock and missing new contact information',()=>{
  seed(state);reject({...state,items:[{...bean,stock:-1,openingStock:0}]},'INVENTORY_MOVEMENT_MISMATCH');
  reject({...state,customers:[{...INITIAL_CUSTOMERS[0],balance:0,totalSales:0,invoicesCount:0}]},'CONTACT_DETAILS_REQUIRED');
+});
+
+function importAs(user:string,query:string){return sql(`begin;set local request.jwt.claim.sub='${user}';set local role authenticated;${query};commit;`);}
+function importJob(user=owner,date='2026-11-01',kind='financial'){
+ const job=JSON.parse(importAs(user,`select public.bon_erp_new_import('report.csv','${kind}','${date}',7)`));
+ sql(`insert into storage.objects values(gen_random_uuid(),'agouz-cashier-imports','${job.path}')`);
+ const ready=JSON.parse(importAs(user,`select public.bon_erp_prepare_import('${job.id}','${'signed_fixture_'.repeat(3)}')`));return {...job,key:ready.workerToken};
+}
+function workerCall(job:any,action='claim',result:any={rows:[{total:5}],sha256:'a'.repeat(64)},attempt:number|null=1){
+ const query=action==='claim'?`public.bon_erp_claim_import('${job.id}','${job.key}')`:`public.bon_erp_finish_import('${job.id}','${job.key}',${attempt??'null'},${literal(result)},null)`;
+ return JSON.parse(sql(`begin;set local role anon;select ${query};commit;`)||'null');
+}
+it.skipIf(!active)('parses into a pending cashier queue exactly once without changing money or stock',()=>{
+ const job=importJob(),before=sql("select row_to_json(s)::text from public.bon_elagouz_store s");
+ expect(workerCall(job).attempt).toBe(1);expect(workerCall(job)).toEqual({busy:true});
+ const finish=workerCall(job,'finish');expect(finish.status).toBe('ready');expect(workerCall(job,'finish')).toEqual(finish);expect(workerCall(job)).toBeNull();
+ expect(sql('select count(*) from public.cashier_sync_queue where not processed')).toBe('1');
+ expect(sql("select row_to_json(s)::text from public.bon_elagouz_store s")).toBe(before);
+ const list=JSON.parse(importAs(owner,'select public.bon_erp_read_import()'));expect(list).toHaveLength(1);expect(list[0].result).toBeUndefined();expect(list[0].worker_token).toBeUndefined();expect(list[0].download_token).toBeUndefined();
+ expect(()=>importAs(owner,"select public.bon_erp_new_import('another.csv','financial','2026-11-01',7)")).toThrow('CASHIER_IMPORT_ALREADY_PENDING');
+ expect(()=>sql(`begin;set local role anon;select * from bon_erp_private.import_jobs;rollback;`)).toThrow('permission denied');
+});
+it.skipIf(!active)('rejects null, wrong and replayed import credentials, result shapes and leases',()=>{
+ const job=importJob();
+ for(const key of ['null',"''",`'${'b'.repeat(64)}'`]){
+  expect(()=>sql(`begin;set local role anon;select public.bon_erp_claim_import('${job.id}',${key});rollback;`)).toThrow('IMPORT_WORKER_DENIED');
+  expect(()=>sql(`begin;set local role anon;select public.bon_erp_finish_import('${job.id}',${key},1,null,null);rollback;`)).toThrow('IMPORT_WORKER_DENIED');
+ }
+ workerCall(job);
+ for(const result of [null,{}, {rows:{}}, {rows:[]}, {rows:[{}]}])expect(()=>workerCall(job,'finish',result)).toThrow('INVALID_IMPORT_RESULT');
+ expect(()=>workerCall(job,'finish',{rows:[{}],sha256:'a'.repeat(64)},null)).toThrow('IMPORT_LEASE_CHANGED');
+ sql(`update bon_erp_private.import_jobs set lease_until=now()-interval '1 second' where id='${job.id}'`);expect(workerCall(job).attempt).toBe(2);
+ expect(()=>workerCall(job,'finish')).toThrow('IMPORT_LEASE_CHANGED');expect(workerCall(job,'finish',{rows:[{}],sha256:'a'.repeat(64)},2).status).toBe('ready');
+ expect(sql("select has_schema_privilege('anon','bon_erp_private','USAGE')")).toBe('f');
+});
+it.skipIf(!active)('keeps cashier jobs and storage private and stops processing after account revocation',()=>{
+ const cashier='22222222-2222-4222-8222-222222220041',other='22222222-2222-4222-8222-222222220042';userAccessFixture(cashier,{},'cashier');userAccessFixture(other,{},'cashier');const job=importJob(cashier);
+ expect(JSON.parse(importAs(other,`select public.bon_erp_read_import('${job.id}')`)||'null')).toBeNull();
+ expect(()=>importAs(other,`select public.bon_erp_prepare_import('${job.id}','${'x'.repeat(30)}')`)).toThrow('USER_PERMISSION_DENIED');
+ expect(()=>importAs(other,`select public.bon_erp_cancel_import('${job.id}')`)).toThrow('USER_PERMISSION_DENIED');
+ expect(workerCall(job).catalog).toEqual([]);
+ sql(`update public.erp_members set disabled_at=now() where user_id='${cashier}'`);
+ expect(workerCall(job,'finish').status).toBe('failed');expect(sql('select count(*) from public.cashier_sync_queue')).toBe('0');
+ expect(sql(`begin;grant insert on storage.objects to authenticated;set local request.jwt.claim.sub='${other}';set local role authenticated;select count(*) from storage.objects where bucket_id='agouz-cashier-imports';rollback;`)).toBe('0');
+ expect(()=>sql(`begin;grant insert on storage.objects to authenticated;set local request.jwt.claim.sub='${other}';set local role authenticated;insert into storage.objects values(gen_random_uuid(),'agouz-cashier-imports','${job.path}');rollback;`)).toThrow('row-level security');
+});
+it.skipIf(!active)('cancels a wrong unreviewed import and rejects content duplicates across dates',()=>{
+ const one=importJob();workerCall(one);workerCall(one,'finish');
+ const two=importJob(owner,'2026-11-02');workerCall(two);expect(workerCall(two,'finish').status).toBe('failed');
+ expect(sql(`select error_code from bon_erp_private.import_jobs where id='${two.id}'`)).toBe('DUPLICATE_IMPORT_FILE');
+ importAs(owner,`select public.bon_erp_cancel_import('${one.id}')`);expect(sql('select count(*) from public.cashier_sync_queue where not processed')).toBe('0');
+ expect(()=>workerCall(one)).toThrow('IMPORT_WORKER_DENIED');
+ const replacement=importJob();workerCall(replacement);workerCall(replacement,'finish',{rows:[{}],sha256:'c'.repeat(64)});
+ sql(`update public.cashier_sync_queue set processed=true where import_job_id='${replacement.id}'`);
+ expect(()=>importAs(owner,`select public.bon_erp_cancel_import('${replacement.id}')`)).toThrow('IMPORT_ALREADY_REVIEWED');
+});
+it.skipIf(!active)('validates import reservations and requires an actual stored file and signed download token',()=>{
+ for(const args of ["null,'financial','2026-11-01',7","'../report.csv','financial','2026-11-01',7","'report.csv',null,'2026-11-01',7","'report.csv','items',null,7","'report.csv','items','2026-02-30',7","'report.csv','items','2026-11-01',null","'report.csv','items','2026-11-01',10485761"]){expect(()=>importAs(owner,`select public.bon_erp_new_import(${args})`)).toThrow();}
+ const job=JSON.parse(importAs(owner,"select public.bon_erp_new_import('report.csv','financial','2026-11-01',7)"));
+ expect(()=>importAs(owner,`select public.bon_erp_prepare_import('${job.id}',null)`)).toThrow('IMPORT_UPLOAD_MISSING');
+ expect(()=>importAs(owner,`select public.bon_erp_prepare_import('${job.id}','${'x'.repeat(30)}')`)).toThrow('IMPORT_UPLOAD_MISSING');
+ expect(()=>sql(`begin;set local role anon;select public.bon_erp_read_import();rollback;`)).toThrow('permission denied');
+});
+
+it.skipIf(!active)('reports recovery health through a narrow backup-only receipt while preserving the previous verified archive',()=>{
+ const reader='33333333-3333-4333-8333-333333333334';
+ sql(`insert into auth.users values('${reader}','health@local.test',now());insert into bon_erp_private.storage_backup_principal values(true,'${reader}')`);
+ const sha='d'.repeat(40),generation='2026-11-04T01-00-00-000Z-12345678';
+ const report=(state:string,run:string)=>importAs(reader,`select public.bon_erp_report_recovery_health('${state}','${run}','${sha}','${generation}')`);
+ expect(()=>importAs(owner,`select public.bon_erp_report_recovery_health('running','1','${sha}')`)).toThrow('BACKUP_PRINCIPAL_REQUIRED');
+ expect(()=>importAs(reader,`select public.bon_erp_report_recovery_health('success',null,'${sha}')`)).toThrow('INVALID_RECOVERY_STATUS');
+ report('running','1');report('success','1');const verified=JSON.parse(importAs(owner,'select public.bon_erp_operational_health()')).backup;
+ expect(verified.state).toBe('success');expect(verified.last_verified_run).toBe('1');
+ report('running','2');report('failed','2');const failed=JSON.parse(importAs(owner,'select public.bon_erp_operational_health()')).backup;
+ expect(failed.last_verified_at).toBe(verified.last_verified_at);expect(failed.last_verified_run).toBe('1');expect(failed.state).toBe('failed');
+ expect(()=>report('success','1')).toThrow('RECOVERY_RUN_CHANGED');
+ expect(()=>importAs(reader,'select public.bon_erp_operational_health()')).toThrow('USER_PERMISSION_DENIED');
+ expect(importAs(reader,"select count(*) from public.bon_elagouz_store")).toBe('0');
+ sql(`delete from bon_erp_private.storage_backup_principal where user_id='${reader}';delete from auth.users where id='${reader}'`);
+});
+
+it.skipIf(!active)('keeps individual cashier provenance and current customer contact available without downloading all invoices',()=>{
+ const source=cashierPair().posted;seed(source);
+ const result=readJson(`select public.bon_erp_sale_detail('${source.cashierDays[0].id}','cashier')`);
+ expect(result.itemsReport).toEqual(source.cashierDays[0].itemsReport);expect(result.consumption).toEqual(source.cashierDays[0].consumption);expect(result.itemNames.bean).toBe(source.items[0].name);
+ const customer={...INITIAL_CUSTOMERS[0],phone:'01012345678'},invoice={...sale(),customerId:INITIAL_CUSTOMERS[0].id};
+ seed({...state,customers:[customer],salesInvoices:[invoice]});expect(readJson(`select public.bon_erp_sale_detail('${invoice.id}','invoice')`).customerPhone).toBe(customer.phone);
+ expect(()=>readJson("select public.bon_erp_sales_page('legacy','',0,null)")).toThrow('INVALID_PAGE');
+ expect(()=>readJson("select public.bon_erp_item_search('x',null)")).toThrow('INVALID_SEARCH');
+});
+
+it.skipIf(!active)('dispatches at most two due jobs with per-job credentials and rate-limits repeat dispatch without committing network requests',()=>{
+ const jobs=[importJob(owner,'2026-10-01'),importJob(owner,'2026-10-02'),importJob(owner,'2026-10-03')];
+ const result=sql(`begin;select bon_erp_private.dispatch_imports();select count(*) from bon_erp_private.import_jobs where dispatched_at is not null;select bon_erp_private.dispatch_imports();select bon_erp_private.dispatch_imports();select bool_and(convert_from(body,'UTF8')::jsonb ? 'worker_token' and url='https://agouz.vercel.app/api/import-worker') from net.http_request_queue;rollback;`);
+ expect(result).toBe('2\n2\n1\n0\nt');
+ expect(sql('select count(*) from net.http_request_queue')).toBe('0');
+ expect(sql('select count(*) from bon_erp_private.import_jobs where dispatched_at is not null')).toBe('0');
+ expect(()=>importAs(owner,'select bon_erp_private.dispatch_imports()')).toThrow('permission denied');
+ sql(`update bon_erp_private.import_jobs set attempt=3 where id='${jobs[0].id}';update bon_erp_private.import_jobs set updated_at=now()-interval '51 minutes' where id='${jobs[1].id}'`);
+ expect(sql(`begin;select bon_erp_private.dispatch_imports();select count(*) from bon_erp_private.import_jobs where status='failed';rollback;`)).toBe('0\n2');
 });

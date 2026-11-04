@@ -1,3 +1,6 @@
+import {useDashboardRead} from './hooks/useDashboardRead';
+import {PagedSalesHistory} from './components/PagedSalesHistory';
+import {ScreenLoading} from './components/ScreenLoading';
 import {Modal} from './components/Modal';
 import {DashboardScreen} from './components/DashboardScreen';
 import {WorkspaceSidebar} from './components/WorkspaceSidebar';
@@ -204,8 +207,12 @@ export default function App() {
   );
 
   const [selectedFinancialPartnerId,setSelectedFinancialPartnerId]=useState('');
-  const cloud = useErpStore();
+  const [historyEditing,setHistoryEditing]=useState(false);
+  const needsFullStore=!['home','sections','sales_invoices'].includes(activeScreen)||historyEditing;
+  const cloud = useErpStore(needsFullStore);
   const { engine, member } = cloud;
+  const dashboard=useDashboardRead(member?.userId,!!member&&canView(member)&&['home','sections','sales_invoices'].includes(activeScreen),reportPeriod);
+  useEffect(()=>{if(activeScreen!=='sales_invoices')setHistoryEditing(false);},[activeScreen]);
   useEffect(()=>setSelectedFinancialPartnerId(''),[member?.userId,member?.partnerId]);
   const confirmSave=async()=>{await engine.flush();if(engine.snapshot.status!=='ready')throw Error(engine.snapshot.error||'لم يصل تأكيد اعتماد العملية؛ راجع حالة الحفظ');};
   const loggedPartnerId = member?.partnerId ?? null;
@@ -331,7 +338,7 @@ export default function App() {
   const queueBusy = React.useRef(false);
   const [queuedReports,setQueuedReports]=useState<QueuedCashierReport[]>([]);
   useEffect(() => {
-    if (!member) return;
+    if (!member || activeScreen!=="cashier_sync") return;
     const sb = getSupabaseClient();
     if (!sb) return;
     let disposed = false;
@@ -342,7 +349,7 @@ export default function App() {
       try {
         const { data, error } = await sb
           .from("cashier_sync_queue")
-          .select("id,file_name,sale_date,raw_rows,content_hash")
+          .select("id,file_name,sale_date,content_hash,report_kind,import_job_id")
           .eq("processed", false)
           .order("created_at")
           .limit(20);
@@ -378,7 +385,7 @@ export default function App() {
       window.removeEventListener("online", processPending);
       void sb.removeChannel(channel);
     };
-  }, [member?.userId, engine]);
+  }, [member?.userId, engine,activeScreen]);
 
   const addAuditLog = (
     actionType: AuditLogEntry["actionType"],
@@ -886,7 +893,7 @@ export default function App() {
     );
   if(member.role==='cashier')return <CashierUploadScreen name={member.displayName} onLogout={handleLogout}/>;
   if(!canView(member))return <main dir="rtl" className="agouz-login"><section className="login-panel p-6 space-y-4"><h1 className="font-black">الحساب غير مخوّل لعرض بيانات المحل</h1><p>اطلب من المالك تحديد صلاحياتك ثم سجّل الدخول مجددًا.</p><button className="login-submit w-full" onClick={handleLogout}>تسجيل الخروج</button></section></main>;
-  const blocked = !["ready", "dirty"].includes(cloud.status);
+  const blocked = (needsFullStore||engine.hasPending)&&!["ready", "dirty"].includes(cloud.status);
   const statusText =
     cloud.status === "saving"
       ? "جارٍ الحفظ على السحابة…"
@@ -985,17 +992,18 @@ export default function App() {
       <div className="app-workspace min-h-screen bg-[#FAF8F4] text-[#1E1612] relative pb-16">
         <div className="screen-stage" key={activeScreen+':'+moreInitialTab}>
         {/* ================= 1. الشاشة الرئيسية: لوحة الإحصائيات والرسوم البيانية الاحترافية ================= */}
-        {activeScreen === 'home'&&<DashboardScreen state={cloud.state} sales={reportSales} period={reportPeriod} onPeriod={setReportPeriod} name={currentPartner.name} queued={queuedReports.length} onNavigate={navigateScreen}/>}
+        {activeScreen === 'home'&&<DashboardScreen model={dashboard.data} error={dashboard.error} onRetry={dashboard.retry} period={reportPeriod} onPeriod={setReportPeriod} name={currentPartner.name} onNavigate={navigateScreen}/>}
 
         {/* ================= 2. قسم الأقسام (بالتصميم الاحترافي الأول الفخم بالإسبريسو والذهبي) ================= */}
         {activeScreen === "sections" && <SectionsHub
-          counts={{products:items.length,inventory:items.length,purchase:purchaseInvoices.length,cashier_sync:queuedReports.length+cashierDays.filter(d=>d.status==='pending').length,sales_invoices:salesInvoices.length+cashierDays.filter(d=>d.status==='approved').length,customers:customers.length,suppliers:suppliers.length,staff_payroll:employees.length,shortages:shortagesCount}}
+          counts={dashboard.data?.counts??{}}
           onNavigate={(screen)=>{
             if(screen==='expenses'||screen==='data_control'||screen==='partners'){setMoreInitialTab(screen);setActiveScreen('more');}
             else setActiveScreen(screen);
           }}
         />}
 
+        {needsFullStore&&!cloud.fullReady?<ScreenLoading/>:<React.Fragment>
         {activeScreen==='users'&&<UsersScreen access={member} partners={partners} onBack={()=>setActiveScreen('sections')}/>}
         {/* ================= الشاشات الفرعية ================= */}
         {activeScreen === "purchase" && (
@@ -1440,7 +1448,7 @@ export default function App() {
           />
         )}
 
-        {activeScreen === "sales_invoices" && (
+        {activeScreen === "sales_invoices" && (!historyEditing?<PagedSalesHistory onBack={()=>setActiveScreen('home')} onManage={canWrite(member,'sales')?()=>setHistoryEditing(true):undefined}/>:(
           <SalesInvoicesAndReturnsScreen
             cashierDays={cashierDays}
             salesInvoices={salesInvoices}
@@ -1467,7 +1475,7 @@ export default function App() {
             }}
             onBack={() => setActiveScreen("home")}
           />
-        )}
+        ))}
 
         {activeScreen === "insights" && (
           <SmartInsightsScreen
@@ -1701,6 +1709,7 @@ export default function App() {
           />
         )}
 
+        </React.Fragment>}
         </div>
         {/* شريط القوائم السفلي المثبت دائماً في أسفل الشاشة مع قسم "الأقسام" بجانب "الرئيسية" */}
         <nav aria-label="التنقل الرئيسي" style={{paddingBottom:'max(6px, env(safe-area-inset-bottom))'}} className="workspace-nav fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#E6DEC8] py-1.5 px-2 grid grid-cols-4 z-40 mx-auto shadow-[0_-4px_20px_rgba(30,22,18,0.06)]">
