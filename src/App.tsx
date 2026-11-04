@@ -914,7 +914,7 @@ export default function App() {
           بيئة اختبار محلية — بيانات تجريبية منفصلة
         </div>
       )}
-      {cloud.status !== 'ready' && <div
+      {(needsFullStore||engine.hasPending)&&cloud.status !== 'ready' && <div
         role="status"
         className="sticky top-0 z-40 w-full bg-stone-900 text-white text-xs text-center p-2"
       >
