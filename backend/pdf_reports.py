@@ -58,7 +58,7 @@ def pdf_bytes(title,period,sections):
 def report_pdf(report):
     from reporting import number
     labels={'revenue':'المبيعات المسجلة','cost':'تكلفة البضاعة','gross':'مجمل الربح','spent':'مصروفات التشغيل','net':'صافي الربح'}
-    return pdf_bytes('ملخص النتائج المالية',report.from_date+' — '+report.to_date,[
+    return pdf_bytes('ملخص النتائج المالية','من '+report.from_date+' إلى '+report.to_date,[
         ('ملخص الفترة',['البيان','جنيه مصري'],[[label,number(report.summary['report'],key)] for key,label in labels.items()]),
         ('الأيام المسجلة',['التاريخ','المبيعات','الصافي'],[[r['date'],r['sales'],r['profit']] for r in report.daily]),
         ('نطاق التقرير',['ملاحظات'],[['المبيعات تستبعد المرتجعات وتضم أيام الكاشير المعتمدة مرة واحدة.'],['الصافي بعد مصروفات التشغيل، دون المسحوبات الشخصية.'],['إصدار البيانات: '+str(report.source['version'])]])])
@@ -70,9 +70,9 @@ def invoice_pdf(invoice):
     if abs(total-paid-remaining)>Decimal('0.011'):raise ValueError('INVOICE_TOTAL_MISMATCH')
     rows=invoice['items']
     if not isinstance(rows,list) or not 1<=len(rows)<=500:raise ValueError('PDF_ROW_LIMIT')
-    lines=[[text(r,'itemName'),number(r,'quantity',nonnegative=True),text(r,'unitLabel'),number(r,'unitPrice',nonnegative=True),number(r,'totalPrice',nonnegative=True)] for r in rows]
+    lines=[[text(r,'itemName'),format(number(r,'quantity',nonnegative=True),'f'),text(r,'unitLabel'),number(r,'unitPrice',nonnegative=True),number(r,'totalPrice',nonnegative=True)] for r in rows]
     subtotal,discount=number(invoice,'subtotal',nonnegative=True),number(invoice,'discount',nonnegative=True)
-    if any(line[1]<=0 for line in lines) or abs(sum(line[4] for line in lines)-subtotal)>Decimal('0.011') or abs(subtotal-discount-total)>Decimal('0.011'):
+    if any(Decimal(line[1])<=0 for line in lines) or abs(sum(line[4] for line in lines)-subtotal)>Decimal('0.011') or abs(subtotal-discount-total)>Decimal('0.011'):
         raise ValueError('INVOICE_TOTAL_MISMATCH')
     return pdf_bytes(('فاتورة مرتجعة — ' if invoice.get('isReturned') else 'فاتورة مبيعات — ')+text(invoice,'invoiceNumber'),business_day(invoice),[
         ('العميل',['الاسم','الهاتف'],[[text(invoice,'customerName'),text(invoice,'customerPhone',True)]]),

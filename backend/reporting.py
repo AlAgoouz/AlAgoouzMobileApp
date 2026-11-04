@@ -10,6 +10,9 @@ from pydantic import Field, TypeAdapter
 import xlsxwriter
 
 D=pl.Decimal(30,6)
+categories={'raw_bean':'بن خام','raw_spice':'منتج مباشر','manufactured_blend':'توليفات','direct_product':'منتج مباشر','drink_recipe':'مشروبات لها وصفة','direct_drink':'مشروبات بيع مباشر','seasoning_recipe':'تحويجات','snack':'سناكس'}
+units={'kg':'كيلو','gram':'جرام','piece':'قطعة','liter':'لتر','ml':'مل'}
+channels={'wholesale':'جملة','retail':'بيع المحل السابق','cashier_sync':'يوم الكاشير'}
 money_adapter=TypeAdapter(Annotated[Decimal,Field(allow_inf_nan=False,max_digits=24,decimal_places=6)])
 text_adapter=TypeAdapter(Annotated[str,Field(max_length=2000)])
 date_adapter=TypeAdapter(date)
@@ -98,7 +101,8 @@ def workbook_bytes(report):
     header=book.add_format({'bold':True,'bg_color':'#352719','font_color':'#FFFFFF','font_name':'Arial','align':'right','reading_order':2})
     normal=book.add_format({'font_name':'Arial','reading_order':2,'valign':'top'})
     numeric=book.add_format({'font_name':'Arial','num_format':'#,##0.00;[Red]-#,##0.00','reading_order':1})
-    def sheet(name,columns,rows):
+    quantity=book.add_format({'font_name':'Arial','num_format':'#,##0.######;[Red]-#,##0.######','reading_order':1})
+    def sheet(name,columns,rows,quantity_columns=()):
         if len(rows)>10000:
             raise ValueError('EXPORT_ROW_LIMIT')
         page=book.add_worksheet(name)
@@ -108,24 +112,24 @@ def workbook_bytes(report):
         for row,values in enumerate(rows,1):
             for col,value in enumerate(values):
                 if value is None:page.write_blank(row,col,None,normal)
-                elif isinstance(value,(Decimal,int,float)) and not isinstance(value,bool):page.write_number(row,col,float(value),numeric)
+                elif isinstance(value,(Decimal,int,float)) and not isinstance(value,bool):page.write_number(row,col,float(value),quantity if col in quantity_columns else numeric)
                 else:page.write_string(row,col,str(value),normal)
         if rows:page.autofilter(0,0,len(rows),len(columns)-1)
         page.repeat_rows(0);page.set_footer('&Cبُن العجوز — &P / &N')
         return page
     labels={'revenue':'المبيعات المسجلة','cost':'تكلفة البضاعة','gross':'مجمل الربح','spent':'مصروفات التشغيل','net':'صافي الربح'}
     sheet('ملخص الفترة',['البيان','القيمة'],[['من',report.from_date],['إلى',report.to_date],['إصدار البيانات',report.source['version']]]+[[label,number(report.summary['report'],key)] for key,label in labels.items()]+[['ملاحظة','المبيعات تستبعد المرتجعات وتضم أيام الكاشير المعتمدة مرة واحدة.'],['الأرصدة','المخزون والعملاء والموردون والشركاء أرصدة حالية.']])
-    sheet('المبيعات',['المستند','التاريخ','العميل','القناة','المبيعات','التكلفة','مجمل الربح'],[[r[k] for k in ['number','date','customer','channel','amount','cost','net']] for r in report.sales])
+    sheet('المبيعات',['المستند','التاريخ','العميل','القناة','المبيعات','التكلفة','مجمل الربح'],[[r['number'],r['date'],r['customer'],channels.get(r['channel'],r['channel']),r['amount'],r['cost'],r['net']] for r in report.sales])
     sheet('المصروفات',['التاريخ','البيان','التصنيف','المبلغ'],[[r[k] for k in ['date','title','category','amount']] for r in report.expenses])
     daily=sheet('الأيام المسجلة',['التاريخ','المبيعات','الصافي'],[[r['date'],r['sales'],r['profit']] for r in report.daily])
     if report.daily:
         chart=book.add_chart({'type':'line'})
         for col,title in [(1,'المبيعات'),(2,'الصافي')]:chart.add_series({'name':title,'categories':['الأيام المسجلة',1,0,len(report.daily),0],'values':['الأيام المسجلة',1,col,len(report.daily),col]})
         chart.set_title({'name':'المبيعات وصافي الربح للأيام المسجلة'});daily.insert_chart('E2',chart)
-    sheet('المخزون الحالي',['الكود','الصنف','النوع','الوحدة','الرصيد','متوسط التكلفة','قيمة الرصيد'],[[text(r,'code'),text(r,'name'),text(r,'category'),text(r,'baseUnit'),number(r,'stock'),number(r,'costPrice',nonnegative=True),number(r,'stock')*number(r,'costPrice')] for r in records(report.source,'items') if r['category'] not in ('drink_recipe','seasoning_recipe')])
+    sheet('المخزون الحالي',['الكود','الصنف','النوع','الوحدة','الرصيد','متوسط التكلفة','قيمة الرصيد'],[[text(r,'code'),text(r,'name'),categories.get(text(r,'category'),text(r,'category')),units.get(text(r,'baseUnit'),text(r,'baseUnit')),number(r,'stock'),number(r,'costPrice',nonnegative=True),number(r,'stock')*number(r,'costPrice')] for r in records(report.source,'items') if r['category'] not in ('drink_recipe','seasoning_recipe')],quantity_columns=(4,))
     sheet('العملاء',['العميل','الهاتف','المنطقة','المديونية الحالية','إجمالي المبيعات المسجل'],[[text(r,'name'),text(r,'phone',True),text(r,'area',True),number(r,'balance'),number(r,'totalSales')] for r in records(report.source,'customers')])
     sheet('الموردون',['المورد','الهاتف','العنوان','المندوب','إجمالي المشتريات المسجل'],[[text(r,'name'),text(r,'phone',True),text(r,'address',True),text(r,'representativeName',True),number(r,'totalPurchases')] for r in records(report.source,'suppliers')])
-    sheet('المشتريات',['الفاتورة','التاريخ','المورد','الصافي دون الضريبة','الضريبة المنفصلة','الإجمالي'],[[text(r,'invoiceNumber'),business_day(r),text(r,'supplierName'),number(r,'netAmount',True),number(r,'taxAmount',True),number(r,'totalAmount')] for r in records(report.source,'purchase_invoices')])
+    sheet('المشتريات',['الفاتورة','التاريخ','المورد','الصافي دون الضريبة','الضريبة المنفصلة','الإجمالي','الحالة'],[[text(r,'invoiceNumber'),business_day(r),text(r,'supplierName'),number(r,'netAmount',True),number(r,'taxAmount',True),number(r,'totalAmount'),'ملغاة' if r.get('isCancelled') else 'معتمدة'] for r in records(report.source,'purchase_invoices')])
     sheet('حصص الشركاء',['الشريك','النسبة %','حصة ربح الفترة فقط','المدفوع من الجيب حاليًا','المسحوبات حاليًا'],[[text(r,'name'),number(r,'sharePercent'),number(report.summary['report'],'net')*number(r,'sharePercent')/100,number(r,'totalPaidFromPocket'),number(r,'totalWithdrawals')] for r in records(report.source,'partners')])
     book.close()
     data=output.getvalue()

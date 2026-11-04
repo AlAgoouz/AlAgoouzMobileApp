@@ -96,7 +96,7 @@ export function mapRawCashierRows(
 ): ParsedCashierRow[] {
   const names=catalog.map(item=>({item,name:normalize(item.name)}));
   const codes=new Map<string,InventoryItem[]>(),barcodes=new Map<string,InventoryItem[]>(),byName=new Map<string,InventoryItem[]>();
-  const add=(index:Map<string,InventoryItem[]>,key:string,item:InventoryItem)=>{if(key)index.set(key,[...(index.get(key)??[]),item]);};
+  const add=(index:Map<string,InventoryItem[]>,key:string,item:InventoryItem)=>{if(!key)return;const group=index.get(key);if(group)group.push(item);else index.set(key,[item]);};
   for(const {item,name} of names){add(codes,normalize(item.code),item);if(item.barcode)add(barcodes,item.barcode,item);add(byName,name,item);}
   return rows
     .filter((row) => Object.values(row).some((v) => String(v ?? '').trim()))
