@@ -1,5 +1,6 @@
 import React,{useState,useMemo} from 'react';
 import {FolderSync} from 'lucide-react';
+import {queuedRows} from '../lib/importJobs';
 import {ImportJobsPanel} from './ImportJobsPanel';
 import {OperationHeader} from './OperationHeader';
 import {RecordPagination,useRecordPage} from './RecordPagination';
@@ -9,7 +10,7 @@ import {mapRawCashierRows,parseLocalizedNumber} from '../lib/cashierRows';
 import {convertToBaseUnit} from '../lib/itemCosts';
 import type {attachCashierReport} from '../lib/cashierDays';
 type Report=Parameters<typeof attachCashierReport>[2];
-export type QueuedCashierReport={id:string;file_name:string;sale_date:string;content_hash:string;report_kind?:'financial'|'items';import_job_id?:string;raw_rows:Record<string,unknown>[]};
+export type QueuedCashierReport={id:string;file_name:string;sale_date:string;content_hash:string;report_kind?:'financial'|'items';import_job_id?:string;raw_rows?:Record<string,unknown>[]};
 export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack}: {items:InventoryItem[];days:CashierDay[];queued?:QueuedCashierReport[];onAttach:(date:string,report:Report)=>Promise<void>;onApprove:(id:string)=>Promise<void>;onBack:()=>void}){
  const [date,setDate]=useState(businessDate()),[type,setType]=useState<'financial'|'items'>('financial');
  const [preview,setPreview]=useState<{name:string;sha256:string;rows:Record<string,unknown>[];sourceQueueId?:string} | null>(null);
@@ -37,7 +38,7 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
  return <main dir="rtl" className="operation-screen min-h-screen bg-[#FAF8F4] p-4 pb-28 space-y-4">
   <OperationHeader title="تقارير يوم الكاشير" description="تقرير مالي + تقرير أصناف، لحساب يومك بدقة." icon={FolderSync} onBack={onBack} busy={busy}/>
   <p className="operation-note">ارفع التقريرين لنفس اليوم. يتسجل الإيراد مرة واحدة، وتُخصم المكونات عند اعتماد اليوم بعد اكتمال التقريرين.</p>
-  {!!queued.length&&<section className="border rounded-xl p-3"><h2 className="font-bold">ملفات وصلت من جهاز الكاشير وتنتظر المراجعة</h2><p>افتح الملف لمراجعته.</p>{queued.some(q=>!q.report_kind)&&<label>نوع الملف القديم<select value={type} onChange={e=>{setType(e.target.value as typeof type);setPreview(null);}}><option value="financial">تقرير مالي</option><option value="items">تقرير أصناف</option></select></label>}{queued.map(q=><button key={q.id} disabled={busy} className="block p-2 underline" onClick={()=>{setDate(q.sale_date);if(q.report_kind)setType(q.report_kind);setPreview({name:q.file_name,sha256:q.content_hash,rows:q.raw_rows,sourceQueueId:q.id});setColumn('');setRowIndex('0');}}>{q.sale_date} — {q.file_name}</button>)}</section>}
+  {!!queued.length&&<section className="border rounded-xl p-3"><h2 className="font-bold">ملفات وصلت من جهاز الكاشير وتنتظر المراجعة</h2><p>افتح الملف لمراجعته.</p>{queued.some(q=>!q.report_kind)&&<label>نوع الملف القديم<select value={type} onChange={e=>{setType(e.target.value as typeof type);setPreview(null);}}><option value="financial">تقرير مالي</option><option value="items">تقرير أصناف</option></select></label>}{queued.map(q=><button key={q.id} disabled={busy} className="block p-2 underline" onClick={()=>void act(async()=>{const rows=q.raw_rows??await queuedRows(q.id);setDate(q.sale_date);if(q.report_kind)setType(q.report_kind);setPreview({name:q.file_name,sha256:q.content_hash,rows,sourceQueueId:q.id});setColumn('');setRowIndex('0');})}>{q.sale_date} — {q.file_name}</button>)}</section>}
   <ImportJobsPanel onReview={job=>{if(!job.result)return;setDate(job.sale_date);setType(job.kind);setPreview({name:job.file_name,sha256:job.result.sha256,rows:job.result.rows,sourceQueueId:job.queue_id??undefined});setColumn('');setRowIndex('0');}}/>
   {preview&&<p>يوم العمل: {date} — {type==='financial'?'تقرير مالي':'تقرير أصناف'}</p>}
   {preview&&<section className="border rounded-xl p-3 space-y-3"><h2 className="font-bold">مراجعة {preview.name}</h2>

@@ -59,7 +59,7 @@ declare result jsonb;
 begin
  if public.bon_erp_role() is distinct from 'partner' then raise exception 'USER_PERMISSION_DENIED' using errcode='42501';end if;
  if p_id is null or p_kind is null or length(p_id)>160 or p_kind not in ('invoice','cashier') then raise exception 'INVALID_DETAIL';end if;
- select v into result from public.bon_elagouz_store s cross join lateral jsonb_array_elements(case when p_kind='cashier' then s.cashier_days else s.sales_invoices end) v where s.id='main_store' and v->>'id'=p_id;
+ select v||(case when p_kind='invoice' then jsonb_build_object('customerPhone',coalesce((select c->>'phone' from jsonb_array_elements(s.customers)c where c->>'id'=v->>'customerId' limit 1),'')) else jsonb_build_object('itemNames',coalesce((select jsonb_object_agg(i->>'id',i->>'name') from jsonb_array_elements(s.items)i where exists(select 1 from jsonb_array_elements(coalesce(v#>'{itemsReport,lines}','[]'::jsonb)||coalesce(v->'consumption','[]'::jsonb))l where l->>'itemId'=i->>'id')),'{}'::jsonb)) end) into result from public.bon_elagouz_store s cross join lateral jsonb_array_elements(case when p_kind='cashier' then s.cashier_days else s.sales_invoices end) v where s.id='main_store' and v->>'id'=p_id;
  return result;
 end $$;
 

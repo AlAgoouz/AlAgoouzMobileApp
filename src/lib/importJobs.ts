@@ -25,3 +25,9 @@ export async function uploadImport(file:File,kind:ImportKind,date:string){
  if(error){await cancelImport(job.id).catch(()=>{});throw Error('لم يتأكد رفع الملف؛ حدّث قائمة الملفات قبل تكرار الرفع.');}
  await enqueueImport(job.id);return job.id;
 }
+
+export async function queuedRows(id:string){
+ const {data,error}=await client().from('cashier_sync_queue').select('raw_rows').eq('id',id).eq('processed',false).single();
+ if(error)throw Error('تعذر فتح الملف؛ حدّث القائمة وأعد المحاولة.');
+ return z.array(z.record(z.string(),z.unknown())).max(10000).parse(data.raw_rows);
+}

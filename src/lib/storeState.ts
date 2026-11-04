@@ -493,6 +493,9 @@ export function invoiceDetail(value:unknown):SalesInvoice {
  if(Math.abs(invoice.totalAmount-invoice.paidAmount-invoice.remainingAmount)>0.011)throw Error('إجمالي الفاتورة لا يطابق المدفوع والمتبقي');
  return invoice as unknown as SalesInvoice;
 }
+export function cashierDayDetail(value:unknown):CashierDay {
+ return schema.shape.cashierDays.unwrap().element.parse(value) as CashierDay;
+}
 export function toCloud(state: StoreState) {
   return Object.fromEntries(
     Object.entries(cloudFields).map(([local, cloud]) => [

@@ -349,7 +349,7 @@ export default function App() {
       try {
         const { data, error } = await sb
           .from("cashier_sync_queue")
-          .select("id,file_name,sale_date,raw_rows,content_hash,report_kind,import_job_id")
+          .select("id,file_name,sale_date,content_hash,report_kind,import_job_id")
           .eq("processed", false)
           .order("created_at")
           .limit(20);
