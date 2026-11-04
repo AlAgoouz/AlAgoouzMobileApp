@@ -35,10 +35,13 @@ def pdf_bytes(title,period,sections):
     initialize_pdf()
     from weasyprint import HTML
     from weasyprint.text.fonts import FontConfiguration
+    from weasyprint.urls import URLFetcher,URLFetcherResponse
     font=(Path(__file__).parent/'assets'/'Amiri-Regular.ttf').read_bytes()
-    def fetch(url,*args,**kwargs):
-        if url!='agouz-font:amiri':raise ValueError('PDF_RESOURCE_DENIED')
-        return {'string':font,'mime_type':'font/ttf'}
+    class LocalFontFetcher(URLFetcher):
+        def fetch(self,url,headers=None):
+            if url!='agouz-font:amiri':raise ValueError('PDF_RESOURCE_DENIED')
+            return URLFetcherResponse(url,body=font,headers={'Content-Type':'font/ttf'})
+    fetch=LocalFontFetcher(allowed_protocols={'agouz-font'},fail_on_errors=True)
     escape=lambda v:html.escape(str(v),quote=True)
     parts=[]
     for heading,columns,rows in sections:
@@ -46,7 +49,7 @@ def pdf_bytes(title,period,sections):
         content=''.join('<tr>'+''.join('<td>'+escape(f'{v:,.2f}' if isinstance(v,Decimal) else v)+'</td>' for v in row)+'</tr>' for row in rows)
         parts.append('<h2>'+escape(heading)+'</h2><table><thead><tr>'+''.join('<th>'+escape(c)+'</th>' for c in columns)+'</tr></thead><tbody>'+content+'</tbody></table>')
     markup='''<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>
-    @font-face{font-family:Agouz;src:url('agouz-font:amiri')}@page{size:A4;margin:16mm;@bottom-center{content:"بُن العجوز — " counter(page);font-family:Agouz;font-size:10pt}}
+    @font-face{font-family:Agouz;src:url('agouz-font:amiri')}@font-face{font-family:Agouz;font-weight:bold;src:url('agouz-font:amiri')}@page{size:A4;margin:16mm;@bottom-center{content:"بُن العجوز — " counter(page);font-family:Agouz;font-size:10pt}}
     body{font-family:Agouz;font-size:12pt;color:#352719;line-height:1.5}header{border-bottom:3px solid #b48d42;padding-bottom:10pt}h1{font-size:25pt;margin:0}h2{font-size:16pt;margin:18pt 0 6pt}p{color:#766145}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#352719;color:white}td,th{padding:7pt;border:1px solid #ddcfb5;text-align:right;overflow-wrap:anywhere}tr{break-inside:avoid}thead{display:table-header-group}tbody tr:nth-child(even){background:#faf7f0}
     </style></head><body><header><h1>بُن العجوز — أصل المزاج</h1><h2>'''+escape(title)+'</h2><p>'+escape(period)+'</p></header>'+''.join(parts)+'</body></html>'
     return HTML(string=markup,url_fetcher=fetch).write_pdf(font_config=FontConfiguration())

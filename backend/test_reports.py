@@ -66,7 +66,10 @@ class ReportTests(unittest.TestCase):
         report=prepare_report(*fixture(),'2026-11-01','2026-11-30')
         data=report_pdf(report)
         self.assertTrue(data.startswith(b'%PDF-'))
-        self.assertEqual(len(PdfReader(io.BytesIO(data)).pages),1)
+        reader=PdfReader(io.BytesIO(data))
+        self.assertEqual(len(reader.pages),1)
+        font_names=[str(value.get_object().get('/BaseFont')) for value in reader.pages[0]['/Resources']['/Font'].get_object().values()]
+        self.assertTrue(any('Agouz' in name or 'Amiri' in name for name in font_names),font_names)
         invoice=dict(invoiceNumber='INV-AR-1',date='2026-11-04',customerName='شركة بن العجوز للتجارة — القاهرة',customerPhone='01012345678',subtotal=100,discount=0,totalAmount=100,paidAmount=40,remainingAmount=60,items=[dict(itemName='توليفة العجوز الخاصة رقم '+str(i),quantity=1,unitLabel='كيلو',unitPrice=1,totalPrice=1) for i in range(100)])
         receipt=invoice_pdf(invoice)
         self.assertGreater(len(PdfReader(io.BytesIO(receipt)).pages),1)
