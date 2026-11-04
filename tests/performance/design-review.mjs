@@ -60,6 +60,7 @@ export async function verifyDesign(){
       localStorage.setItem('sb-127-auth-token',JSON.stringify({access_token:encode({alg:'HS256',typ:'JWT'})+'.'+encode({sub:user.id,role:'authenticated',aud:'authenticated',iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+3600})+'.fixture',refresh_token:'fixture',expires_at:Math.floor(Date.now()/1000)+3600,token_type:'bearer',user}));
     });
     await page.reload();await page.getByText('ملخص الإحصائيات والأرباح المباشر',{exact:true}).waitFor();
+    assert.equal(await page.getByText('تعذر تأكيد الحفظ',{exact:true}).count(),0,'Read-only dashboard must not report a failed save before a write exists');
     assert.equal(await page.getByRole('button',{name:'الأقسام',exact:true}).count(),1,'Home must not duplicate the section directory');
     assert.equal(await page.getByRole('button',{name:'المزيد',exact:true}).count(),0);
     await page.getByRole('button',{name:'كل السجل',exact:true}).click();
