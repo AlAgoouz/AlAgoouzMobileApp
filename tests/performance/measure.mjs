@@ -38,6 +38,7 @@ for(let run=0;run<3;run++){
   sample.invoiceReadyMs=performance.now()-invoiceStart;
   phase('counting-invoices');sample.nodes=await page.locator('*').count();sample.renderedInvoices=await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).count();
   console.log(label,'invoiceReadyMs',sample.invoiceReadyMs,'rendered',sample.renderedInvoices);
+  if(label!=='baseline'&&(await(await fetch('http://127.0.0.1:5284/__perf__/metrics')).json()).fullReads!==0)throw Error('INITIAL_FULL_STORE_READ_FORBIDDEN');
   phase('checking-refresh-traffic');const initial=await(await fetch('http://127.0.0.1:5284/__perf__/metrics')).json();
   for(let i=0;i<3;i++){const response=page.waitForResponse(r=>r.url().includes('/rest/v1/bon_elagouz_store'));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await(await response).finished();await sleep(500);}
   const end=await(await fetch('http://127.0.0.1:5284/__perf__/metrics')).json();

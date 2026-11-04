@@ -9,10 +9,14 @@ import {adjustCatalogItem} from '../src/lib/catalogAdjustments';
 import {businessDate} from '../src/lib/dates';
 import {receiveStock} from '../src/lib/costing';
 import {attachCashierReport,approveCashierDay} from '../src/lib/cashierDays';
+import {salesForReports} from '../src/lib/cashierDays';
+import {buildReport,reportRange,reportPoints} from '../src/lib/reporting';
+import {dashboardSchema,salesPageSchema} from '../src/lib/readModels';
 import type {StoreState} from '../src/lib/storeState';
 import type {SalesInvoice,InventoryItem} from '../src/types/erp';
 const active=!!process.env.AGOUZ_TEST_PG_CONTAINER;
 const owner='11111111-1111-4111-8111-111111111111';
+function readJson(query:string){return JSON.parse(asUser(owner,query).split('\n').at(-1)!);}
 const state={...emptyStore,partners:[{...INITIAL_PARTNERS[0],id:'p1',sharePercent:100,totalPaidFromPocket:0,totalWithdrawals:0}]};
 function asUser(id:string,query:string){return sql(`begin;select set_config('request.jwt.claim.sub','${id}',true);set local role authenticated;${query};rollback;`);}
 function userAccessFixture(id:string,permissions:Record<string,boolean>,role='partner',disabled=false){
@@ -67,6 +71,45 @@ function seed(store:StoreState){
 }
 beforeEach(()=>{if(active)seed(state);});
 afterAll(()=>{if(active)dispose();});
+it.skipIf(!active)('matches bounded dashboard figures to the established financial reporting rules',()=>{
+ const paired=cashierPair().posted;
+ const invoices=[{...sale(),id:'active',date:businessDate()},{...sale(),id:'returned',isReturned:true,date:businessDate()}];
+ const expenses=[{id:'exp',title:'Daily',date:businessDate(),category:'إيجار',amount:3,paidFrom:'درج المحل',partnerName:'Owner'},{id:'withdrawal',title:'Owner',date:businessDate(),category:'مسحوبات شركاء',amount:999,paidFrom:'درج المحل',partnerName:'Owner'},{id:'cancelled',title:'Cancelled',date:businessDate(),category:'إيجار',amount:999,paidFrom:'درج المحل',partnerName:'Owner',isCancelled:true}] as StoreState['expenses'];
+ const source={...paired,salesInvoices:invoices,expenses};seed(source);
+ const range=reportRange({kind:'all',from:'',to:''}),expected=buildReport(salesForReports(source),expenses,range);
+ const result=dashboardSchema.parse(readJson("select public.bon_erp_dashboard('0001-01-01','9999-12-31')"));
+ for(const field of ['revenue','cost','gross','spent','net','margin'] as const)expect(result.report[field]).toBeCloseTo(expected[field],8);
+ expect(result.report.count).toBe(expected.active.length);expect(result.balances.inventory).toBe(-0.5);expect(result.approved).toBe(1);
+ expect(reportPoints(result.report.entries,range,result.report.firstDate,result.report.lastDate)).toEqual(expected.points);
+ expect(result.products[0].revenue).toBe(invoices[0].items[0].totalPrice);
+ expect(JSON.stringify(result)).not.toContain('financial.xlsx');
+});
+it.skipIf(!active)('preserves sparse month and year charts without returning invoice history',()=>{
+ for(const dates of [['2026-01-01','2026-12-31'],['2000-01-01','2026-12-31'],['1800-01-01','2026-12-31']]){
+  const invoices=dates.map((date,i)=>({...sale(),date,id:'chart-'+i}));seed({...stockState(),salesInvoices:invoices});
+  const range=reportRange({kind:'all',from:'',to:''}),expected=buildReport(invoices,[],range);
+  const model=dashboardSchema.parse(readJson("select public.bon_erp_dashboard('0001-01-01','9999-12-31')"));
+  expect(reportPoints(model.report.entries,range,model.report.firstDate,model.report.lastDate)).toEqual(expected.points);
+  expect(model.report.entries.length).toBeLessThanOrEqual(2);
+ }
+});
+it.skipIf(!active)('bounds invoice pages and searches line names across the entire history',()=>{
+ const invoices=Array.from({length:121},(_,i)=>({...sale(),id:'history-'+String(i).padStart(3,'0'),invoiceNumber:'SEARCH-'+i,items:[{...sale().items[0],itemName:i===120?'Unique ingredient':'Ordinary'}]}));seed({...stockState(),salesInvoices:invoices});
+ const first=salesPageSchema.parse(readJson("select public.bon_erp_sales_page('legacy','',0,50)"));expect(first.total).toBe(121);expect(first.rows).toHaveLength(50);expect(first.rows[0].items).toBeUndefined();
+ const second=salesPageSchema.parse(readJson("select public.bon_erp_sales_page('legacy','',50,50)"));expect(second.rows[0].id).not.toBe(first.rows[0].id);
+ const searched=salesPageSchema.parse(readJson("select public.bon_erp_sales_page('legacy','Unique ingredient',0,50)"));expect(searched.total).toBe(1);expect(searched.rows[0].id).toBe('history-120');
+ const detail=readJson("select public.bon_erp_sale_detail('history-120','invoice')");expect(detail.items[0].itemName).toBe('Unique ingredient');
+ expect(()=>asUser(owner,"select public.bon_erp_sales_page('legacy','',0,51)")).toThrow('INVALID_PAGE');
+ expect(()=>asUser(owner,"select public.bon_erp_dashboard('2026-02-30','2026-03-01')")).toThrow();
+});
+it.skipIf(!active)('keeps read APIs caller-authorized and immediately refuses disabled and cashier accounts',()=>{
+ const viewer='22222222-2222-4222-8222-222222229101',cashier='22222222-2222-4222-8222-222222229102';userAccessFixture(viewer,{view:true});userAccessFixture(cashier,{},'cashier');
+ const query="select public.bon_erp_dashboard('0001-01-01','9999-12-31')";
+ expect(()=>asUser(viewer,query)).not.toThrow();expect(()=>asUser(cashier,query)).toThrow('USER_PERMISSION_DENIED');
+ sql(`update public.erp_members set disabled_at=now() where user_id='${viewer}'`);expect(()=>asUser(viewer,query)).toThrow('USER_PERMISSION_DENIED');
+ expect(()=>sql('set role anon;'+query)).toThrow('permission denied');
+ expect(sql("select bool_and(not p.prosecdef) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and proname in ('bon_erp_dashboard','bon_erp_sales_page','bon_erp_sale_detail','bon_erp_item_search')")).toBe('t');
+});
 function save(value:any){return sql(`begin;set local request.jwt.claim.sub='${owner}';set local role authenticated;select public.bon_erp_save_store(0,${literal(value)},gen_random_uuid(),null);rollback;`);}
 const accept=(store:StoreState)=>expect(save(toCloud(store))).toContain('"version": 1');
 const reject=(store:StoreState,reason:string)=>{expect(()=>save(toCloud(store))).toThrow(reason);expect(sql("select version from public.bon_elagouz_store where id='main_store'")).toBe('0');};

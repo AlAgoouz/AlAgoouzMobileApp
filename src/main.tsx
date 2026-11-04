@@ -6,6 +6,7 @@ import "./index.css";
 import "./visual-system.css";
 import "./card-surfaces.css";
 import "./section-system.css";
+import "./record-system.css";
 import {ScreenLoading} from './components/ScreenLoading';
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

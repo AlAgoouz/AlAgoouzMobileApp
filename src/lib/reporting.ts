@@ -26,9 +26,16 @@ export function buildReport(sales:SalesInvoice[],expenses:Expense[],range:Report
  const add=(date:string,sales:number,profit:number)=>{const row=entries.get(date)??{sales:0,profit:0};entries.set(date,{sales:row.sales+sales,profit:row.profit+profit});};
  for(const i of active)add(i.date,i.totalAmount,i.netProfit);
  for(const e of periodExpenses)if(!e.isCancelled&&e.category!=='مسحوبات شركاء')add(e.date,0,-e.amount);
+ const points=reportPoints([...entries].map(([date,value])=>({date,...value})),range);
+ return {invoices,active,expenses:periodExpenses,revenue,cost,gross,spent,net:gross-spent,margin:revenue?((gross-spent)/revenue)*100:0,points};
+}
+export const money=(value:number)=>new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(Object.is(value,-0)?0:value);
+
+export function reportPoints(rows:{date:string;sales:number;profit:number}[],range:ReportRange,firstDate?:string|null,lastDate?:string|null){
+ const entries=new Map(rows.map(row=>[row.date,{sales:row.sales,profit:row.profit}]));
  const dates=[...entries.keys()].sort();let points:TrendPoint[]=[];
  if(dates.length){
-  const first=range.from==='0001-01-01'?dates[0]:range.from,last=range.to==='9999-12-31'?dates[dates.length-1]:range.to;
+  const first=range.from==='0001-01-01'?(firstDate??dates[0]):range.from,last=range.to==='9999-12-31'?(lastDate??dates[dates.length-1]):range.to;
   const days=(Date.parse(last)-Date.parse(first))/86400000;
   if(days<=62){
    for(let d=new Date(first+'T12:00:00Z');d.toISOString().slice(0,10)<=last;d.setUTCDate(d.getUTCDate()+1)){
@@ -48,6 +55,5 @@ export function buildReport(sales:SalesInvoice[],expenses:Expense[],range:Report
    points=cursor.toISOString().slice(0,length)>stop?filled:[...buckets.values()].sort((a,b)=>a.date.localeCompare(b.date));
   }
  }
- return {invoices,active,expenses:periodExpenses,revenue,cost,gross,spent,net:gross-spent,margin:revenue?((gross-spent)/revenue)*100:0,points};
+ return points;
 }
-export const money=(value:number)=>new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(Object.is(value,-0)?0:value);

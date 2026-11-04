@@ -7,7 +7,9 @@ import { scrubLegacyPasswords } from '../lib/legacyCache';
 import { authErrorMessage } from '../lib/authErrors';
 import { storeWriteError } from '../lib/storeErrors';
 
-export function useErpStore() {
+export function useErpStore(loadFull=true) {
+  const fullRequested=useRef(loadFull);fullRequested.current=loadFull;
+  const [hydrationKey,setHydrationKey]=useState('');
   const recoveryFlow = useRef(new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery');
   const [passwordRecovery, setPasswordRecovery] = useState(recoveryFlow.current);
   const passwordUpdated = useRef(false);
@@ -127,11 +129,10 @@ export function useErpStore() {
         setMember(null);engine.logout();
       }else{
         const access:UserAccess={userId:user.id,partnerId:profile.partner_id??null,username:profile.username,displayName:profile.display_name||profile.username,role:profile.role,isOwner:profile.is_owner===true,permissions:profile.permissions??{}};
-        const alreadyLoaded=activeUser.current===user.id&&engine.snapshot.status!=='signed-out';
+        if(activeUser.current&&activeUser.current!==user.id)engine.logout();
         accessRef.current=access;activeUser.current=user.id;setAuthError('');
         setMember(previous=>JSON.stringify(previous)===JSON.stringify(access)?previous:access);
-        if(access.role==='partner'&&canView(access)){if(!alreadyLoaded)await engine.load();}
-        else engine.logout();
+        if(access.role!=='partner'||!canView(access))engine.logout();
       }
       if (!disposed) setAuthReady(true);
       } catch (failure) {
@@ -175,6 +176,12 @@ export function useErpStore() {
       subscription.unsubscribe();
     };
   }, [engine]);
+  useEffect(()=>{
+    if(!loadFull||member?.role!=='partner'||!canView(member)){setHydrationKey('');return;}
+    let alive=true;const key=member.userId;
+    const hydrate=async()=>{if(engine.snapshot.status==='signed-out')await engine.load();else await engine.refresh();if(alive)setHydrationKey(key);};
+    void hydrate();return()=>{alive=false;};
+  },[loadFull,member?.userId,member?.role,member?.permissions.view,engine]);
   useEffect(() => {
     if (!member || !canView(member) || member.role==='cashier') return;
     const sb = getSupabaseClient();
@@ -190,16 +197,16 @@ export function useErpStore() {
           filter: 'id=eq.main_store',
         },
         () => {
-          void engine.refresh();
+          if(fullRequested.current)void engine.refresh();
         },
       )
       .subscribe();
     const timer = setInterval(() => {
-      if (document.visibilityState === 'hidden' || !navigator.onLine) return;
+      if (!fullRequested.current || document.visibilityState === 'hidden' || !navigator.onLine) return;
       void engine.refresh();
     }, 15000);
     const refresh = () => {
-      if (document.visibilityState === 'hidden' || !navigator.onLine) return;
+      if (!fullRequested.current || document.visibilityState === 'hidden' || !navigator.onLine) return;
       void engine.refresh();
     };
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -286,6 +293,7 @@ export function useErpStore() {
   }
   return {
     ...snapshot,
+    fullReady:hydrationKey===member?.userId&&['ready','dirty'].includes(snapshot.status),
     engine,
     member,
     authReady,
