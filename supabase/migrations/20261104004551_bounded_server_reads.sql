@@ -4,7 +4,7 @@ create or replace function public.bon_erp_dashboard(p_from text,p_to text)
 returns jsonb language plpgsql stable security invoker set search_path='' as $$
 declare s public.bon_elagouz_store%rowtype; result jsonb;
 begin
- perform bon_erp_private.require_access('view');
+ if public.bon_erp_role() is distinct from 'partner' then raise exception 'USER_PERMISSION_DENIED' using errcode='42501';end if;
  if p_from !~ '^\d{4}-\d{2}-\d{2}$' or p_to !~ '^\d{4}-\d{2}-\d{2}$' or p_from>p_to or to_char(p_from::date,'YYYY-MM-DD')<>p_from or to_char(p_to::date,'YYYY-MM-DD')<>p_to then raise exception 'INVALID_REPORT_RANGE';end if;
  select * into strict s from public.bon_elagouz_store where id='main_store';
  with invoices as materialized (
@@ -39,7 +39,7 @@ create or replace function public.bon_erp_sales_page(p_kind text default null,p_
 returns jsonb language plpgsql stable security invoker set search_path='' as $$
 declare s public.bon_elagouz_store%rowtype; kind text:=p_kind; result jsonb;
 begin
- perform bon_erp_private.require_access('view');
+ if public.bon_erp_role() is distinct from 'partner' then raise exception 'USER_PERMISSION_DENIED' using errcode='42501';end if;
  if p_offset<0 or p_offset>10000000 or p_limit not between 1 and 50 or length(p_query)>150 then raise exception 'INVALID_PAGE';end if;
  select * into strict s from public.bon_elagouz_store where id='main_store';
  if kind is null then kind:=case when jsonb_array_length(s.cashier_days)>0 then 'cashier' when exists(select 1 from jsonb_array_elements(s.sales_invoices) v where v->>'saleType'<>'wholesale') then 'legacy' else 'wholesale' end;end if;
@@ -49,7 +49,7 @@ begin
   where (kind='cashier' or (kind='wholesale' and v->>'saleType'='wholesale') or (kind='legacy' and v->>'saleType'<>'wholesale'))
   and (coalesce(p_query,'')='' or position(lower(p_query) in lower(concat_ws(' ',v->>'invoiceNumber',v->>'customerName',v->>'date',(select string_agg(line->>'itemName',' ') from jsonb_array_elements(case when kind='cashier' then '[]'::jsonb else coalesce(v->'items','[]'::jsonb) end) line))))>0)
  ), page as (select v,ord from records order by v->>'date' desc,v->>'id' offset p_offset limit p_limit)
- select jsonb_build_object('kind',kind,'version',s.version,'total',(select count(*) from records),'rows',coalesce((select jsonb_agg(case when kind='cashier' then (v-'itemsReport'-'consumption')||jsonb_build_object('itemsCount',jsonb_array_length(coalesce(v#>'{itemsReport,lines}','[]'::jsonb))) else (v-'items')||jsonb_build_object('itemsCount',jsonb_array_length(v->'items')) end order by v->>'date' desc,v->>'id') from page),'[]'::jsonb)) into result;
+ select jsonb_build_object('kind',kind,'version',s.version,'total',(select count(*) from records),'rows',coalesce((select jsonb_agg(case when kind='cashier' then (v-'itemsReport'-'consumption'-'shortages')||jsonb_build_object('itemsCount',jsonb_array_length(coalesce(v#>'{itemsReport,lines}','[]'::jsonb))) else (v-'items')||jsonb_build_object('itemsCount',jsonb_array_length(v->'items')) end order by v->>'date' desc,v->>'id') from page),'[]'::jsonb)) into result;
  return result;
 end $$;
 
@@ -57,7 +57,7 @@ create or replace function public.bon_erp_sale_detail(p_id text,p_kind text defa
 returns jsonb language plpgsql stable security invoker set search_path='' as $$
 declare result jsonb;
 begin
- perform bon_erp_private.require_access('view');
+ if public.bon_erp_role() is distinct from 'partner' then raise exception 'USER_PERMISSION_DENIED' using errcode='42501';end if;
  if length(p_id)>160 or p_kind not in ('invoice','cashier') then raise exception 'INVALID_DETAIL';end if;
  select v into result from public.bon_elagouz_store s cross join lateral jsonb_array_elements(case when p_kind='cashier' then s.cashier_days else s.sales_invoices end) v where s.id='main_store' and v->>'id'=p_id;
  return result;
@@ -67,7 +67,7 @@ create or replace function public.bon_erp_item_search(p_query text,p_limit integ
 returns jsonb language plpgsql stable security invoker set search_path='' as $$
 declare result jsonb;
 begin
- perform bon_erp_private.require_access('view');
+ if public.bon_erp_role() is distinct from 'partner' then raise exception 'USER_PERMISSION_DENIED' using errcode='42501';end if;
  if length(p_query)>150 or p_limit not between 1 and 20 then raise exception 'INVALID_SEARCH';end if;
  select coalesce(jsonb_agg(jsonb_build_object('id',v->>'id','name',v->>'name','code',v->>'code','stock',v->'stock','baseUnit',v->>'baseUnit')),'[]'::jsonb) into result from (select v from public.bon_elagouz_store s cross join lateral jsonb_array_elements(s.items) v where s.id='main_store' and length(trim(p_query))>0 and (position(lower(trim(p_query)) in lower(v->>'name'))>0 or position(lower(trim(p_query)) in lower(v->>'code'))>0) order by v->>'name',v->>'id' limit p_limit) t;
  return result;
