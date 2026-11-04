@@ -1,5 +1,5 @@
 import {useDashboardRead} from './hooks/useDashboardRead';
-import {recordFinancialOpening} from './lib/financialOpening';
+import {saveFinancialOpening} from './lib/financialOpening';
 import {PagedSalesHistory} from './components/PagedSalesHistory';
 import {ScreenLoading} from './components/ScreenLoading';
 import {Modal} from './components/Modal';
@@ -1492,7 +1492,7 @@ export default function App() {
         {activeScreen === "reports" && (
           <ProfitReportsScreen
             financeState={cloud.state}
-            onSaveOpening={member?.isOwner?async(date,amount,reason)=>{engine.replace(recordFinancialOpening(engine.state,date,amount,reason,{id:member.userId,name:currentPartner.name}));await confirmSave();}:undefined}
+            onSaveOpening={member?.isOwner?(date,amount,reason)=>saveFinancialOpening(engine,date,amount,reason,{id:member.userId,name:currentPartner.name}):undefined}
             items={items}
             salesInvoices={reportSales}
             expenses={expenses}

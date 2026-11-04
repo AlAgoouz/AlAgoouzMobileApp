@@ -1,6 +1,7 @@
 import type {StoreState} from './storeState';
 import {businessDate} from './dates';
 import {validCalendarDate} from './reporting';
+import type {StoreEngine} from './storeEngine';
 
 function cents(value:number){
  const n=Math.round(value*100);
@@ -15,6 +16,19 @@ export function recordFinancialOpening(state:StoreState,date:string,amount:numbe
  const old=state.financialOpenings[0];if(old&&date!==old.date)throw Error('تاريخ بداية المدة ثابت؛ يمكنك تصحيح المبلغ مع تسجيل السبب');
  const event={id:crypto.randomUUID(),recordedAt:new Date().toISOString(),actorId:actor.id,actorName:actor.name,amount,reason};
  return {...state,financialOpenings:[{id:old?.id??crypto.randomUUID(),date,account:'treasury' as const,amount,priorPeriodSettled:true as const,history:[...(old?.history??[]),event]}]};
+}
+
+export async function saveFinancialOpening(engine:StoreEngine,date:string,amount:number,reason:string,actor:{id:string;name:string}){
+ const confirm=async()=>{await engine.flush();if(engine.snapshot.status!=='ready')throw Error(engine.snapshot.error||'لم يصل تأكيد حفظ رصيد البداية');};
+ // Retry an uncertain operation with its existing id before making a correction.
+ // Otherwise a lost acknowledgement could append two events against one version.
+ if(engine.hasPending){
+  await confirm();
+  const saved=engine.state.financialOpenings[0],last=saved?.history[saved.history.length-1];
+  if(saved?.date===date&&saved.amount===amount&&last?.reason===reason.trim()&&last.actorId===actor.id)return;
+ }
+ engine.replace(recordFinancialOpening(engine.state,date,amount,reason,actor));
+ await confirm();
 }
 
 // Cash movements are derived from documents, never persisted as extra sales.

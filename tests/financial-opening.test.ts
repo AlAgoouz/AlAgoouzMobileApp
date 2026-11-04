@@ -1,6 +1,7 @@
-import {it,expect} from 'vitest';
+import {it,expect,vi} from 'vitest';
 import {emptyStore,createBackup,parseBackup} from '../src/lib/storeState';
-import {recordFinancialOpening,financialPosition} from '../src/lib/financialOpening';
+import {recordFinancialOpening,saveFinancialOpening,financialPosition} from '../src/lib/financialOpening';
+import {StoreEngine} from '../src/lib/storeEngine';
 import {buildReport} from '../src/lib/reporting';
 import {salesForReports} from '../src/lib/cashierDays';
 import type {SalesInvoice,PurchaseInvoice,Expense,CashierDay} from '../src/types/erp';
@@ -10,6 +11,14 @@ const sale=(patch:Partial<SalesInvoice>={}):SalesInvoice=>({id:'sale',invoiceNum
 const purchase=(patch:Partial<PurchaseInvoice>={}):PurchaseInvoice=>({id:'purchase',invoiceNumber:'P1',date:'2026-11-02',supplierId:'s',supplierName:'Supplier',items:[],totalAmount:200,paidAmount:200,remainingAmount:0,paymentMethod:'نقدي',partnerName:'Owner',...patch});
 const expense=(patch:Partial<Expense>={}):Expense=>({id:'expense',date:'2026-11-02',category:'إيجار',title:'Rent',amount:50,paidFrom:'خزنة الشركة',partnerName:'Owner',...patch});
 const position=(state:ReturnType<typeof base>,from='2026-11-01',to='2026-11-30')=>financialPosition(state,from,to)!;
+it('retries a lost acknowledgement without duplicating the opening or its history',async()=>{
+ const save=vi.fn().mockRejectedValueOnce(Error('network')).mockResolvedValue(1);
+ const engine=new StoreEngine({load:async()=>({state:emptyStore,version:0}),save});await engine.load();
+ await expect(saveFinancialOpening(engine,'2026-11-01',1000,'رصيد أكتوبر بعد التسوية',actor)).rejects.toThrow('network');
+ await saveFinancialOpening(engine,'2026-11-01',1000,'رصيد أكتوبر بعد التسوية',actor);
+ expect(save).toHaveBeenCalledTimes(2);expect(save.mock.calls[0][2]).toBe(save.mock.calls[1][2]);
+ expect(engine.state.financialOpenings[0].history).toHaveLength(1);expect(engine.snapshot.status).toBe('ready');
+});
 it('keeps an unconfigured balance distinct from a deliberately confirmed zero and preserves backups',()=>{
  expect(financialPosition(emptyStore,'2026-11-01','2026-11-30')).toBeNull();
  expect(position(base(0)).closing).toBe(0);
