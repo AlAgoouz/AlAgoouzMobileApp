@@ -4,7 +4,6 @@ import io
 import os
 import unittest
 import zipfile
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 import httpx
 from fastapi.testclient import TestClient
@@ -106,52 +105,59 @@ class PublisherTests(unittest.TestCase):
 
     def test_publish_requires_database_authorization_and_does_not_forward_jwt(self):
         rpc_mock = AsyncMock(side_effect=[{'status':'uploading', 'object_path':f'{JOB}/{JOB}/report.csv'}, {'status':'queued','workerToken':KEY}])
-        with patch.object(main, 'rpc', rpc_mock), patch.object(main, 'signed_download_token', AsyncMock(return_value='download-fixture')), patch.object(main, 'send', AsyncMock()) as send:
+        with patch.object(main, 'rpc', rpc_mock), patch.object(main, 'signed_download_token', AsyncMock(return_value='download-fixture')), patch.object(main, 'process_import', AsyncMock(return_value='done')) as send:
             response = self.client.post(f'/api/imports/{JOB}/enqueue', headers={'Authorization':'Bearer caller-fixture'})
             self.assertEqual(response.status_code, 202)
-            payload = send.await_args.args[1].model_dump_json()
+            payload = send.await_args.args[0].model_dump_json()
             self.assertNotIn('caller-fixture', payload)
             self.assertNotIn('download-fixture', payload)
             self.assertEqual(rpc_mock.await_args_list[0].args[3], 'caller-fixture')
-        with patch.object(main, 'rpc', AsyncMock(side_effect=PermissionError())), patch.object(main, 'send', AsyncMock()) as send:
+        with patch.object(main, 'rpc', AsyncMock(side_effect=PermissionError())), patch.object(main, 'process_import', AsyncMock(return_value='done')) as send:
             self.assertEqual(self.client.post(f'/api/imports/{JOB}/enqueue',headers={'Authorization':'Bearer invalid'}).status_code,403)
             send.assert_not_awaited()
 
     def test_external_path_is_rejected_and_ready_job_is_not_republished(self):
-        with patch.object(main, 'rpc', AsyncMock(return_value={'status':'uploading','object_path':'https://evil.test/file'})), patch.object(main, 'send', AsyncMock()) as send:
+        with patch.object(main, 'rpc', AsyncMock(return_value={'status':'uploading','object_path':'https://evil.test/file'})), patch.object(main, 'process_import', AsyncMock(return_value='done')) as send:
             self.assertEqual(self.client.post(f'/api/imports/{JOB}/enqueue',headers={'Authorization':'Bearer fixture'}).status_code,400)
             send.assert_not_awaited()
-        with patch.object(main, 'rpc', AsyncMock(return_value={'status':'ready'})), patch.object(main, 'send', AsyncMock()) as send:
+        with patch.object(main, 'rpc', AsyncMock(return_value={'status':'ready'})), patch.object(main, 'process_import', AsyncMock(return_value='done')) as send:
             self.assertEqual(self.client.post(f'/api/imports/{JOB}/enqueue',headers={'Authorization':'Bearer fixture'}).status_code,202)
             send.assert_not_awaited()
+
+    def test_scheduled_endpoint_requires_one_valid_job_capability(self):
+        self.assertEqual(self.client.post('/api/import-worker',json={'job_id':JOB,'worker_token':'bad'}).status_code,422)
+        with patch.object(main,'process_import',AsyncMock(return_value='denied')):
+            self.assertEqual(self.client.post('/api/import-worker',json={'job_id':JOB,'worker_token':KEY}).status_code,403)
+        with patch.object(main,'process_import',AsyncMock(return_value='retry')):
+            self.assertEqual(self.client.post('/api/import-worker',json={'job_id':JOB,'worker_token':KEY}).status_code,503)
+        with patch.object(main,'process_import',AsyncMock(return_value='done')):
+            self.assertEqual(self.client.post('/api/import-worker',json={'job_id':JOB,'worker_token':KEY}).status_code,200)
 
 
 class WorkerTests(unittest.IsolatedAsyncioTestCase):
     async def test_processing_completes_pending_preview_only(self):
         calls = AsyncMock(side_effect=[{'path':'safe.csv','downloadToken':'fixture','bytes':7,'fileName':'safe.csv','kind':'financial','attempt':1}, {'status':'ready'}])
         with patch.object(worker,'rpc',calls), patch.object(worker,'download',AsyncMock(return_value=b'total\n5')):
-            await worker.process_import(SimpleNamespace(payload=worker.ImportMessage(job_id=JOB,worker_token=KEY)))
+            await worker.process_import(worker.ImportMessage(job_id=JOB,worker_token=KEY))
         self.assertEqual([c.args[1] for c in calls.await_args_list],['bon_erp_claim_import','bon_erp_finish_import'])
         self.assertEqual(calls.await_args_list[1].args[2]['p_result']['rows'],[{'total':'5'}])
 
-    async def test_duplicate_delivery_is_acknowledged_and_busy_delivery_retried(self):
+    async def test_duplicate_delivery_is_idempotent_and_active_lease_is_respected(self):
         for job in [None, {'busy':True}]:
             with patch.object(worker,'rpc',AsyncMock(return_value=job)), patch.object(worker,'download',AsyncMock()) as download:
                 if job:
-                    with self.assertRaises(worker.RetryAfter):
-                        await worker.process_import(SimpleNamespace(payload=worker.ImportMessage(job_id=JOB,worker_token=KEY)))
+                    self.assertEqual(await worker.process_import(worker.ImportMessage(job_id=JOB,worker_token=KEY)), 'busy')
                 else:
-                    await worker.process_import(SimpleNamespace(payload=worker.ImportMessage(job_id=JOB,worker_token=KEY)))
+                    await worker.process_import(worker.ImportMessage(job_id=JOB,worker_token=KEY))
                 download.assert_not_awaited()
 
     async def test_parser_error_is_terminal_but_network_error_is_retryable(self):
         calls = AsyncMock(side_effect=[{'path':'safe.csv','downloadToken':'fixture','bytes':1,'fileName':'safe.csv','kind':'financial','attempt':1}, {'status':'failed'}])
         with patch.object(worker,'rpc',calls), patch.object(worker,'download',AsyncMock(return_value=b'x')):
-            await worker.process_import(SimpleNamespace(payload=worker.ImportMessage(job_id=JOB,worker_token=KEY)))
+            await worker.process_import(worker.ImportMessage(job_id=JOB,worker_token=KEY))
             self.assertEqual(calls.await_args_list[1].args[2]['p_error'],'EMPTY_REPORT')
         with patch.object(worker,'rpc',AsyncMock(side_effect=RuntimeError('network'))):
-            with self.assertRaises(worker.RetryAfter):
-                await worker.process_import(SimpleNamespace(payload=worker.ImportMessage(job_id=JOB,worker_token=KEY)))
+            self.assertEqual(await worker.process_import(worker.ImportMessage(job_id=JOB,worker_token=KEY)), 'retry')
 
 
 if __name__ == '__main__':

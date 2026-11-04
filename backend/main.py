@@ -1,10 +1,9 @@
 import logging
 import re
 from uuid import UUID
-from fastapi import FastAPI, Header, HTTPException, Response
-from vercel.queue import send, DuplicateIdempotencyKeyError
+from fastapi import FastAPI, Header, HTTPException, Response, BackgroundTasks
 from clients import rpc, signed_download_token, http_client, BackendUnavailable
-from worker import imports, ImportMessage
+from worker import process_import, ImportMessage
 
 logger = logging.getLogger("agouz.imports")
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -30,7 +29,7 @@ async def health():
 
 
 @app.post("/api/imports/{job_id}/enqueue", status_code=202)
-async def enqueue(job_id: UUID, authorization: str = Header(default="")):
+async def enqueue(job_id: UUID, background_tasks: BackgroundTasks, authorization: str = Header(default="")):
     if not authorization.startswith("Bearer ") or len(authorization) > 8192:
         raise HTTPException(status_code=401, detail="IMPORT_LOGIN_REQUIRED")
     bearer = authorization[7:]
@@ -48,10 +47,7 @@ async def enqueue(job_id: UUID, authorization: str = Header(default="")):
             if "workerToken" not in prepared:
                 return {"id": str(job_id), "status": prepared["status"]}
             payload = ImportMessage(job_id=job_id, worker_token=prepared["workerToken"])
-            try:
-                await send(imports, payload, retention=3600, idempotency_key=f"import-{job_id}-{payload.worker_token[:12]}")
-            except DuplicateIdempotencyKeyError:
-                pass
+            background_tasks.add_task(process_import,payload)
             return {"id": str(job_id), "status": "queued"}
     except PermissionError:
         raise HTTPException(status_code=403, detail="IMPORT_PERMISSION_DENIED") from None
@@ -60,3 +56,15 @@ async def enqueue(job_id: UUID, authorization: str = Header(default="")):
     except Exception:
         logger.warning("import_enqueue_failed job=%s", job_id)
         raise HTTPException(status_code=503, detail="IMPORT_RETRY_AVAILABLE") from None
+
+
+@app.post("/api/import-worker",include_in_schema=False)
+async def scheduled_import(payload: ImportMessage):
+    # A database-generated capability authorizes one job only. SQL checks it
+    # before any file read, and rechecks the original uploader's live access.
+    result=await process_import(payload)
+    if result=="denied":
+        raise HTTPException(status_code=403,detail="IMPORT_WORKER_DENIED")
+    if result=="retry":
+        raise HTTPException(status_code=503,detail="IMPORT_RETRY_PENDING")
+    return {"status":result}

@@ -72,10 +72,10 @@ try{
     if(await sha256(join(inputs,name))!==hash)throw new Error('RESTORE_INPUT_HASH_MISMATCH');
   }
   console.log('Starting isolated restore on the Docker data disk.');
-  run('docker',['network','create','--label','app.agouz.purpose=isolated-recovery',network]);createdNetwork=true;
+  run('docker',['network','create','--internal','--label','app.agouz.purpose=isolated-recovery',network]);createdNetwork=true;
   run('docker',['volume','create','--label','app.agouz.purpose=isolated-recovery',volume]);createdVolume=true;
   const dbEnv=join(restore,'database.env');writeFileSync(dbEnv,'POSTGRES_PASSWORD='+password+'\nPOSTGRES_USER=supabase_admin\n',{mode:0o600});
-  run('docker',['run','-d','--pull','never','--name',dbContainer,'--label','app.agouz.purpose=isolated-recovery','--network',network,'--env-file',dbEnv,'--mount','type=volume,source='+volume+',target=/var/lib/postgresql/data','--publish','127.0.0.1::5432','public.ecr.aws/supabase/postgres:17.11.0.004']);createdDB=true;
+  run('docker',['run','-d','--pull','never','--name',dbContainer,'--label','app.agouz.purpose=isolated-recovery','--network',network,'--env-file',dbEnv,'--mount','type=volume,source='+volume+',target=/var/lib/postgresql/data','--publish','127.0.0.1::5432','public.ecr.aws/supabase/postgres:17.11.0.004','-c','cron.database_name='+database,'-c','cron.launch_active_jobs=off','-c','pg_net.database_name=agouz_restore_network_disabled']);createdDB=true;
   pgEnv={...process.env,PGHOST:'127.0.0.1',PGPORT:port(dbContainer,5432),PGUSER:'supabase_admin',PGPASSWORD:password,PGSSLMODE:'disable',PGCONNECT_TIMEOUT:'3',PGOPTIONS:'-c timezone=UTC'};
   await waitUntil(()=>{try{sql('select 1;','postgres');return true;}catch{return false;}});
   if(!/^agouz_recovery_[a-f0-9]{12}$/.test(database))throw new Error('RESTORE_DATABASE_REFUSED');

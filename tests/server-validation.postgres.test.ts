@@ -346,3 +346,14 @@ it.skipIf(!active)('keeps individual cashier provenance and current customer con
  expect(()=>readJson("select public.bon_erp_sales_page('legacy','',0,null)")).toThrow('INVALID_PAGE');
  expect(()=>readJson("select public.bon_erp_item_search('x',null)")).toThrow('INVALID_SEARCH');
 });
+
+it.skipIf(!active)('dispatches at most two due jobs with per-job credentials and rate-limits repeat dispatch without committing network requests',()=>{
+ const jobs=[importJob(owner,'2026-10-01'),importJob(owner,'2026-10-02'),importJob(owner,'2026-10-03')];
+ const result=sql(`begin;select bon_erp_private.dispatch_imports();select count(*) from bon_erp_private.import_jobs where dispatched_at is not null;select bon_erp_private.dispatch_imports();select bon_erp_private.dispatch_imports();select bool_and(convert_from(body,'UTF8')::jsonb ? 'worker_token' and url='https://agouz.vercel.app/api/import-worker') from net.http_request_queue;rollback;`);
+ expect(result).toBe('2\n2\n1\n0\nt');
+ expect(sql('select count(*) from net.http_request_queue')).toBe('0');
+ expect(sql('select count(*) from bon_erp_private.import_jobs where dispatched_at is not null')).toBe('0');
+ expect(()=>importAs(owner,'select bon_erp_private.dispatch_imports()')).toThrow('permission denied');
+ sql(`update bon_erp_private.import_jobs set attempt=3 where id='${jobs[0].id}';update bon_erp_private.import_jobs set updated_at=now()-interval '51 minutes' where id='${jobs[1].id}'`);
+ expect(sql(`begin;select bon_erp_private.dispatch_imports();select count(*) from bon_erp_private.import_jobs where status='failed';rollback;`)).toBe('0\n2');
+});
