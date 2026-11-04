@@ -336,3 +336,13 @@ it.skipIf(!active)('reports recovery health through a narrow backup-only receipt
  expect(importAs(reader,"select count(*) from public.bon_elagouz_store")).toBe('0');
  sql(`delete from bon_erp_private.storage_backup_principal where user_id='${reader}';delete from auth.users where id='${reader}'`);
 });
+
+it.skipIf(!active)('keeps individual cashier provenance and current customer contact available without downloading all invoices',()=>{
+ const source=cashierPair().posted;seed(source);
+ const result=readJson(`select public.bon_erp_sale_detail('${source.cashierDays[0].id}','cashier')`);
+ expect(result.itemsReport).toEqual(source.cashierDays[0].itemsReport);expect(result.consumption).toEqual(source.cashierDays[0].consumption);expect(result.itemNames.bean).toBe(source.items[0].name);
+ const customer={...INITIAL_CUSTOMERS[0],phone:'01012345678'},invoice={...sale(),customerId:INITIAL_CUSTOMERS[0].id};
+ seed({...state,customers:[customer],salesInvoices:[invoice]});expect(readJson(`select public.bon_erp_sale_detail('${invoice.id}','invoice')`).customerPhone).toBe(customer.phone);
+ expect(()=>readJson("select public.bon_erp_sales_page('legacy','',0,null)")).toThrow('INVALID_PAGE');
+ expect(()=>readJson("select public.bon_erp_item_search('x',null)")).toThrow('INVALID_SEARCH');
+});
