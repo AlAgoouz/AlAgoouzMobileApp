@@ -179,6 +179,9 @@ def parse_report(data: bytes, filename: str, kind: str, catalog=None):
     if any(isinstance(value, str) and value.startswith("=") for row in rows for value in row.values()):
         warnings.append("FORMULA_TEXT_REQUIRES_REVIEW")
     result = {"rows": rows, "columns": columns, "rowCount": len(rows), "headerRow": header_index + 1, "sha256": hashlib.sha256(data).hexdigest(), "warnings": warnings, "matches": matches}
+    if kind == 'items' and catalog:
+        from suggestions import suggest_rows
+        result['suggestions'] = suggest_rows(rows,columns,catalog,ALIASES,normalize)
     if len(json.dumps(result, ensure_ascii=False).encode("utf-8")) > MAX_RESULT:
         raise InvalidReport("REPORT_RESULT_TOO_LARGE")
     return result

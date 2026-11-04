@@ -1,0 +1,4 @@
+-r requirements.txt
+hypothesis==6.170.14
+sortedcontainers==2.4.0
+pypdf==6.21.4
