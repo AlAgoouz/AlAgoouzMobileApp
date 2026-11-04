@@ -33,7 +33,7 @@ for(let run=0;run<3;run++){
   if(run===0)await page.screenshot({path:label+'-mobile.png'});
   phase('opening-invoices');await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
   const invoiceStart=performance.now();await page.getByRole('button',{name:/فواتير البيع/}).click();
-  await page.getByRole('heading',{name:/الفواتير والمرتجعات|سجل المبيعات/}).waitFor();
+  await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).first().waitFor();
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   sample.invoiceReadyMs=performance.now()-invoiceStart;
   phase('counting-invoices');sample.nodes=await page.locator('*').count();sample.renderedInvoices=await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).count();
@@ -46,7 +46,7 @@ for(let run=0;run<3;run++){
   if(label!=='baseline'){
     phase('checking-full-history-search');await page.getByRole('textbox',{name:'بحث في كل الفواتير'}).fill('INV-09999');await page.getByText('#INV-09999',{exact:false}).waitFor();
     if(await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).count()!==1)throw Error('INVOICE_SEARCH_MISMATCH');
-    if(sample.renderedInvoices>50||sample.refreshWireBytes>1000)throw Error('PERFORMANCE_BUDGET_FAILED');
+    if(sample.renderedInvoices!==50||sample.refreshWireBytes>1000)throw Error('PERFORMANCE_BUDGET_FAILED');
   }
   phase('complete');
  })();

@@ -69,7 +69,7 @@ function seed(store:StoreState){
   const fields=Object.entries(toCloud(store));
   sql(`delete from public.bon_elagouz_store;insert into public.bon_elagouz_store(id,version,${fields.map(([name])=>name).join(',')})values('main_store',0,${fields.map(([,value])=>literal(value)).join(',')});`);
 }
-beforeEach(()=>{if(active)seed(state);});
+beforeEach(()=>{if(active){seed(state);sql('truncate table bon_erp_private.import_jobs,public.cashier_sync_queue;delete from storage.objects where bucket_id=\'agouz-cashier-imports\';');}});
 afterAll(()=>{if(active)dispose();});
 it.skipIf(!active)('matches bounded dashboard figures to the established financial reporting rules',()=>{
  const paired=cashierPair().posted;
@@ -256,4 +256,66 @@ it.skipIf(!active)('requires separate purchase tax, full payment, moving average
 it.skipIf(!active)('rejects negative initial stock and missing new contact information',()=>{
  seed(state);reject({...state,items:[{...bean,stock:-1,openingStock:0}]},'INVENTORY_MOVEMENT_MISMATCH');
  reject({...state,customers:[{...INITIAL_CUSTOMERS[0],balance:0,totalSales:0,invoicesCount:0}]},'CONTACT_DETAILS_REQUIRED');
+});
+
+function importAs(user:string,query:string){return sql(`begin;set local request.jwt.claim.sub='${user}';set local role authenticated;${query};commit;`);}
+function importJob(user=owner,date='2026-11-01',kind='financial'){
+ const job=JSON.parse(importAs(user,`select public.bon_erp_new_import('report.csv','${kind}','${date}',7)`));
+ sql(`insert into storage.objects values(gen_random_uuid(),'agouz-cashier-imports','${job.path}')`);
+ const ready=JSON.parse(importAs(user,`select public.bon_erp_prepare_import('${job.id}','${'signed_fixture_'.repeat(3)}')`));return {...job,key:ready.workerToken};
+}
+function workerCall(job:any,action='claim',result:any={rows:[{total:5}],sha256:'a'.repeat(64)},attempt:number|null=1){
+ const query=action==='claim'?`public.bon_erp_claim_import('${job.id}','${job.key}')`:`public.bon_erp_finish_import('${job.id}','${job.key}',${attempt??'null'},${literal(result)},null)`;
+ return JSON.parse(sql(`begin;set local role anon;select ${query};commit;`));
+}
+it.skipIf(!active)('parses into a pending cashier queue exactly once without changing money or stock',()=>{
+ const job=importJob(),before=sql("select row_to_json(s)::text from public.bon_elagouz_store s");
+ expect(workerCall(job).attempt).toBe(1);expect(workerCall(job)).toEqual({busy:true});
+ const finish=workerCall(job,'finish');expect(finish.status).toBe('ready');expect(workerCall(job,'finish')).toEqual(finish);expect(workerCall(job)).toBeNull();
+ expect(sql('select count(*) from public.cashier_sync_queue where not processed')).toBe('1');
+ expect(sql("select row_to_json(s)::text from public.bon_elagouz_store s")).toBe(before);
+ const list=JSON.parse(importAs(owner,'select public.bon_erp_read_import()'));expect(list).toHaveLength(1);expect(list[0].result).toBeUndefined();expect(list[0].worker_token).toBeUndefined();expect(list[0].download_token).toBeUndefined();
+ expect(()=>importAs(owner,"select public.bon_erp_new_import('another.csv','financial','2026-11-01',7)")).toThrow('CASHIER_IMPORT_ALREADY_PENDING');
+ expect(()=>sql(`begin;set local role anon;select * from bon_erp_private.import_jobs;rollback;`)).toThrow('permission denied');
+});
+it.skipIf(!active)('rejects null, wrong and replayed import credentials, result shapes and leases',()=>{
+ const job=importJob();
+ for(const key of ['null',"''",`'${'b'.repeat(64)}'`]){
+  expect(()=>sql(`begin;set local role anon;select public.bon_erp_claim_import('${job.id}',${key});rollback;`)).toThrow('IMPORT_WORKER_DENIED');
+  expect(()=>sql(`begin;set local role anon;select public.bon_erp_finish_import('${job.id}',${key},1,null,null);rollback;`)).toThrow('IMPORT_WORKER_DENIED');
+ }
+ workerCall(job);
+ for(const result of [null,{}, {rows:{}}, {rows:[]}, {rows:[{}]}])expect(()=>workerCall(job,'finish',result)).toThrow('INVALID_IMPORT_RESULT');
+ expect(()=>workerCall(job,'finish',{rows:[{}],sha256:'a'.repeat(64)},null)).toThrow('IMPORT_LEASE_CHANGED');
+ sql(`update bon_erp_private.import_jobs set lease_until=now()-interval '1 second' where id='${job.id}'`);expect(workerCall(job).attempt).toBe(2);
+ expect(()=>workerCall(job,'finish')).toThrow('IMPORT_LEASE_CHANGED');expect(workerCall(job,'finish',{rows:[{}],sha256:'a'.repeat(64)},2).status).toBe('ready');
+ expect(sql("select has_schema_privilege('anon','bon_erp_private','USAGE')")).toBe('f');
+});
+it.skipIf(!active)('keeps cashier jobs and storage private and stops processing after account revocation',()=>{
+ const cashier='22222222-2222-4222-8222-222222220041',other='22222222-2222-4222-8222-222222220042';userAccessFixture(cashier,{},'cashier');userAccessFixture(other,{},'cashier');const job=importJob(cashier);
+ expect(JSON.parse(importAs(other,`select public.bon_erp_read_import('${job.id}')`))).toBeNull();
+ expect(()=>importAs(other,`select public.bon_erp_prepare_import('${job.id}','${'x'.repeat(30)}')`)).toThrow('USER_PERMISSION_DENIED');
+ expect(()=>importAs(other,`select public.bon_erp_cancel_import('${job.id}')`)).toThrow('USER_PERMISSION_DENIED');
+ expect(workerCall(job).catalog).toEqual([]);
+ sql(`update public.erp_members set disabled_at=now() where user_id='${cashier}'`);
+ expect(workerCall(job,'finish').status).toBe('failed');expect(sql('select count(*) from public.cashier_sync_queue')).toBe('0');
+ expect(sql(`begin;grant insert on storage.objects to authenticated;set local request.jwt.claim.sub='${other}';set local role authenticated;select count(*) from storage.objects where bucket_id='agouz-cashier-imports';rollback;`)).toBe('0');
+ expect(()=>sql(`begin;grant insert on storage.objects to authenticated;set local request.jwt.claim.sub='${other}';set local role authenticated;insert into storage.objects values(gen_random_uuid(),'agouz-cashier-imports','${job.path}');rollback;`)).toThrow('row-level security');
+});
+it.skipIf(!active)('cancels a wrong unreviewed import and rejects content duplicates across dates',()=>{
+ const one=importJob();workerCall(one);workerCall(one,'finish');
+ const two=importJob(owner,'2026-11-02');workerCall(two);expect(workerCall(two,'finish').status).toBe('failed');
+ expect(sql(`select error_code from bon_erp_private.import_jobs where id='${two.id}'`)).toBe('DUPLICATE_IMPORT_FILE');
+ importAs(owner,`select public.bon_erp_cancel_import('${one.id}')`);expect(sql('select count(*) from public.cashier_sync_queue where not processed')).toBe('0');
+ expect(()=>workerCall(one)).toThrow('IMPORT_WORKER_DENIED');
+ const replacement=importJob();workerCall(replacement);workerCall(replacement,'finish',{rows:[{}],sha256:'c'.repeat(64)});
+ sql(`update public.cashier_sync_queue set processed=true where import_job_id='${replacement.id}'`);
+ expect(()=>importAs(owner,`select public.bon_erp_cancel_import('${replacement.id}')`)).toThrow('IMPORT_ALREADY_REVIEWED');
+});
+it.skipIf(!active)('validates import reservations and requires an actual stored file and signed download token',()=>{
+ for(const args of ["null,'financial','2026-11-01',7","'../report.csv','financial','2026-11-01',7","'report.csv',null,'2026-11-01',7","'report.csv','items',null,7","'report.csv','items','2026-02-30',7","'report.csv','items','2026-11-01',null","'report.csv','items','2026-11-01',10485761"]){expect(()=>importAs(owner,`select public.bon_erp_new_import(${args})`)).toThrow();}
+ const job=JSON.parse(importAs(owner,"select public.bon_erp_new_import('report.csv','financial','2026-11-01',7)"));
+ expect(()=>importAs(owner,`select public.bon_erp_prepare_import('${job.id}',null)`)).toThrow('IMPORT_UPLOAD_MISSING');
+ expect(()=>importAs(owner,`select public.bon_erp_prepare_import('${job.id}','${'x'.repeat(30)}')`)).toThrow('IMPORT_UPLOAD_MISSING');
+ expect(()=>sql(`begin;set local role anon;select public.bon_erp_read_import();rollback;`)).toThrow('permission denied');
 });

@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import React from 'react';
-import {webcrypto} from 'node:crypto';
 import {afterEach,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {ItemDefinitionModal} from '../src/components/ItemDefinitionModal';
@@ -11,34 +10,46 @@ import {INITIAL_ITEMS,INITIAL_CUSTOMERS,INITIAL_SUPPLIERS} from '../src/data/ini
 import {approveCashierDay,attachCashierReport} from '../src/lib/cashierDays';
 import {emptyStore} from '../src/lib/storeState';
 import {salesForReports} from '../src/lib/cashierDays';
-afterEach(()=>{cleanup();vi.unstubAllGlobals();});
-it('uploads both real CSV reports, posts one day with a stock shortage, and rejects a duplicate date',async()=>{
- vi.stubGlobal('crypto',webcrypto);
+import * as imports from '../src/lib/importJobs';
+vi.mock('../src/lib/importJobs',()=>({listImports:vi.fn(async()=>[]),readImport:vi.fn(),uploadImport:vi.fn(),cancelImport:vi.fn(),enqueueImport:vi.fn(),importError:()=> 'راجع الملف وأعد المحاولة'}));
+afterEach(()=>{cleanup();vi.clearAllMocks();vi.mocked(imports.listImports).mockResolvedValue([]);});
+it('reviews server-parsed paired reports, posts one day with a shortage, and rejects a repeated date',async()=>{
  let live={...emptyStore,items:[{...raw,stock:1}]};
+ const jobs:imports.ImportJob[]=[];
+ vi.mocked(imports.listImports).mockImplementation(async()=>[...jobs]);
+ vi.mocked(imports.readImport).mockImplementation(async id=>jobs.find(j=>j.id===id)!);
+ vi.mocked(imports.uploadImport).mockImplementation(async(file,kind,date)=>{
+  const rows=kind==='financial'?[{total:file.name==='duplicate.csv'?'600':'500'}]:[{code:'R1',quantity:'2000',unit:'gram'}];
+  const n=jobs.length+1,id=`11111111-1111-4111-8111-${String(n).padStart(12,'0')}`;
+  jobs.push({id,file_name:file.name,sale_date:date,kind,status:'ready',created_at:'2026-11-04',updated_at:'2026-11-04',error_code:null,reviewed:false,queue_id:id,result:{rows,sha256:String(n).repeat(64)}});return id;
+ });
  const attach=vi.fn(async(date,report)=>{live=attachCashierReport(live,date,report);redraw();});
  const approve=vi.fn(async(id)=>{live=approveCashierDay(live,id,'Owner');redraw();});
  const view=()=> <CashierDayScreen items={live.items} days={live.cashierDays} onAttach={attach} onApprove={approve} onBack={()=>{}}/>;
  const {rerender}=render(view());const redraw=()=>rerender(view());
- const upload=async(name:string,csv:string)=>{
-  const file=new File([csv],name,{type:'text/csv'});file.arrayBuffer=async()=>new TextEncoder().encode(csv).buffer;
-  fireEvent.change(screen.getByLabelText('ملف التقرير'),{target:{files:[file]}});
+ const upload=async(name:string)=>{
+  fireEvent.change(screen.getByLabelText('ملف التقرير'),{target:{files:[new File(['fixture'],name,{type:'text/csv'})]}});
+  fireEvent.click(screen.getByRole('button',{name:'رفع وبدء المعالجة'}));
+  await waitFor(()=>expect(screen.getAllByRole('button',{name:'مراجعة التقرير'})).toHaveLength(jobs.length));
+  fireEvent.click(screen.getAllByRole('button',{name:'مراجعة التقرير'}).at(-1)!);
   await screen.findByText('مراجعة '+name);
  };
- await upload('financial.csv','total\n500');
+ await upload('financial.csv');
  fireEvent.change(screen.getByLabelText('عمود إيراد اليوم'),{target:{value:'total'}});
  fireEvent.click(screen.getByRole('button',{name:'حفظ التقرير لهذا اليوم'}));await waitFor(()=>expect(attach).toHaveBeenCalledTimes(1));
  expect(live.items[0].stock).toBe(1);expect(salesForReports(live)).toHaveLength(0);
  fireEvent.change(screen.getByLabelText('نوع التقرير'),{target:{value:'items'}});
- await upload('items.csv','code,quantity,unit\nR1,2000,gram');
+ await upload('items.csv');
  fireEvent.click(screen.getByRole('button',{name:'حفظ التقرير لهذا اليوم'}));await waitFor(()=>expect(attach).toHaveBeenCalledTimes(2));
  fireEvent.click(screen.getByRole('button',{name:'اعتماد اليوم وخصم الأصناف'}));await waitFor(()=>expect(approve).toHaveBeenCalledOnce());
  expect(live.items[0].stock).toBe(-1);expect(live.cashierDays[0].totalCost).toBe(200);
  expect(live.cashierDays[0].shortages).toEqual([{itemId:'raw',shortage:1}]);
  expect(salesForReports(live).reduce((sum,i)=>sum+i.totalAmount,0)).toBe(500);
  fireEvent.change(screen.getByLabelText('نوع التقرير'),{target:{value:'financial'}});
- await upload('duplicate.csv','total\n600');fireEvent.change(screen.getByLabelText('عمود إيراد اليوم'),{target:{value:'total'}});
+ await upload('duplicate.csv');fireEvent.change(screen.getByLabelText('عمود إيراد اليوم'),{target:{value:'total'}});
  fireEvent.click(screen.getByRole('button',{name:'حفظ التقرير لهذا اليوم'}));await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain('معتمد بالفعل'));
  expect(live.cashierDays).toHaveLength(1);expect(live.items[0].stock).toBe(-1);expect(salesForReports(live)[0].totalAmount).toBe(500);
+ expect(imports.uploadImport).toHaveBeenCalledWith(expect.any(File),'items',expect.any(String));
 });
 const raw={...INITIAL_ITEMS.find(i=>i.category==='raw_bean')!,id:'raw',code:'R1',name:'Raw bean',stock:10,costPrice:100,lastPurchasePrice:100};
 const blend={...raw,id:'blend',code:'BL1',name:'Blend',category:'manufactured_blend' as const,hasRecipe:true,recipe:[{ingredientId:raw.id,ingredientName:raw.name,quantity:1000,unit:'gram' as const}]};

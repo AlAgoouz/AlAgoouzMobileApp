@@ -338,7 +338,7 @@ export default function App() {
   const queueBusy = React.useRef(false);
   const [queuedReports,setQueuedReports]=useState<QueuedCashierReport[]>([]);
   useEffect(() => {
-    if (!member) return;
+    if (!member || activeScreen!=="cashier_sync") return;
     const sb = getSupabaseClient();
     if (!sb) return;
     let disposed = false;
@@ -349,7 +349,7 @@ export default function App() {
       try {
         const { data, error } = await sb
           .from("cashier_sync_queue")
-          .select("id,file_name,sale_date,raw_rows,content_hash")
+          .select("id,file_name,sale_date,raw_rows,content_hash,report_kind,import_job_id")
           .eq("processed", false)
           .order("created_at")
           .limit(20);
@@ -385,7 +385,7 @@ export default function App() {
       window.removeEventListener("online", processPending);
       void sb.removeChannel(channel);
     };
-  }, [member?.userId, engine]);
+  }, [member?.userId, engine,activeScreen]);
 
   const addAuditLog = (
     actionType: AuditLogEntry["actionType"],

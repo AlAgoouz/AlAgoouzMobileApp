@@ -20,6 +20,7 @@ const server=http.createServer(async(req,res)=>{
     return send(projectRead(row,readName,JSON.parse(body||'{}')));
   }
   if(u.pathname==='/rest/v1/rpc/bon_erp_my_access')return send({user_id:user.id,partner_id:'p1',username:'owner',display_name:'مالك الاختبار',role:'partner',is_owner:true,permissions:{view:true}});
+  if(u.pathname==='/rest/v1/rpc/bon_erp_read_import')return send([]);
   if(u.pathname==='/rest/v1/rpc/bon_erp_list_users')return send([{user_id:user.id,partner_id:'p1',username:'owner',display_name:'مالك الاختبار',role:'partner',is_owner:true,permissions:{view:true},email:user.email,disabled:false,deleted:false,created_at:user.created_at}]);
   if(u.pathname==='/rest/v1/erp_members')return send({partner_id:'p1',role:'partner'});
   if(u.pathname==='/rest/v1/bon_elagouz_store')return send(u.searchParams.get('select')==='version'?{version:0}:row,u.searchParams.get('select')==='version'?'version':'full');
