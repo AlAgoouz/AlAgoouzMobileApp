@@ -11,9 +11,12 @@ async function exportFile(path:string,name:string,mime:string){
  return new File([bytes],name,{type:mime});
 }
 export const serverInvoicePdf=(id:string)=>exportFile(`/api/invoices/${encodeURIComponent(id)}/pdf`,'Agouz-invoice.pdf','application/pdf');
+export function downloadExport(file:File){
+ const url=URL.createObjectURL(file),link=document.createElement('a');link.href=url;link.download=file.name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
 export async function downloadReport(format:'xlsx'|'pdf',from:string,to:string){
  const query=new URLSearchParams({from_date:from,to_date:to});
  const mime=format==='pdf'?'application/pdf':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
  const file=await exportFile(`/api/reports/${format}?${query}`,`Agouz-${from}-${to}.${format}`,mime);
- const url=URL.createObjectURL(file),link=document.createElement('a');link.href=url;link.download=file.name;link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+ downloadExport(file);
 }
