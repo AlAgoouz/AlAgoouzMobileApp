@@ -484,7 +484,8 @@
                   "enum": [
                     "opening",
                     "purchase",
-                    "production"
+                    "production",
+                    "sale_return"
                   ]
                 },
                 "sourceId": {
@@ -862,7 +863,8 @@
                         "enum": [
                           "opening",
                           "purchase",
-                          "production"
+                          "production",
+                          "sale_return"
                         ]
                       },
                       "sourceId": {
@@ -1079,7 +1081,8 @@
                         "enum": [
                           "opening",
                           "purchase",
-                          "production"
+                          "production",
+                          "sale_return"
                         ]
                       },
                       "sourceId": {

@@ -124,7 +124,7 @@ const item = base
         .passthrough(),
     ),
     costingVersion: z.literal(2).optional(),
-    costHistory: z.array(z.object({id, date: id, postedAt: id, sourceType: z.enum(['opening','purchase','production']), sourceId: id, quantity: number.positive(), unitCost: money, averageCost: money})).optional(),
+    costHistory: z.array(z.object({id, date: id, postedAt: id, sourceType: z.enum(['opening','purchase','production','sale_return']), sourceId: id, quantity: number.positive(), unitCost: money, averageCost: money})).optional(),
   })
   .passthrough();
 const line = z

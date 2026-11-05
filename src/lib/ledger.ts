@@ -1,5 +1,7 @@
 import type { StoreState } from './storeState';
 import { businessDate } from './dates';
+import { receiveStock } from './costing';
+import type { StoreEngine } from './storeEngine';
 
 export function assertPayment(balance: number, amount: number) {
   if (!Number.isFinite(amount) || amount <= 0)
@@ -72,15 +74,18 @@ export function returnSale(
   const invoice = state.salesInvoices.find((i) => i.id === invoiceId);
   if (!invoice || invoice.isReturned)
     throw new Error('الفاتورة غير موجودة أو مرتجعة بالفعل');
-  const stock = new Map<string, number>();
+  const returnedAt = new Date().toISOString();
+  const date = businessDate(new Date(returnedAt));
+  const stock = new Map<string, { quantity: number; cost: number }>();
   for (const line of invoice.items) {
-    if (line.category === 'drink_recipe') continue; // Prepared drinks remain consumed.
+    if (['drink_recipe', 'seasoning_recipe'].includes(line.category)) continue;
     if (!state.items.some((i) => i.id === line.itemId))
       throw new Error('يلزم استعادة الصنف المحذوف قبل تنفيذ المرتجع');
-    stock.set(
-      line.itemId,
-      (stock.get(line.itemId) ?? 0) + line.normalizedQtyInBaseUnit,
-    );
+    const previous = stock.get(line.itemId) ?? { quantity: 0, cost: 0 };
+    stock.set(line.itemId, {
+      quantity: previous.quantity + line.normalizedQtyInBaseUnit,
+      cost: previous.cost + line.totalCost,
+    });
   }
   const customer = state.customers.find((c) => c.id === invoice.customerId);
   if (invoice.remainingAmount > 0 && !customer)
@@ -90,37 +95,40 @@ export function returnSale(
     customer?.balance ?? 0,
   );
   const refundAmount = Number((invoice.totalAmount - debtReversed).toFixed(2));
-  const consumedDrinkCost = Number(
+  const consumedCost = Number(
     invoice.items
-      .filter((line) => line.category === 'drink_recipe')
+      .filter((line) => ['drink_recipe', 'seasoning_recipe'].includes(line.category))
       .reduce((sum, line) => sum + line.totalCost, 0)
       .toFixed(2),
   );
   return {
     ...state,
     expenses:
-      consumedDrinkCost > 0
+      consumedCost > 0
         ? [
             {
               id: crypto.randomUUID(),
-              date: businessDate(),
+              date,
               category: 'نثريات أخرى',
-              title: `تكلفة مشروبات مرتجعة — ${invoice.invoiceNumber}`,
-              amount: consumedDrinkCost,
+              title: `تكلفة أصناف مستهلكة مرتجعة — ${invoice.invoiceNumber}`,
+              amount: consumedCost,
               partnerName: actor,
               paidFrom: 'تسوية مخزون (بدون نقدية)',
               notes:
-                'استهلاك مكونات مشروبات لم تعد للمخزون؛ لا يمثل صرفًا نقديًا.',
+                'مكونات المشروبات والتحويجات تظل مستهلكة؛ لا يمثل صرفًا نقديًا.',
               sourceInvoiceId: invoice.id,
             },
             ...state.expenses,
           ]
         : state.expenses,
-    items: state.items.map((i) =>
-      stock.has(i.id)
-        ? { ...i, stock: Number((i.stock + stock.get(i.id)!).toFixed(6)) }
-        : i,
-    ),
+    items: state.items.map((item) => {
+      const returned = stock.get(item.id);
+      return returned
+        ? receiveStock(item, returned.quantity, returned.cost / returned.quantity, {
+            id: invoice.id, date, type: 'sale_return', postedAt: returnedAt,
+          })
+        : item;
+    }),
     customers: state.customers.map((c) =>
       c.id === invoice.customerId
         ? {
@@ -136,7 +144,7 @@ export function returnSale(
         ? {
             ...i,
             isReturned: true,
-            returnedAt: new Date().toISOString(),
+            returnedAt,
             returnedBy: actor,
             returnDebtReversed: debtReversed,
             returnRefundAmount: refundAmount,
@@ -144,6 +152,26 @@ export function returnSale(
         : i,
     ),
   };
+}
+
+// Confirm each return separately. An uncertain retry keeps the original operation
+// id and receipt instead of recording twice after a lost acknowledgement.
+export async function saveSaleReturn(engine: StoreEngine, invoiceId: string, actor: string, actorId?: string) {
+  const confirm = async () => {
+    await engine.flush();
+    if (engine.snapshot.status !== 'ready')
+      throw Error(engine.snapshot.error || 'لم يصل تأكيد حفظ المرتجع');
+  };
+  if (engine.hasPending) {
+    await confirm();
+    if (engine.state.salesInvoices.some((i) => i.id === invoiceId && i.isReturned)) return;
+  }
+  const state = returnSale(engine.state, invoiceId, actor);
+  engine.replace({ ...state, auditLogs: [{
+    id: crypto.randomUUID(), timestamp: new Date().toISOString(), actorId,
+    partnerName: actor, actionType: 'مرتجع', description: `مرتجع الفاتورة ${invoiceId}`,
+  }, ...state.auditLogs] });
+  await confirm();
 }
 
 export function recordPayment(
