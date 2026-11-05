@@ -6,6 +6,19 @@ import {CatalogNameDraftPanel} from '../src/components/CatalogNameDraftPanel';
 import type {CatalogNameDraft} from '../src/types/erp';
 afterEach(cleanup);
 const drafts:CatalogNameDraft[]=[{id:'legacy',name:'بن برازيلى',sourceRepository:'AlAgoouz/Erp-AlAgoouz',sourceCommit:'a'.repeat(40),sourcePath:'source.ts',importedAt:'2026-11-05T00:00:00.000Z'}];
+it('edits a pending name without forcing product activation',async()=>{
+ const change=vi.fn().mockResolvedValue(undefined),complete=vi.fn();render(<CatalogNameDraftPanel drafts={drafts} items={[]} onChange={change} onComplete={complete}/>);
+ fireEvent.click(screen.getByRole('button',{name:'تعديل اسم بن برازيلى'}));
+ fireEvent.change(screen.getByLabelText('اسم المنتج'),{target:{value:'بن برازيلي وسط'}});fireEvent.click(screen.getByRole('button',{name:'حفظ الاسم'}));
+ await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());expect(change).toHaveBeenCalledWith('legacy','بن برازيلي وسط');expect(complete).not.toHaveBeenCalled();
+});
+it('requires confirmation and keeps a rejected removal visible for retry',async()=>{
+ const change=vi.fn().mockRejectedValue(Error('لا توجد صلاحية'));render(<CatalogNameDraftPanel drafts={drafts} items={[]} onChange={change}/>);
+ fireEvent.click(screen.getByRole('button',{name:'حذف بن برازيلى'}));expect(change).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'إلغاء'}));expect(change).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'حذف بن برازيلى'}));fireEvent.click(screen.getByRole('button',{name:'تأكيد الحذف'}));
+ await waitFor(()=>expect(screen.getByRole('alert').textContent).toBe('لا توجد صلاحية'));expect(change).toHaveBeenCalledWith('legacy',null);expect(screen.getByRole('dialog')).toBeTruthy();
+});
 it('opens the source name with unknown type, unit, stock and prices left empty',()=>{
  const save=vi.fn();render(<CatalogNameDraftPanel drafts={drafts} items={[]} onComplete={save}/>);fireEvent.click(screen.getByRole('button',{name:'استكمال بن برازيلى'}));
  expect((screen.getByLabelText('اسم الصنف') as HTMLInputElement).value).toBe('بن برازيلى');
