@@ -57,6 +57,19 @@ export interface CatalogNameDraft {
   sourceCommit:string;
   sourcePath:string;
   importedAt:string;
+  legacyPrices?:LegacyCatalogPrices;
+}
+
+export interface LegacyCatalogPrices {
+  purchasePrice:number;
+  salePrice:number;
+  unitLabel:string;
+  packageWeightGrams?:number;
+  sourceName:string;
+  sourcePath:string;
+  sourceCommit:string;
+  sourceKind:'github_seed';
+  requiresReview:true;
 }
 
 export interface ItemCostRecord {
