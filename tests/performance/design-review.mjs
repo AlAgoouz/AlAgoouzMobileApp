@@ -110,6 +110,7 @@ export async function verifyDesign(){
         await page.getByRole('searchbox',{name:'البحث في المنتجات الجاهزة'}).fill('P99');
         assert.equal(await register.getByRole('listitem').count(),1,'Search must reset pagination and cover the whole catalog');
         await page.getByRole('searchbox',{name:'البحث في المنتجات الجاهزة'}).fill('');
+        assert.equal(await page.getByRole('combobox',{name:'انتقل إلى صفحة المنتجات الجاهزة'}).inputValue(),'0','Clearing search must not resurrect an old page');
         await page.getByRole('combobox',{name:'عدد النتائج في الصفحة'}).selectOption('50');
         await register.getByRole('button',{name:'تفاصيل',exact:true}).first().click();
         for(const width of [320,360,430,768,1024,1440]){
