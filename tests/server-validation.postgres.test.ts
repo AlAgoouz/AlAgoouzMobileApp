@@ -140,21 +140,18 @@ function save(value:any){return sql(`begin;set local request.jwt.claim.sub='${ow
 const accept=(store:StoreState)=>expect(save(toCloud(store))).toContain('"version": 1');
 const reject=(store:StoreState,reason:string)=>{expect(()=>save(toCloud(store))).toThrow(reason);expect(sql("select version from public.bon_elagouz_store where id='main_store'")).toBe('0');};
 const nameDraft={id:'legacy-draft',name:'Imported name',sourceRepository:'AlAgoouz/Erp-AlAgoouz',sourceCommit:'a'.repeat(40),sourcePath:'source.ts',importedAt:'2026-11-05T00:00:00.000Z'};
-const legacyPrices={purchasePrice:45,salePrice:65,unitLabel:'كيس',packageWeightGrams:250,sourceName:'Imported name',sourcePath:'seed.sql',sourceCommit:'a'.repeat(40),sourceKind:'github_seed' as const,requiresReview:true as const};
-it.skipIf(!active)('persists unit-bound price references without posting accounting or inventory',()=>{
- seed(stockState());const pending={...stockState(),catalogNameDrafts:[{...nameDraft,legacyPrices}]};accept(pending);
- const result=readJson(`select public.bon_erp_save_store(0,${literal(toCloud(pending))},'${crypto.randomUUID()}');select jsonb_build_object('drafts',catalog_name_drafts,'items',items,'partners',partners,'sales',sales_invoices,'expenses',expenses) from public.bon_elagouz_store`);
- expect(result).toEqual({drafts:pending.catalogNameDrafts,items:pending.items,partners:pending.partners,sales:[],expenses:[]});
-});
-it.skipIf(!active)('preserves price references omitted by old clients without granting catalog write access',()=>{
- seed(stockState());const pending={...stockState(),catalogNameDrafts:[{...nameDraft,legacyPrices}]};
- sql(`begin;set local request.jwt.claim.sub='${owner}';update public.bon_elagouz_store set catalog_name_drafts=${literal(pending.catalogNameDrafts)};commit;`);
- const oldClient={...stockState(),catalogNameDrafts:[nameDraft]},payload=literal(toCloud(oldClient));
- expect(readJson(`select public.bon_erp_save_store(0,${payload},'${crypto.randomUUID()}');select catalog_name_drafts from public.bon_elagouz_store`)).toEqual(pending.catalogNameDrafts);
- const employee='22222222-2222-4222-8222-222222220098';userAccessFixture(employee,{view:true,expenses:true});
- const kept=JSON.parse(asUser(employee,`select public.bon_erp_save_store(0,${payload},'${crypto.randomUUID()}');select catalog_name_drafts from public.bon_elagouz_store`).split('\n').at(-1)!);expect(kept).toEqual(pending.catalogNameDrafts);
- const forged={...pending,catalogNameDrafts:[{...nameDraft,legacyPrices:{...legacyPrices,purchasePrice:999}}]};expect(()=>asUser(employee,`select public.bon_erp_save_store(0,${literal(toCloud(forged))},'${crypto.randomUUID()}')`)).toThrow('USER_PERMISSION_DENIED');
- expect(readJson(`select public.bon_erp_restore_store(0,${payload},'${crypto.randomUUID()}');select catalog_name_drafts from public.bon_elagouz_store`)).toEqual(oldClient.catalogNameDrafts);
+it.skipIf(!active)('drops withdrawn price metadata from stale clients and restores without altering manually entered product prices',()=>{
+ const existing=stockState();seed(existing);
+ const pending={...existing,catalogNameDrafts:[nameDraft]},stale={...pending,catalogNameDrafts:[{...nameDraft,legacyPrices:{purchasePrice:45,salePrice:65,sourceKind:'github_seed'}}]};
+ // Reproduce data written before the compensating migration in this disposable
+ // validation database. All triggers are re-enabled on transaction completion.
+ sql(`begin;set local session_replication_role=replica;update public.bon_elagouz_store set catalog_name_drafts=${literal(stale.catalogNameDrafts)};commit;`);
+ const payload={...toCloud(pending),catalog_name_drafts:stale.catalogNameDrafts};
+ const result=readJson(`select public.bon_erp_save_store(0,${literal(payload)},'${crypto.randomUUID()}');select jsonb_build_object('drafts',catalog_name_drafts,'items',items,'partners',partners,'sales',sales_invoices,'expenses',expenses) from public.bon_elagouz_store`);
+ expect(result).toEqual({drafts:pending.catalogNameDrafts,items:existing.items,partners:existing.partners,sales:[],expenses:[]});
+ expect(readJson(`select public.bon_erp_restore_store(0,${literal(payload)},'${crypto.randomUUID()}');select catalog_name_drafts from public.bon_elagouz_store`)).toEqual(pending.catalogNameDrafts);
+ const employee='22222222-2222-4222-8222-222222220099';userAccessFixture(employee,{view:true,expenses:true});
+ expect(JSON.parse(asUser(employee,`select public.bon_erp_save_store(0,${literal(payload)},'${crypto.randomUUID()}');select catalog_name_drafts from public.bon_elagouz_store`).split('\n').at(-1)!)).toEqual(pending.catalogNameDrafts);
 });
 it.skipIf(!active)('authorizes catalog name rename and deletion without changing inventory or accounting',()=>{
  seed(stockState());const pending={...stockState(),catalogNameDrafts:[nameDraft]};

@@ -1,15 +1,13 @@
 import {Modal} from './Modal';
 import React,{useState} from 'react';
-import type {InventoryItem,ItemCategory,RecipeIngredient,UnitType,LegacyCatalogPrices} from '../types/erp';
+import type {InventoryItem,ItemCategory,RecipeIngredient,UnitType} from '../types/erp';
 import {itemCategories,requiresRecipe,isRecipeOnUse} from '../lib/itemPolicy';
 import {calculateRecipeTotalCost} from '../lib/itemCosts';
 import {nextItemCode} from '../lib/operationChecks';
-import {legacyPricesForUnit} from '../lib/legacyCatalogPrices';
-import {LegacyCatalogPricesNote} from './LegacyCatalogPricesNote';
 
-export function ItemDefinitionModal({items,onSave,onClose,allowedCategories,initialName='',requireDetails=false,initialPrices}: {
+export function ItemDefinitionModal({items,onSave,onClose,allowedCategories,initialName='',requireDetails=false}: {
  items:InventoryItem[]; onSave:(item:Omit<InventoryItem,'id'>)=>void|boolean|Promise<void|boolean>;
- onClose:()=>void; allowedCategories?:ItemCategory[];initialName?:string;requireDetails?:boolean;initialPrices?:LegacyCatalogPrices;
+ onClose:()=>void; allowedCategories?:ItemCategory[];initialName?:string;requireDetails?:boolean;
 }){
  const options=itemCategories.filter(c=>!allowedCategories||allowedCategories.includes(c.id));
  const [category,setCategory]=useState<ItemCategory|''>(requireDetails?'':options[0]?.id??'raw_bean');
@@ -23,12 +21,6 @@ export function ItemDefinitionModal({items,onSave,onClose,allowedCategories,init
  const needsRecipe=!!category&&requiresRecipe(category);
  const onUse=!!category&&isRecipeOnUse({category});
  const actualUnit=category==='drink_recipe'?'piece':category==='manufactured_blend'?'kg':baseUnit;
- const importedPrices=initialPrices&&category&&!onUse?legacyPricesForUnit(initialPrices,actualUnit):null;
- const fillImportedPrices=(kind:ItemCategory|'',unit:InventoryItem['baseUnit']|'')=>{
-  if(!initialPrices)return;
-  const values=kind&&!isRecipeOnUse({category:kind})?legacyPricesForUnit(initialPrices,unit):null;
-  setCost(kind&&!requiresRecipe(kind)&&values?String(values.purchasePrice):'');setRetail(values?String(values.salePrice):'');
- };
  const available=items.filter(i=>i.category!=='drink_recipe');
  const ingredient=available.find(i=>i.id===ingredientId);
  const units:UnitType[]=ingredient?.baseUnit==='piece'?['piece']:ingredient?.baseUnit==='liter'?['ml','liter']:['gram','kg'];
@@ -54,10 +46,10 @@ export function ItemDefinitionModal({items,onSave,onClose,allowedCategories,init
    onClose();
   }catch(e){setError((e as Error).message);}finally{setSaving(false);}
  };
- return <Modal title={requireDetails?"استكمال الصنف المستورد":"تعريف صنف جديد"} busy={saving} onClose={onClose} footer={<div className="flex gap-3"><button disabled={saving} onClick={()=>void save()} className="bg-[#1E1612] text-white rounded-xl px-4 py-2">حفظ الصنف والوصفة</button><button disabled={saving} onClick={onClose} className="border rounded-xl px-4 py-2">إلغاء</button></div>}><fieldset disabled={saving} className="space-y-4">{initialPrices&&<><LegacyCatalogPricesNote prices={initialPrices}/><p className="operation-note">{importedPrices?`تُعبّأ الأسعار حسب الوحدة المختارة (${actualUnit==='kg'?'كيلو':'عبوة/قطعة'}). يمكنك تعديلها قبل الحفظ.`:onUse?'تكلفة الوصفة تُحسب من المكونات. حدد سعر بيع وحدة المشروب أو التحويجة بنفسك.':'اختر النوع والوحدة لتعبئة الأسعار. الوحدات التي لا يمكن تحويل سعرها تحتاج إدخالًا يدويًا.'}</p></>}<label className="block">نوع الصنف<select className={inputClass} value={category} onChange={e=>{const kind=e.target.value as ItemCategory;const unit=requireDetails&&!['manufactured_blend','drink_recipe'].includes(kind)?'':['raw_bean','manufactured_blend','seasoning_recipe'].includes(kind)?'kg':'piece';setCategory(kind);setBaseUnit(unit);fillImportedPrices(kind,unit);setRecipe([]);}}>{requireDetails&&<option value="">اختر نوع الصنف</option>}{options.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
+ return <Modal title={requireDetails?"استكمال الصنف المستورد":"تعريف صنف جديد"} busy={saving} onClose={onClose} footer={<div className="flex gap-3"><button disabled={saving} onClick={()=>void save()} className="bg-[#1E1612] text-white rounded-xl px-4 py-2">حفظ الصنف والوصفة</button><button disabled={saving} onClick={onClose} className="border rounded-xl px-4 py-2">إلغاء</button></div>}><fieldset disabled={saving} className="space-y-4"><label className="block">نوع الصنف<select className={inputClass} value={category} onChange={e=>{const kind=e.target.value as ItemCategory;setCategory(kind);setBaseUnit(requireDetails&&!['manufactured_blend','drink_recipe'].includes(kind)?'':['raw_bean','manufactured_blend','seasoning_recipe'].includes(kind)?'kg':'piece');setRecipe([]);}}>{requireDetails&&<option value="">اختر نوع الصنف</option>}{options.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
 <label className="block">اسم الصنف<input className={inputClass} value={name} onChange={e=>setName(e.target.value)}/></label>
 <label className="block">كود الصنف (اختياري)<input className={inputClass} value={code} onChange={e=>setCode(e.target.value)}/></label>
-{category!=='drink_recipe'&&category!=='manufactured_blend'&&<label className="block">الوحدة الأساسية<select className={inputClass} value={baseUnit} onChange={e=>{const unit=e.target.value as InventoryItem['baseUnit'];setBaseUnit(unit);fillImportedPrices(category,unit);}}>{requireDetails&&<option value="">اختر الوحدة</option>}<option value="kg">كيلو</option><option value="piece">قطعة</option><option value="liter">لتر</option></select></label>}
+{category!=='drink_recipe'&&category!=='manufactured_blend'&&<label className="block">الوحدة الأساسية<select className={inputClass} value={baseUnit} onChange={e=>setBaseUnit(e.target.value as InventoryItem['baseUnit'])}>{requireDetails&&<option value="">اختر الوحدة</option>}<option value="kg">كيلو</option><option value="piece">قطعة</option><option value="liter">لتر</option></select></label>}
 {needsRecipe&&<fieldset className="border rounded-xl p-3 space-y-2"><legend>مكونات {category==='manufactured_blend'?'إنتاج كيلو من التوليفة':category==='drink_recipe'?'المشروب الواحد':`وحدة التحويجة (${actualUnit})`}</legend>
     <p className="text-sm">{category==='manufactured_blend'?'تُخصم عند الإنتاج، ثم يباع رصيد التوليفة الجاهز.':'تُخصم المكونات عند الاستخدام أو البيع، دون عملية إنتاج.'}</p>
     <label className="block">المكون<select className={inputClass} value={ingredientId} onChange={e=>{setIngredientId(e.target.value);const raw=items.find(i=>i.id===e.target.value);setUnit(raw?.baseUnit==='piece'?'piece':raw?.baseUnit==='liter'?'ml':'gram');}}><option value="">اختر مكونًا</option>{available.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select></label>

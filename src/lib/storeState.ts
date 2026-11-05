@@ -156,7 +156,7 @@ const invoice = base
   })
   .passthrough();
 export const schema = z.object({
-  catalogNameDrafts:z.array(base.extend({name:text.trim().min(1).max(200),sourceRepository:text.min(1).max(200),sourceCommit:text.regex(/^[a-f0-9]{40}$/),sourcePath:text.min(1).max(500),importedAt:text.datetime(),legacyPrices:z.object({purchasePrice:money.max(999999999999.99),salePrice:money.max(999999999999.99),unitLabel:text.min(1).max(40),packageWeightGrams:number.int().positive().max(1000000).optional(),sourceName:text.min(1).max(200),sourcePath:text.min(1).max(500),sourceCommit:text.regex(/^[a-f0-9]{40}$/),sourceKind:z.literal('github_seed'),requiresReview:z.literal(true)}).optional()})).max(2000).default([]),
+  catalogNameDrafts:z.array(base.extend({name:text.trim().min(1).max(200),sourceRepository:text.min(1).max(200),sourceCommit:text.regex(/^[a-f0-9]{40}$/),sourcePath:text.min(1).max(500),importedAt:text.datetime()})).max(2000).default([]),
   financialOpenings:z.array(base.extend({date:id,account:z.literal('treasury'),amount:money.max(999999999999.99),priorPeriodSettled:z.literal(true),history:z.array(z.object({id,recordedAt:id,actorId:id,actorName:id,amount:money.max(999999999999.99),reason:text.min(6).max(500)})).min(1).max(1000)})).max(1).default([]),
   cashierDays:z.array(base.extend({date:id,status:z.enum(['pending','approved']),
     financialReport:z.object({fileName:id,sha256:text.regex(/^[a-f0-9]{64}$/),uploadedAt:id,sourceQueueId:id.optional(),totalRevenue:money}).optional(),
