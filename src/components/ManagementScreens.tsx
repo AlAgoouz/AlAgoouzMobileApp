@@ -9,6 +9,9 @@ import {supplierPurchaseHistory} from '../lib/supplierPurchases';
 import {ContactEditModal} from './ContactEditModal';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
 import {CatalogNameDraftPanel} from './CatalogNameDraftPanel';
+import {CatalogListControls,CatalogListNavigation} from './CatalogListControls';
+import {CatalogProductRows} from './CatalogProductRows';
+import {browseCatalog,type CatalogSort} from '../lib/catalogBrowse';
 import type {CatalogNameDraft} from '../types/erp';
 import {categoryLabel,itemCategories,requiresRecipe,isStockItem,isRecipeOnUse} from '../lib/itemPolicy';
 import React, { useState, useMemo } from "react";
@@ -88,6 +91,8 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 }) => {
   const [filterCat, setFilterCat] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [catalogPane,setCatalogPane]=useState<'pending'|'ready'>(()=>nameDrafts.length?'pending':'ready');
+  const [catalogSort,setCatalogSort]=useState<CatalogSort>('name'),[catalogPageSize,setCatalogPageSize]=useState(50);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [editingOriginal, setEditingOriginal] = useState<InventoryItem | null>(
     null,
@@ -123,20 +128,9 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
   }, [items]);
 
   const filtered = useMemo(() => {
-    return items.filter((i) => {
-      if (filterCat !== "all" && (i.category==='raw_spice'?'direct_product':i.category) !== filterCat) return false;
-      if (
-        search.trim() &&
-        !i.name.toLowerCase().includes(search.toLowerCase()) &&
-        !i.code.toLowerCase().includes(search.toLowerCase())
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [items, filterCat, search]);
-
-  const getCategoryBadge = (cat:ItemCategory)=>({label:categoryLabel(cat),cls:'bg-[#FDF8EB] text-[#9E7918] border-[#E8D8A8]'});
+    return browseCatalog(items.filter(i=>filterCat==='all'||(i.category==='raw_spice'?'direct_product':i.category)===filterCat),search,catalogSort);
+  }, [items, filterCat, search,catalogSort]);
+  const catalogPage=useRecordPage(filtered,filterCat+'|'+search+'|'+catalogSort+'|'+catalogPageSize,catalogPageSize);
 
   const handleOpenAddModal=()=>setShowAddModal(true);
 
@@ -202,264 +196,26 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
           <span>منتج جديد</span>
         </button></OperationHeader>
 
-      <div className="p-3.5 space-y-3.5">
-        <CatalogNameDraftPanel drafts={nameDrafts} items={items} onComplete={onCompleteNameDraft} onChange={onChangeNameDraft}/>
-        {/* كارت الملخص التوضيحي للدورة التشغيلية وزر إضافة منتج */}
-        <div className="bg-gradient-to-br from-[#1E1612] via-[#2A1F1A] to-[#17110E] rounded-3xl p-4 text-[#FAF8F4] border border-[#C59B27]/60 shadow-xl space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-black text-[#FBF5B7]">
-                دليل المنتجات وأسعار البيع والتكلفة
-              </h2>
-              <p className="text-[10px] text-[#D4AF37] mt-0.5">
-                من هنا تُعرّف الأصناف التي تعتمد عليها المشتريات والإنتاج
-                والمبيعات
-              </p>
-            </div>
-            <span className="text-xs font-black bg-white/10 border border-[#C59B27]/40 text-[#FBF5B7] px-2.5 py-1 rounded-xl">
-              {catalogStats.total} منتج
-            </span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-2.5">
-              <div className="text-[10px] text-[#D8CBB8]">أصناف مباشرة</div>
-              <div className="text-sm font-black text-white mt-0.5">
-                {catalogStats.rawAndSpices}{" "}
-                <span className="text-[10px] text-[#D4AF37]">صنف</span>
-              </div>
-            </div>
-            <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-2.5">
-              <div className="text-[10px] text-[#D8CBB8]">أصناف لها وصفة</div>
-              <div className="text-sm font-black text-[#FBF5B7] mt-0.5">
-                {catalogStats.blendsAndDrinks}{" "}
-                <span className="text-[10px] text-[#D4AF37]">صنف</span>
-              </div>
-            </div>
-            <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-2.5">
-              <div className="text-[10px] text-[#D8CBB8]">متوسط هامش الربح</div>
-              <div className="text-sm font-black text-emerald-400 mt-0.5">
-                {catalogStats.avgMargin}%
-              </div>
-            </div>
-          </div>
-
-          {/* أزرار الربط السريع بالدورة التشغيلية */}
-          <div className="grid grid-cols-3 gap-2 pt-1">
-            <button
-              onClick={handleOpenAddModal}
-              className="col-span-3 bg-gradient-to-l from-[#C59B27] via-[#D4AF37] to-[#B38728] text-[#1E1612] font-black text-xs py-3 rounded-2xl shadow flex items-center justify-center gap-1.5"
-            >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>تعريف وإضافة منتج جديد للنظام</span>
-            </button>
-            <button
-              onClick={onNavigateToPurchase}
-              className="bg-white/10 hover:bg-white/15 border border-[#C59B27]/30 text-[#FBF5B7] py-2 rounded-xl text-[10px] font-bold"
-            >
-              1. شراء خامات &gt;
-            </button>
-            <button
-              onClick={onNavigateToProduction}
-              className="bg-white/10 hover:bg-white/15 border border-[#C59B27]/30 text-[#FBF5B7] py-2 rounded-xl text-[10px] font-bold"
-            >
-              2. الوصفات والإنتاج &gt;
-            </button>
-            <button
-              onClick={onNavigateToInventory}
-              className="bg-white/10 hover:bg-white/15 border border-[#C59B27]/30 text-[#FBF5B7] py-2 rounded-xl text-[10px] font-bold"
-            >
-              3. أرصدة المخزن &gt;
-            </button>
-          </div>
+      <div className="catalog-workspace">
+        <div className="catalog-overview">
+          <nav className="catalog-status-tabs" aria-label="حالة المنتجات">
+            <button aria-pressed={catalogPane==='pending'} onClick={()=>setCatalogPane('pending')}>تحتاج استكمال ({nameDrafts.length})</button>
+            <button aria-pressed={catalogPane==='ready'} onClick={()=>setCatalogPane('ready')}>جاهزة للاستخدام ({items.length})</button>
+          </nav>
+          <details className="catalog-shortcuts"><summary>انتقالات سريعة</summary><div><button onClick={onNavigateToPurchase}>المشتريات</button><button onClick={onNavigateToProduction}>الوصفات والإنتاج</button><button onClick={onNavigateToInventory}>أرصدة المخزن</button></div></details>
         </div>
-
-        {/* فلاتر تصنيف المنتجات */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
-          {[
-            { id: "all", label: `كل المنتجات (${items.length})` },
-            ...itemCategories,
-          ].map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setFilterCat(t.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold shrink-0 border transition ${
-                filterCat === t.id
-                  ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
-                  : "bg-white text-[#5C4B3E] border-[#E6DEC8]"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* شريط البحث */}
-        <div className="bg-white rounded-2xl border border-[#E6DEC8] px-3.5 py-2.5 flex items-center gap-2 shadow-sm">
-          <Search className="w-4 h-4 text-[#9E7918]" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="ابحث باسم المنتج أو الكود (مثلاً: برازيلي، توليفة، تركي...)"
-            className="w-full text-xs font-bold bg-transparent focus:outline-none text-[#1E1612]"
-          />
-        </div>
-
-        {/* قائمة بطاقات المنتجات والتسعير */}
-        {filtered.length === 0 ? (
-          <div className="bg-white rounded-2xl p-8 text-center text-xs text-[#7A6855] border border-[#E6DEC8]">
-            لا توجد منتجات مسجلة في هذا التصنيف. اضغط (+ تعريف وإضافة منتج جديد)
-            للبدء.
+        <section className="catalog-pane" hidden={catalogPane!=='pending'} aria-label="المنتجات التي تحتاج استكمالًا">
+          <CatalogNameDraftPanel drafts={nameDrafts} items={items} onComplete={onCompleteNameDraft} onChange={onChangeNameDraft} onShowReady={()=>setCatalogPane('ready')}/>
+        </section>
+        <section className="catalog-pane space-y-3" hidden={catalogPane!=='ready'} aria-label="المنتجات الجاهزة">
+          <div className="catalog-summary"><span>أصناف مباشرة <b>{catalogStats.rawAndSpices}</b></span><span>أصناف لها وصفة <b>{catalogStats.blendsAndDrinks}</b></span><span>متوسط هامش البيع الإرشادي <b>{catalogStats.avgMargin}%</b></span></div>
+          <div className="flex gap-1.5 overflow-x-auto pb-1" aria-label="تصفية أنواع المنتجات">
+            {[{id:'all',label:'كل المنتجات ('+items.length+')'},...itemCategories].map(category=><button key={category.id} aria-pressed={filterCat===category.id} onClick={()=>setFilterCat(category.id)} className={'min-h-[44px] px-3 py-2 rounded-xl text-xs font-extrabold shrink-0 border '+(filterCat===category.id?'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]':'bg-white text-[#5C4B3E] border-[#E6DEC8]')}>{category.label}</button>)}
           </div>
-        ) : (
-          <div className="space-y-2.5">
-            {filtered.map((item) => {
-              const catInfo = getCategoryBadge(item.category);
-              const unitLabel =
-                item.baseUnit === "kg"
-                  ? "كجم"
-                  : item.baseUnit === "liter"
-                    ? "لتر"
-                    : "كوب/قطعة";
-              const profitPerUnit = Number(
-                (item.retailPrice - item.costPrice).toFixed(1),
-              );
-              const marginPct =
-                item.retailPrice > 0
-                  ? Math.round((profitPerUnit / item.retailPrice) * 100)
-                  : 0;
-              const price100g =
-                item.baseUnit === "kg"
-                  ? Math.round(item.retailPrice / 10)
-                  : null;
-              const price250g =
-                item.baseUnit === "kg"
-                  ? Math.round(item.retailPrice / 4)
-                  : null;
-
-              return (
-                <div
-                  key={item.id}
-                  className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm space-y-2.5 transition"
-                >
-                  {/* السطر العلوي: الكود، التصنيف، الاسم، وأزرار التعديل والحذف */}
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center flex-wrap gap-1.5 mb-1">
-                        <span className="text-[10px] font-black bg-[#FAF8F4] text-[#7A6855] px-2 py-0.5 rounded border border-[#E6DEC8]">
-                          {item.code}
-                        </span>
-                        <span
-                          className={`text-[10px] font-extrabold px-2 py-0.5 rounded border ${catInfo.cls}`}
-                        >
-                          {catInfo.label}
-                        </span>
-                        {item.roastLevel && item.roastLevel !== "بدون" && (
-                          <span className="text-[10px] font-bold bg-[#FAF8F4] text-[#6E5D4F] px-2 py-0.5 rounded border border-[#E6DEC8]">
-                            تحميص {item.roastLevel}
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="text-sm font-black text-[#1E1612]">
-                        {item.name}
-                      </h3>
-                    </div>
-
-                    {canManage&&<div className="grid grid-cols-2 gap-2 shrink-0 w-full sm:w-auto">
-                      <button
-                        onClick={() => openEditItem(item)}
-                        aria-label={`تعديل المنتج ${item.name}`}
-                        className="min-h-[44px] text-xs font-extrabold text-[#1E1612] bg-[#FDF8EB] border border-[#C59B27] px-3 py-2 rounded-xl hover:bg-[#F5EBD0] transition"
-                      >
-                        تعديل
-                      </button>
-                      <button
-                        onClick={() => {setDeleting(item);setDeleteError('');}}
-                        aria-label={`حذف المنتج ${item.name}`}
-                        className="min-h-[44px] px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 rounded-xl border border-red-100 inline-flex items-center justify-center gap-2"
-                        title="حذف المنتج"
-                      >
-                        <Trash2 className="w-4 h-4" aria-hidden="true" />حذف
-                      </button>
-                    </div>}
-                  </div>
-
-                  {/* شبكة الأسعار والربحية */}
-                  <div className="grid grid-cols-4 gap-1.5 text-center bg-[#FAF8F4] rounded-xl p-2.5 border border-[#EDE6D8]">
-                    <div>
-                      <div className="text-[10px] text-[#7A6855] font-semibold">
-                        التكلفة/{unitLabel}
-                      </div>
-                      <div className="text-xs font-black text-[#9E7918] mt-0.5">
-                        {item.costPrice.toFixed(1)} ج
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-[#7A6855] font-semibold">
-                        بيع قطاعي
-                      </div>
-                      <div className="text-xs font-black text-[#1E1612] mt-0.5">
-                        {item.retailPrice} ج
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-[#7A6855] font-semibold">
-                        بيع جملة
-                      </div>
-                      <div className="text-xs font-black text-[#1E1612] mt-0.5">
-                        {item.wholesalePrice} ج
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-[#7A6855] font-semibold">
-                        ربح الـ {unitLabel}
-                      </div>
-                      <div className="text-xs font-black text-emerald-700 mt-0.5">
-                        +{profitPerUnit} ج ({marginPct}%)
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* أسعار الأوزان السريعة لو المنتج بالكيلو + حالة الوصفة */}
-                  <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] pt-0.5">
-                    {price100g !== null && price250g !== null ? (
-                      <div className="flex items-center gap-2 text-[#6E5D4F] font-bold">
-                        <span className="bg-[#FDF8EB] border border-[#E8D8A8] px-2 py-0.5 rounded-lg text-[#9E7918]">
-                          100 جم: {price100g} ج.م
-                        </span>
-                        <span className="bg-[#FDF8EB] border border-[#E8D8A8] px-2 py-0.5 rounded-lg text-[#9E7918]">
-                          ثمن (125 جم): {Math.round(item.retailPrice / 8)} ج.م
-                        </span>
-                        <span className="bg-[#FDF8EB] border border-[#E8D8A8] px-2 py-0.5 rounded-lg text-[#9E7918]">
-                          ربع كجم: {price250g} ج.م
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-[#8C7A6B] font-bold">
-                        يُباع بالعدد / الكوب المباشر
-                      </span>
-                    )}
-
-                    {requiresRecipe(item.category) && (
-                      <button
-                        onClick={onNavigateToProduction}
-                        className="text-[10px] font-black text-[#1E1612] bg-[#FAF8F4] border border-[#C59B27] px-2.5 py-1 rounded-lg flex items-center gap-1"
-                      >
-                        <Flame className="w-3 h-3 text-[#9E7918]" />
-                        <span>
-                          {item.recipe && item.recipe.length > 0
-                            ? `مكونات الوصفة (${item.recipe.length})`
-                            : "ضبط مقادير الوصفة"}
-                        </span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+          <CatalogListControls label="البحث في المنتجات الجاهزة" search={search} onSearch={setSearch} sort={catalogSort} onSort={setCatalogSort} pageSize={catalogPageSize} onPageSize={setCatalogPageSize}/>
+          <CatalogListNavigation page={catalogPage} label="انتقل إلى صفحة المنتجات الجاهزة"/>
+          {filtered.length?<CatalogProductRows items={catalogPage.visible} canManage={canManage} onEdit={openEditItem} onDelete={item=>{setDeleting(item);setDeleteError('');}} onRecipe={onNavigateToProduction}/>:<p role="status" className="catalog-empty">لا توجد منتجات جاهزة مطابقة لهذا العرض.</p>}
+        </section>
       </div>
 
       {/* نافذة تعريف وإضافة منتج جديد */}
