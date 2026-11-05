@@ -86,7 +86,7 @@ const ingredient = z.object({
   ingredientId: id,
   ingredientName: text,
   quantity: number.positive(),
-  unit: z.enum(["kg", "gram", "piece", "liter", "ml"]),
+  unit: z.enum(["kg", "gram", "piece", "count", "liter", "ml"]),
 });
 const item = base
   .extend({
@@ -102,7 +102,7 @@ const item = base
       "seasoning_recipe",
       "snack",
     ]),
-    baseUnit: z.enum(["kg", "piece", "liter"]),
+    baseUnit: z.enum(["kg", "piece", "count", "liter"]),
     openingStock: money.optional(),
     stock: number,
     minStock: money,

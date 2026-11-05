@@ -3,6 +3,7 @@ import {OperationHeader} from './OperationHeader';
 import {productionNeeds} from '../lib/inventory';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
 import {requiresRecipe} from '../lib/itemPolicy';
+import {quantityUnits,unitLabel as displayUnit} from '../lib/units';
 import React, { useEffect, useState, useMemo } from "react";
 import {Flame, Plus, Trash2, CheckCircle2, AlertTriangle, Layers, History, Scale, Save} from 'lucide-react';
 import {
@@ -144,7 +145,7 @@ export const ProductionAndRecipesScreen: React.FC<
     rawAndBlendIngredients[0]?.id || "",
   );
   const [newIngQty, setNewIngQty] = useState<string>("250");
-  const [newIngUnit, setNewIngUnit] = useState<UnitType>("gram");
+  const [newIngUnit, setNewIngUnit] = useState<UnitType>(()=>quantityUnits(rawAndBlendIngredients[0]?.baseUnit??'kg')[0]);
   const [editRetailPrice, setEditRetailPrice] = useState<string>(() =>
     blendItems[0] ? String(blendItems[0].retailPrice) : "",
   );
@@ -191,16 +192,11 @@ export const ProductionAndRecipesScreen: React.FC<
   // وحدات الكمية المسموح بها حسب وحدة الصنف المختار (تمنع جملًا يحوّلها الشريط الصامت لصفر)
   const newIngBaseUnit =
     rawAndBlendIngredients.find((i) => i.id === newIngId)?.baseUnit || "kg";
-  const allowedIngUnits: UnitType[] =
-    newIngBaseUnit === "piece"
-      ? ["piece"]
-      : newIngBaseUnit === "liter"
-        ? ["ml", "liter"]
-        : ["gram", "kg"];
+  const allowedIngUnits = quantityUnits(newIngBaseUnit);
 
   const ingredientUnitValid = (
     ing: Pick<RecipeIngredient, "quantity" | "unit">,
-    baseUnit: "kg" | "piece" | "liter",
+    baseUnit: InventoryItem['baseUnit'],
   ): boolean => {
     if (!Number.isFinite(ing.quantity) || ing.quantity <= 0) return false;
     try {
@@ -297,7 +293,7 @@ export const ProductionAndRecipesScreen: React.FC<
       if (!ingredientUnitValid(ing, raw.baseUnit)) {
         setBannerMessage({
           type: "error",
-          text: `مقدار (${ing.ingredientName}) صفر أو وحدته غير متوافقة مع وحدة الصنف (${raw.baseUnit === "kg" ? "كجم" : raw.baseUnit === "liter" ? "لتر" : "قطعة"})؛ صحّحه قبل الحفظ`,
+          text: `مقدار (${ing.ingredientName}) صفر أو وحدته غير متوافقة مع وحدة الصنف (${displayUnit(raw.baseUnit)})؛ صحّحه قبل الحفظ`,
         });
         return;
       }
@@ -536,17 +532,11 @@ export const ProductionAndRecipesScreen: React.FC<
                       </div>
                       <div className="text-[11px] text-slate-500">
                         في الكيلو الواحد: {sim.perKgQty}{" "}
-                        {sim.perKgUnit === "gram"
-                          ? "جرام"
-                          : sim.perKgUnit === "kg"
-                            ? "كجم"
-                            : sim.perKgUnit === "ml"
-                              ? "مللي"
-                              : "قطعة"}{" "}
+                        {displayUnit(sim.perKgUnit)}{" "}
                         • المتاح بالمخزن:{" "}
                         <b>
                           {sim.availableInBase.toFixed(2)}{" "}
-                          {sim.baseUnit === "kg" ? "كجم" : "وحدة"}
+                          {displayUnit(sim.baseUnit)}
                         </b>
                       </div>
                     </div>
@@ -732,13 +722,7 @@ export const ProductionAndRecipesScreen: React.FC<
                               الكمية:{" "}
                               <b className="text-blue-700">
                                 {ing.quantity}{" "}
-                                {ing.unit === "gram"
-                                  ? "جرام"
-                                  : ing.unit === "kg"
-                                    ? "كجم"
-                                    : ing.unit === "ml"
-                                      ? "مللي"
-                                      : "قطعة"}
+                                {displayUnit(ing.unit)}
                               </b>{" "}
                               • التكلفة في الوصفة:{" "}
                               <b className="text-emerald-700">
@@ -774,24 +758,14 @@ export const ProductionAndRecipesScreen: React.FC<
                       rawAndBlendIngredients.find(
                         (i) => i.id === e.target.value,
                       )?.baseUnit || "kg";
-                    setNewIngUnit(
-                      base === "piece"
-                        ? "piece"
-                        : base === "liter"
-                          ? "ml"
-                          : "gram",
-                    );
+                    setNewIngUnit(quantityUnits(base)[0]);
                   }}
                   className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold bg-white"
                 >
                   {rawAndBlendIngredients.map((raw) => (
                     <option key={raw.id} value={raw.id}>
                       {raw.name} (تكلفته: {raw.costPrice} ج.م /{" "}
-                      {raw.baseUnit === "kg"
-                        ? "كجم"
-                        : raw.baseUnit === "liter"
-                          ? "لتر"
-                          : "قطعة"}
+                      {displayUnit(raw.baseUnit)}
                       )
                     </option>
                   ))}
@@ -824,6 +798,9 @@ export const ProductionAndRecipesScreen: React.FC<
                     )}
                     {allowedIngUnits.includes("piece") && (
                       <option value="piece">قطعة / كوب</option>
+                    )}
+                    {allowedIngUnits.includes("count") && (
+                      <option value="count">عدد</option>
                     )}
                   </select>
                   <button

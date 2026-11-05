@@ -1,4 +1,5 @@
 import type { InventoryItem, RecipeIngredient, UnitType } from "../types/erp";
+import {isCountUnit} from './units';
 
 export function getIngredientCostContribution(
   ingredient: RecipeIngredient,
@@ -30,11 +31,12 @@ export function calculateRecipeTotalCost(
 export function convertToBaseUnit(
   qty: number,
   fromUnit: UnitType,
-  baseUnit: "kg" | "piece" | "liter",
+  baseUnit: InventoryItem['baseUnit'],
 ): number {
   if (baseUnit === "kg" && fromUnit === "gram") return qty / 1000;
   if (baseUnit === "liter" && fromUnit === "ml") return qty / 1000;
   if (fromUnit === baseUnit) return qty;
+  if (isCountUnit(baseUnit) && isCountUnit(fromUnit)) return qty;
   throw new Error("وحدة الكمية لا تطابق وحدة الصنف");
 }
 

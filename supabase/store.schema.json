@@ -355,6 +355,7 @@
             "enum": [
               "kg",
               "piece",
+              "count",
               "liter"
             ]
           },
@@ -413,6 +414,7 @@
                     "kg",
                     "gram",
                     "piece",
+                    "count",
                     "liter",
                     "ml"
                   ]
@@ -731,6 +733,7 @@
                   "enum": [
                     "kg",
                     "piece",
+                    "count",
                     "liter"
                   ]
                 },
@@ -789,6 +792,7 @@
                           "kg",
                           "gram",
                           "piece",
+                          "count",
                           "liter",
                           "ml"
                         ]
@@ -946,6 +950,7 @@
                   "enum": [
                     "kg",
                     "piece",
+                    "count",
                     "liter"
                   ]
                 },
@@ -1004,6 +1009,7 @@
                           "kg",
                           "gram",
                           "piece",
+                          "count",
                           "liter",
                           "ml"
                         ]

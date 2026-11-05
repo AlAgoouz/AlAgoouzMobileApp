@@ -1,3 +1,4 @@
+import {unitLabel as displayUnit} from '../lib/units';
 import {Scale as HeaderScale,Users as HeaderUsers} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
 import {Modal} from './Modal';
@@ -408,9 +409,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                           {item.stock}{" "}
                           {isKg
                             ? `كجم (${Math.round(item.stock * 1000)} جم)`
-                            : item.baseUnit === "liter"
-                              ? "لتر"
-                              : "قطعة"}
+                            : displayUnit(item.baseUnit)}
                         </div>
                       </div>
 
@@ -520,7 +519,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                         }
                       >
                         السيستم: {v.systemStock} | الفعلي: {v.actualStock} (
-                        {v.difference} {v.baseUnit === "kg" ? "كجم" : "وحدة"})
+                        {v.difference} {displayUnit(v.baseUnit)})
                       </span>
                     </div>
                   ))}

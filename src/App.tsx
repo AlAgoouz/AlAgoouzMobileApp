@@ -1,3 +1,4 @@
+import {unitLabel as displayUnit} from './lib/units';
 import {useDashboardRead} from './hooks/useDashboardRead';
 import {saveFinancialOpening} from './lib/financialOpening';
 import {saveCatalogNameDraft,saveCatalogNameDraftChange} from './lib/catalogNameDrafts';
@@ -448,7 +449,7 @@ export default function App() {
           displayQuantity:
             item.baseUnit === "kg"
               ? `${usedInBase} كجم (${Math.round(usedInBase * 1000)} جم)`
-              : `${usedInBase} قطعة`,
+              : `${usedInBase} ${displayUnit(item.baseUnit)}`,
           cost: ingCost,
         });
         return {

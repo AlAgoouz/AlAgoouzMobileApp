@@ -1,4 +1,4 @@
-export type UnitType = 'kg' | 'gram' | 'piece' | 'liter' | 'ml';
+export type UnitType = 'kg' | 'gram' | 'piece' | 'count' | 'liter' | 'ml';
 
 export type ItemCategory =
   | 'raw_bean'          // حبوب بن محمصة خام (تُباع مباشرة وتدخل في التوليفات)
@@ -32,7 +32,7 @@ export interface InventoryItem {
   name: string;
   category: ItemCategory;
   roastLevel?: 'فاتح' | 'وسط' | 'غامق' | 'إسبريسو' | 'بدون';
-  baseUnit: 'kg' | 'piece' | 'liter';
+  baseUnit: 'kg' | 'piece' | 'count' | 'liter';
   stock: number;
   openingStock?: number;
   minStock: number;
@@ -281,7 +281,7 @@ export interface AuditLogEntry {
 export interface StocktakingItemVariance {
   itemId: string;
   itemName: string;
-  baseUnit: 'kg' | 'piece' | 'liter';
+  baseUnit: 'kg' | 'piece' | 'count' | 'liter';
   systemStock: number;
   actualStock: number;
   difference: number;        // actualStock - systemStock
