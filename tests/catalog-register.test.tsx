@@ -16,12 +16,17 @@ it('reduces a 28-page card dataset to seven bounded register pages and resets na
  expect(jump.options).toHaveLength(7);fireEvent.change(jump,{target:{value:'6'}});expect(screen.getAllByRole('listitem')).toHaveLength(36);
  fireEvent.change(screen.getByRole('searchbox',{name:'بحث في الأسماء المستوردة'}),{target:{value:'منتج 000'}});
  expect(screen.getAllByRole('listitem')).toHaveLength(1);expect(screen.getByText('منتج 000')).toBeTruthy();expect(screen.queryByRole('combobox',{name:'انتقل إلى صفحة الأسماء المستوردة'})).toBeNull();
+ fireEvent.change(screen.getByRole('searchbox',{name:'بحث في الأسماء المستوردة'}),{target:{value:''}});
+ expect((screen.getByRole('combobox',{name:'انتقل إلى صفحة الأسماء المستوردة'}) as HTMLSelectElement).value).toBe('0');
+ expect(screen.getByRole('heading',{name:'منتج 000'})).toBeTruthy();
 });
 it('changes page density without rendering the entire product dataset',()=>{
  const rows=Array.from({length:220},(_,i)=>({...draft,id:'row'+i,name:'Name '+i}));render(<CatalogNameDraftPanel drafts={rows} items={[]}/>);
  const size=screen.getByRole('combobox',{name:'عدد النتائج في الصفحة'});
+ fireEvent.change(screen.getByRole('combobox',{name:'انتقل إلى صفحة الأسماء المستوردة'}),{target:{value:'3'}});
  fireEvent.change(size,{target:{value:'100'}});expect(screen.getAllByRole('listitem')).toHaveLength(100);
  fireEvent.change(size,{target:{value:'25'}});expect(screen.getAllByRole('listitem')).toHaveLength(25);
+ fireEvent.change(size,{target:{value:'50'}});expect((screen.getByRole('combobox',{name:'انتقل إلى صفحة الأسماء المستوردة'}) as HTMLSelectElement).value).toBe('0');
 });
 it('matches Arabic spelling variants and code digits without mutating or merging product identities',()=>{
  const rows=[{id:'second',name:'بُن برازيلى وسط',code:'IT-12'},{id:'first',name:'بن برازيلي فاتح',code:'IT-2'}],before=structuredClone(rows);
@@ -41,5 +46,7 @@ it('separates pending names from ready products while preserving explicit manage
 it('bounds ready products too and keeps type filtering across the complete catalog',()=>{
  const rows=Array.from({length:151},(_,i)=>({...INITIAL_ITEMS[0],id:'ready'+i,code:'R'+i,name:'Product '+i,category:i===150?'snack' as const:'raw_bean' as const}));
  render(<ProductsCatalogScreen {...props} items={rows}/>);expect(screen.getAllByRole('listitem')).toHaveLength(50);
+ fireEvent.change(screen.getByRole('combobox',{name:'انتقل إلى صفحة المنتجات الجاهزة'}),{target:{value:'2'}});
  fireEvent.click(screen.getByRole('button',{name:'سناكس',exact:true}));expect(screen.getAllByRole('listitem')).toHaveLength(1);expect(screen.getByRole('heading',{name:'Product 150'})).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'كل المنتجات (151)',exact:true}));expect((screen.getByRole('combobox',{name:'انتقل إلى صفحة المنتجات الجاهزة'}) as HTMLSelectElement).value).toBe('0');
 });
