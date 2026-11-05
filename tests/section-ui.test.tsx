@@ -12,6 +12,7 @@ import {emptyStore} from '../src/lib/storeState';
 import {salesForReports} from '../src/lib/cashierDays';
 import * as imports from '../src/lib/importJobs';
 vi.mock('../src/lib/importJobs',()=>({listImports:vi.fn(async()=>[]),readImport:vi.fn(),uploadImport:vi.fn(),cancelImport:vi.fn(),enqueueImport:vi.fn(),importError:()=> 'راجع الملف وأعد المحاولة'}));
+vi.mock('../src/lib/cashierReportHeader',()=>({inspectCashierFile:vi.fn(async()=>({date:null,kind:null}))}));
 afterEach(()=>{cleanup();vi.clearAllMocks();vi.mocked(imports.listImports).mockResolvedValue([]);});
 it('reviews server-parsed paired reports, posts one day with a shortage, and rejects a repeated date',async()=>{
  let live={...emptyStore,items:[{...raw,stock:1}]};
@@ -29,6 +30,7 @@ it('reviews server-parsed paired reports, posts one day with a shortage, and rej
  const {rerender}=render(view());const redraw=()=>rerender(view());
  const upload=async(name:string)=>{
   fireEvent.change(screen.getByLabelText('ملف التقرير'),{target:{files:[new File(['fixture'],name,{type:'text/csv'})]}});
+  await waitFor(()=>expect((screen.getByRole('button',{name:'رفع وبدء المعالجة'}) as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(screen.getByRole('button',{name:'رفع وبدء المعالجة'}));
   await waitFor(()=>expect(screen.getAllByRole('button',{name:'مراجعة التقرير'})).toHaveLength(jobs.length));
   fireEvent.click(screen.getAllByRole('button',{name:'مراجعة التقرير'}).at(-1)!);

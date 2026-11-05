@@ -2,6 +2,7 @@
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import * as XLSX from 'xlsx';
 export async function verifyDesign(){
   assert.equal(process.env.CI,'true','DESIGN_REVIEW_REQUIRES_ISOLATED_CI');
   const browser=await chromium.launch({headless:true});
@@ -106,6 +107,15 @@ export async function verifyDesign(){
       await limit(page,title);
       assert.equal(await page.locator('.operation-header').count(),1,'Every internal section must share one header');
       assert.equal(await page.locator('.operation-header h1').count(),1);
+      if(title==='تقارير يوم الكاشير'){
+        const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Menu Item Sales Report (UWS)\nDate Range 01 11 26 - 01 11 26\nPrinted on 04/11/26 20:00:00'],['100010 Fixture Drink 2 100.00%\n100010 Fixture Drink 2 100.00%'],['20.00 100.00%\n20.00 100.00%'],['TOTAL SLS 2 20.00\nTOTAL SLS 2 20.00']]),'Report');
+        await page.getByLabel('ملف التقرير',{exact:true}).setInputFiles({name:'synthetic-2030-wrong-filename.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:XLSX.write(book,{type:'buffer',bookType:'xlsx'})});
+        await page.getByText('يوم البيع 2026-11-01 مقروء من داخل التقرير؛ تاريخ الطباعة واسم الملف لا يغيّرانه.',{exact:true}).waitFor();
+        assert.equal(await page.getByLabel('يوم العمل',{exact:true}).inputValue(),'2026-11-01');
+        assert.equal(await page.getByLabel('نوع التقرير',{exact:true}).inputValue(),'items');
+        assert.equal(await page.getByLabel('يوم العمل',{exact:true}).evaluate(e=>e.readOnly),true);
+        await limit(page,'uws-detected-day');await page.screenshot({path:'design-uws-detected-day-mobile.png',fullPage:false});
+      }
       if(title==='المنتجات والتسعير'){
         const register=page.getByRole('list',{name:'سجل المنتجات الجاهزة'});
         assert.equal(await register.getByRole('listitem').count(),50,'Catalog rendering must remain bounded');
