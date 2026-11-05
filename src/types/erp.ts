@@ -63,7 +63,7 @@ export interface ItemCostRecord {
   id:string;
   date:string;
   postedAt:string;
-  sourceType:'opening'|'purchase'|'production';
+  sourceType:'opening'|'purchase'|'production'|'sale_return';
   sourceId:string;
   quantity:number;
   unitCost:number;

@@ -254,6 +254,38 @@ it.skipIf(!active)('restores directly sold goods on return and preserves the ori
   const before=sold(stockState(),sale());seed(before);const returned=returnSale(before,'sale','Owner');accept(returned);
   reject({...returned,salesInvoices:[]},'IMMUTABLE_DOCUMENT');
 });
+it.skipIf(!active)('returns changed-cost stock at its invoice valuation and rejects forged receipt evidence',()=>{
+ const before={...stockState(),items:[{...bean,stock:20,costPrice:6,costingVersion:2 as const}],salesInvoices:[sale(4,{...bean,costPrice:3})]};seed(before);
+ const returned=returnSale(before,'sale','Owner');expect(returned.items[0]).toMatchObject({stock:24,costPrice:5.5});accept(returned);
+ const item=returned.items[0],history=item.costHistory!;
+ reject({...returned,items:[{...item,costPrice:6}]},'RETURN_AVERAGE_COST_MISMATCH');
+ reject({...returned,items:[{...item,costHistory:[]}]},'RETURN_COST_HISTORY_REQUIRED');
+ reject({...returned,items:[{...item,costHistory:[{...history[0],unitCost:6}]}]},'RETURN_ORIGINAL_COST_REQUIRED');
+ reject({...returned,items:[{...item,costHistory:[{...history[0],quantity:3}]}]},'RETURN_ORIGINAL_COST_REQUIRED');
+ reject({...returned,items:[{...item,costHistory:[{...history[0],sourceId:'other'}]}]},'RETURN_COST_RECEIPT_INVALID');
+ reject({...returned,items:[{...item,costHistory:[{...history[0],date:'2020-01-01'}]}]},'RETURN_COST_RECEIPT_INVALID');
+});
+it.skipIf(!active)('keeps legacy seasoning consumed and requires exactly one noncash expense for its original cost',()=>{
+ const seasoning:InventoryItem={...bean,id:'seasoning',code:'SE1',category:'seasoning_recipe',stock:0,openingStock:0,costPrice:0.3,hasRecipe:true,recipe:[{ingredientId:bean.id,ingredientName:bean.name,quantity:300,unit:'gram'}]};
+ const paid=sold({...stockState(),items:[bean,seasoning]},sale(2,seasoning));seed(paid);
+ const returned=returnSale(paid,'sale','Owner');expect(returned.items).toEqual(paid.items);accept(returned);
+ reject({...returned,expenses:[]},'RETURN_CONSUMPTION_COST_REQUIRED');
+ reject({...returned,expenses:[returned.expenses[0],{...returned.expenses[0],id:'duplicate'}]},'RETURN_EXPENSE_DUPLICATE_OR_AMOUNT');
+ reject({...returned,items:returned.items.map(i=>i.id===bean.id?{...i,stock:bean.stock}:i)},'INVENTORY_MOVEMENT_MISMATCH');
+});
+it.skipIf(!active)('replays consecutive returns at original costs without allowing reused return receipts',()=>{
+ const first=sale(4,{...bean,costPrice:3}),second={...sale(2,{...bean,costPrice:9}),id:'second',invoiceNumber:'S2'};
+ const before={...stockState(),items:[{...bean,stock:20,costPrice:6,costingVersion:2 as const}],salesInvoices:[first,second]};seed(before);
+ const returned=returnSale(returnSale(before,'sale','Owner'),'second','Owner');expect(returned.items[0].costPrice).toBe(5.77);accept(returned);
+ const item=returned.items[0],history=item.costHistory!;
+ reject({...returned,items:[{...item,costHistory:[history[0],{...history[1],sourceId:'sale'}]}]},'RETURN_COST_RECEIPT_INVALID');
+ seed(returned);
+ reject({...returned,items:[{...item,costHistory:[...history,{...history[0],id:'replayed'}]}]},'RETURN_RECEIPT_WITHOUT_DOCUMENT');
+});
+it.skipIf(!active)('values returns into negative stock without pretending missing goods have value',()=>{
+ const before={...stockState(),items:[{...bean,stock:-5,costPrice:6,costingVersion:2 as const}],salesInvoices:[sale(4,{...bean,costPrice:3})]};seed(before);
+ const returned=returnSale(before,'sale','Owner');expect(returned.items[0]).toMatchObject({stock:-1,costPrice:3});accept(returned);
+});
 it.skipIf(!active)('rejects an invalid calendar date and rewritten historical totals',()=>{
   const before=sold(stockState(),sale());seed(before);
   const invalid={...before,salesInvoices:[{...before.salesInvoices[0],date:'2026-02-30'}]};reject(invalid,'INVALID_BUSINESS_DATE');

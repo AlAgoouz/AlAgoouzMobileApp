@@ -68,7 +68,7 @@ import { parseBackup, createBackup, type StoreState } from "./lib/storeState";
 import { deductInventory, productionNeeds } from "./lib/inventory";
 import {
   reversePayment,
-  returnSale,
+  saveSaleReturn,
   recordPayment,
   cancelPurchase,
   recordExpense,
@@ -339,6 +339,7 @@ export default function App() {
 
   const [queueError, setQueueError] = useState("");
   const queueBusy = React.useRef(false);
+  const returnBusy = React.useRef(false);
   const [queuedReports,setQueuedReports]=useState<QueuedCashierReport[]>([]);
   useEffect(() => {
     if (!member || activeScreen!=="cashier_sync") return;
@@ -1461,20 +1462,16 @@ export default function App() {
             cashierDays={cashierDays}
             salesInvoices={salesInvoices}
             customers={customers}
-            onReturnInvoice={(invId) => {
-              if(!window.confirm('تأكيد المرتجع الاستثنائي وعكس قيمته المالية؟ مكونات المشروبات المستهلكة لا تعود للمخزون.'))return;
-              safeAction(() => {
-                const state = returnSale(
-                  engine.snapshot.state,
-                  invId,
-                  currentPartner.name,
-                );
-                engine.replace(state);
-                addAuditLog("مرتجع", `مرتجع الفاتورة ${invId}`);
-                showToast(
-                  "تم تسجيل المرتجع وعكس المستحق؛ مكونات المشروبات تظل مستهلكة.",
-                );
-              });
+            onReturnInvoice={async (invId) => {
+              if(returnBusy.current)return;
+              if(!window.confirm('تأكيد المرتجع الاستثنائي وعكس قيمته المالية؟ تعود البضاعة بتكلفة الفاتورة الأصلية، ومكونات المشروبات والتحويجات تظل مستهلكة.'))return;
+              returnBusy.current=true;
+              try {
+                await saveSaleReturn(engine,invId,currentPartner.name,member?.userId);
+                showToast('تم حفظ المرتجع وعكس المستحق وتحديث متوسط تكلفة البضاعة؛ المكونات تظل مستهلكة.');
+              } catch(error) {
+                showToast(error instanceof Error?error.message:'تعذر تأكيد حفظ المرتجع');
+              } finally {returnBusy.current=false;}
             }}
             onDeleteInvoice={(invId) => {
               showToast(
