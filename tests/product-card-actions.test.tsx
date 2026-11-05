@@ -17,6 +17,18 @@ it('offers visible edit and delete actions with product-specific accessible name
  expect(screen.getByRole('button',{name:'حذف المنتج Test product'}).textContent).toContain('حذف');
  fireEvent.click(screen.getByRole('button',{name:'تعديل المنتج Test product'}));expect(screen.getByRole('dialog').textContent).toContain('تعديل بيانات وتسعير المنتج');
 });
+it('edits a ready product cashier code without replacing its prices, quantity or identity',()=>{
+ const update=vi.fn(()=>true);render(<ProductsCatalogScreen {...props} onUpdateItem={update}/>);
+ fireEvent.click(screen.getByRole('button',{name:'تعديل المنتج Test product'}));
+ fireEvent.change(screen.getByLabelText('كود الكاشير / كود المنتج'),{target:{value:'00100010'}});
+ fireEvent.click(screen.getByRole('button',{name:'حفظ التعديلات'}));expect(update).toHaveBeenCalledWith(item.id,{code:'00100010'});
+});
+it('rejects an empty or already-used cashier code before applying an edit',()=>{
+ const update=vi.fn();render(<ProductsCatalogScreen {...props} items={[item,{...item,id:'second',code:'100010',name:'Second product'}]} onUpdateItem={update}/>);
+ fireEvent.click(screen.getByRole('button',{name:'تعديل المنتج Test product'}));
+ const input=screen.getByLabelText('كود الكاشير / كود المنتج');fireEvent.change(input,{target:{value:'100010'}});fireEvent.click(screen.getByRole('button',{name:'حفظ التعديلات'}));expect(screen.getByText('كود المنتج مستخدم لصنف آخر')).toBeTruthy();
+ fireEvent.change(input,{target:{value:' '}});fireEvent.click(screen.getByRole('button',{name:'حفظ التعديلات'}));expect(screen.getByText('كود المنتج مطلوب')).toBeTruthy();expect(update).not.toHaveBeenCalled();
+});
 it('keeps a linked product rejection visible and does not delete on cancel',async()=>{
  const remove=vi.fn().mockRejectedValue(Error('المنتج مرتبط بفاتورة'));render(<ProductsCatalogScreen {...props} onDeleteItem={remove}/>);
  fireEvent.click(screen.getByRole('button',{name:'حذف المنتج Test product'}));expect(remove).not.toHaveBeenCalled();

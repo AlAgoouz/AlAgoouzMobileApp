@@ -2,7 +2,14 @@ import {it,expect} from 'vitest';
 import {adjustCatalogItem,canDeleteCatalogItem} from '../src/lib/catalogAdjustments';
 import {emptyStore} from '../src/lib/storeState';
 import {INITIAL_ITEMS} from '../src/data/initialData';
+import {itemEditPatch} from '../src/lib/operationChecks';
 const bean={...INITIAL_ITEMS.find((item)=>item.category==='raw_bean')!,stock:10};
+it('preserves financial and stock history when assigning a unique cashier code and catches concurrent code changes',()=>{
+ const state={...emptyStore,items:[bean]};const changed=adjustCatalogItem(state,bean.id,{code:' 00100010 '},'Owner');
+ expect(changed).toEqual({...state,items:[{...bean,code:'00100010'}]});
+ expect(()=>adjustCatalogItem(state,bean.id,{code:' '},'Owner')).toThrow('كود المنتج مطلوب');
+ expect(()=>itemEditPatch(bean,{...bean,code:'CHANGED'},{code:'100010'})).toThrow('تغيرت بيانات الصنف');
+});
 it('protects item history in cashier reports, production and stocktaking before attempting a save',()=>{
   const state={...emptyStore,items:[{...bean,stock:0}]};
   const day={id:'day',date:'2026-11-03',status:'pending',itemsReport:{lines:[{itemId:bean.id}]}} as any;

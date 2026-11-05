@@ -322,6 +322,10 @@ function cashierPair(){
   const pending=attachCashierReport(withMoney,businessDate(),{type:'items',file:{fileName:'items.xlsx',sha256:'b'.repeat(64),uploadedAt:new Date().toISOString()},lines:[{itemId:drink.id,quantity:5,unitLabel:'piece',normalizedQtyInBaseUnit:5}]});
   return {before,pending,posted:approveCashierDay(pending,pending.cashierDays[0].id,'Owner')};
 }
+it.skipIf(!active)('assigns a cashier code to an existing product without changing its recorded sales, stock or costs',()=>{
+ const {posted}=cashierPair();seed(posted);const changed=adjustCatalogItem(posted,bean.id,{code:'200018'},'Owner');
+ expect(changed.cashierDays).toEqual(posted.cashierDays);expect(changed.stocktakingRecords).toEqual(posted.stocktakingRecords);expect(changed.items.find(item=>item.id===bean.id)).toEqual({...posted.items.find(item=>item.id===bean.id),code:'200018'});accept(changed);
+});
 it.skipIf(!active)('accepts pending paired cashier reports without posting and permits verified cashier stock shortages',()=>{
  const {before,pending,posted}=cashierPair();seed(before);accept(pending);accept(posted);expect(posted.items[0].stock).toBe(-0.5);
 });

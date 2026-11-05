@@ -166,7 +166,11 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
     if(!editDraft.stock?.trim()||!Number.isFinite(Number(editDraft.stock))||(Number(editDraft.stock)<0&&Number(editDraft.stock)!==editingOriginal?.stock)){setEditError('الجرد الفعلي لا يقل عن صفر؛ يمكن إبقاء العجز الحالي دون تعديله');return;}
     const live = items.find((i) => i.id === editingItem.id);
     try {
+      const code=editingItem.code.trim();
+      if(!code)throw Error('كود المنتج مطلوب');
+      if(items.some(item=>item.id!==editingItem.id&&(item.code.trim().toUpperCase()===code.toUpperCase()||item.barcode===code)))throw Error('كود المنتج مستخدم لصنف آخر');
       const patch = itemEditPatch(editingOriginal!, live, {
+        code,
         name: editingItem.name.trim() || (live ? live.name : "صنف"),
         category: editingItem.category,
         costPrice: parseFloat(editDraft.costPrice),
@@ -251,6 +255,8 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                 className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 text-xs font-extrabold"
               />
             </div>
+            <label className="block text-xs font-bold text-[#7A6855]">كود الكاشير / كود المنتج<input type="text" value={editingItem.code} onChange={e=>setEditingItem({...editingItem,code:e.target.value})} className="w-full border border-[#DFD7C6] rounded-xl px-3 py-2 mt-1"/></label>
+            <p className="text-xs text-[#7A6855]">للمنتج المباع، اكتب نفس الكود الظاهر في تقرير الكاشير. تاريخ الصنف وحركاته يظلان مرتبطين به.</p>
 <div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label className="text-xs font-bold text-[#7A6855] block mb-1">
