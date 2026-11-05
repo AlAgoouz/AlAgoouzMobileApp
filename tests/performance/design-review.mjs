@@ -17,6 +17,11 @@ export async function verifyDesign(){
   const reviewModal=async(page,trigger,label,longPermissions=false)=>{
     await trigger.click();
     const dialog=page.getByRole('dialog');await dialog.waitFor();
+    const baseUnit=dialog.getByLabel('الوحدة الأساسية',{exact:true});
+    if(await baseUnit.count()){
+      await baseUnit.selectOption('count');
+      assert.equal(await baseUnit.inputValue(),'count','New product forms must expose the distinct count unit');
+    }
     if(longPermissions){await dialog.getByRole('combobox').first().selectOption('partner');await dialog.getByText('الاطلاع على جميع بيانات المحل، بما فيها الحسابات والتقارير',{exact:true}).waitFor();}
     assert.equal(await dialog.evaluate(e=>e.matches(':modal')),true,'Dialogs must use the browser top layer');
     assert.ok((await dialog.getAttribute('aria-labelledby'))?.length,'Every dialog needs a named heading');

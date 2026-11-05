@@ -1,3 +1,4 @@
+import {unitLabel as displayUnit} from '../lib/units';
 import {ReceiptText as HeaderReceiptText,FolderSync as HeaderFolderSync} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
 import { businessDate } from "../lib/dates";
@@ -96,7 +97,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
               : `${qtyToAdd} كجم`
         : item.category === "drink_recipe"
           ? "كوب"
-          : "قطعة");
+          : displayUnit(item.baseUnit));
 
     setCart((prev) => {
       const existing = prev.find((c) => c.item.id === item.id);
@@ -204,12 +205,12 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
               .map(
                 (r) =>
                   `${r.quantity * c.qtyInBaseUnit} ${
-                    r.unit === "gram" ? "جم" : r.unit === "ml" ? "مل" : "قطعة"
+                    displayUnit(r.unit)
                   } ${r.ingredientName.split("(")[0]}`,
               )
               .join(" + ")}`
           : `خصم مباشر: ${c.qtyInBaseUnit} ${
-              c.item.baseUnit === "kg" ? "كجم" : "قطعة"
+              displayUnit(c.item.baseUnit)
             } من المخزن`;
 
       return {
@@ -385,7 +386,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                     <div className="text-[11px] text-slate-400">
                       {item.category === "drink_recipe"
                         ? "يحضر بالوصفة ويخصم الخامات تلقائياً"
-                        : `الرصيد المتاح: ${item.stock} ${isKg ? "كجم" : "قطعة"}`}
+                        : `الرصيد المتاح: ${item.stock} ${displayUnit(item.baseUnit)}`}
                     </div>
                   </div>
                   <span className="text-xs font-black text-blue-700 bg-blue-50 px-2 py-1 rounded-lg shrink-0">
@@ -486,7 +487,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] text-slate-500">
-                        الكمية ({c.item.baseUnit === "kg" ? "كجم" : "عدد"}):
+                        الكمية ({displayUnit(c.item.baseUnit)}):
                       </span>
                       <input
                         type="number"
@@ -808,11 +809,7 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
                       </span>
                       <span className="text-xs font-black text-blue-700">
                         {row.quantity}{" "}
-                        {row.unitHint === "gram"
-                          ? "جرام"
-                          : row.unitHint === "kg"
-                            ? "كجم"
-                            : "وحدة"}
+                        {displayUnit(row.unitHint)}
                       </span>
                     </div>
 
@@ -836,11 +833,7 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
                               .map(
                                 (ing) =>
                                   `${ing.quantity * qtyInBase} ${
-                                    ing.unit === "gram"
-                                      ? "جم"
-                                      : ing.unit === "ml"
-                                        ? "مل"
-                                        : "قطعة"
+                                    displayUnit(ing.unit)
                                   } (${ing.ingredientName.split("(")[0]})`,
                               )
                               .join(" + ")}
@@ -848,7 +841,7 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
                         ) : (
                           <div className="text-blue-800 font-semibold">
                             📦 منتج / توليفة جاهزة — سيخصم مباشرة: {qtyInBase}{" "}
-                            {matched.baseUnit === "kg" ? "كجم" : "قطعة"} من رصيد
+                            {displayUnit(matched.baseUnit)} من رصيد
                             الصنف
                           </div>
                         )}

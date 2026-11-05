@@ -1,3 +1,4 @@
+import {unitLabel as displayUnit} from '../lib/units';
 import {ShoppingBag as HeaderShoppingBag} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
 import {Modal} from './Modal';
@@ -277,11 +278,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
         itemName: c.item.name,
         quantity: c.quantity,
         unit:
-          c.item.baseUnit === "kg"
-            ? "كجم"
-            : c.item.baseUnit === "liter"
-              ? "لتر"
-              : "قطعة",
+          displayUnit(c.item.baseUnit),
         purchasePrice: c.purchasePrice,
         newRetailPrice: Number(c.newRetailPrice),
         newWholesalePrice: Number(c.newWholesalePrice),
@@ -715,11 +712,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                       </div>
                       <div className="text-[10px] text-[#7A6855] font-semibold mt-0.5">
                         الرصيد: {item.stock}{" "}
-                        {item.baseUnit === "kg"
-                          ? "كجم"
-                          : item.baseUnit === "liter"
-                            ? "لتر"
-                            : "قطعة"}{" "}
+                        {displayUnit(item.baseUnit)}{" "}
                         • آخر سعر: {item.lastPurchasePrice} ج
                       </div>
                     </div>
@@ -817,11 +810,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                   const newWac = movingAverageCost(item.stock,item.costPrice,quantity,purchasePrice);
 
                   const unitArabic =
-                    item.baseUnit === "kg"
-                      ? "كجم"
-                      : item.baseUnit === "liter"
-                        ? "لتر"
-                        : "قطعة";
+                    displayUnit(item.baseUnit);
 
                   return (
                     <div

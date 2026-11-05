@@ -1,3 +1,4 @@
+import {unitLabel as displayUnit} from '../lib/units';
 import React,{useState,useMemo} from 'react';
 import {FolderSync} from 'lucide-react';
 import type {ImportJob} from '../lib/importJobs';
@@ -51,7 +52,7 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
    {type==='financial'?<>
     <p className="operation-note">مبيعات اليوم تُقرأ تلقائيًا من قيمة Begun في ملف المبيعات.</p>
     {revenue===undefined?<p role="alert">لم يتأكد وجود قيمة Begun واحدة صحيحة لنفس يوم العمل؛ أعد معالجة الملف.</p>:<p className="text-lg font-bold">مبيعات اليوم — Begun: {revenue.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2})} ج.م</p>}
-   </>:<><p>{parsed.length} صف أصناف؛ {parsed.filter(r=>r.error).length} تحتاج تصحيحًا.</p><p className="operation-note">اقتراحات تشابه الاسم للمساعدة فقط. اختيار الصنف ووحدة الكمية يحتاج تأكيدك؛ الكميات والأسعار الأصلية تظل تحت التحقق.</p><RecordPagination {...matchPage}/>{matchPage.visible.map((r,n)=>{const i=matchPage.page*matchPage.pageSize+n,suggestions=preview.suggestions?.find(s=>s.row===i)?.candidates??[];return <article key={i} className="record-card"><p>{r.rawName||r.rawCode}: {r.quantity} {r.unitHint}</p><p>{r.matchedItem?.name} {r.error}</p>{(r.error||choices[i])&&<CashierRowReview index={i} choice={choices[i]} items={items} suggestions={suggestions} busy={busy} onChange={change=>choose(i,change)}/>}</article>;})}</>}
+   </>:<><p>{parsed.length} صف أصناف؛ {parsed.filter(r=>r.error).length} تحتاج تصحيحًا.</p><p className="operation-note">اقتراحات تشابه الاسم للمساعدة فقط. اختيار الصنف ووحدة الكمية يحتاج تأكيدك؛ الكميات والأسعار الأصلية تظل تحت التحقق.</p><RecordPagination {...matchPage}/>{matchPage.visible.map((r,n)=>{const i=matchPage.page*matchPage.pageSize+n,suggestions=preview.suggestions?.find(s=>s.row===i)?.candidates??[];return <article key={i} className="record-card"><p>{r.rawName||r.rawCode}: {r.quantity} {displayUnit(r.unitHint)}</p><p>{r.matchedItem?.name} {r.error}</p>{(r.error||choices[i])&&<CashierRowReview index={i} choice={choices[i]} items={items} suggestions={suggestions} busy={busy} onChange={change=>choose(i,change)}/>}</article>;})}</>}
    <button disabled={busy||(type==='financial'&&revenue===undefined)} onClick={()=>void act(attach)} className="bg-[#1E1612] text-white rounded-xl p-3">حفظ التقرير لهذا اليوم</button>
   </section>}
   {error&&<p role="alert" className="text-red-700">{error}</p>}

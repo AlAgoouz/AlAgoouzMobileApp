@@ -11,7 +11,7 @@ import xlsxwriter
 
 D=pl.Decimal(30,6)
 categories={'raw_bean':'بن خام','raw_spice':'منتج مباشر','manufactured_blend':'توليفات','direct_product':'منتج مباشر','drink_recipe':'مشروبات لها وصفة','direct_drink':'مشروبات بيع مباشر','seasoning_recipe':'تحويجات','snack':'سناكس'}
-units={'kg':'كيلو','gram':'جرام','piece':'قطعة','liter':'لتر','ml':'مل'}
+units={'kg':'كيلو','gram':'جرام','piece':'قطعة','count':'عدد','liter':'لتر','ml':'مل'}
 channels={'wholesale':'جملة','retail':'بيع المحل السابق','cashier_sync':'يوم الكاشير'}
 money_adapter=TypeAdapter(Annotated[Decimal,Field(allow_inf_nan=False,max_digits=24,decimal_places=6)])
 text_adapter=TypeAdapter(Annotated[str,Field(max_length=2000)])

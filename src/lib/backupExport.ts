@@ -1,3 +1,4 @@
+import {unitLabel as displayUnit} from './units';
 import type {
   InventoryItem,
   SalesInvoice,
@@ -51,7 +52,7 @@ export async function exportFullStoreExcel(
       الصنف: i.name,
       الرصيد: i.stock,
       الوحدة:
-        i.baseUnit === 'kg' ? 'كجم' : i.baseUnit === 'liter' ? 'لتر' : 'قطعة',
+        displayUnit(i.baseUnit),
       التكلفة: i.costPrice,
       'سعر القطاعي': i.retailPrice,
       'سعر الجملة': i.wholesalePrice,

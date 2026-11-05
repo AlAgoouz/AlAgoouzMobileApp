@@ -12,6 +12,6 @@ export function CashierRowReview({index,choice,items,suggestions,busy,onChange}:
   <label>بحث لصنف الصف {index+1}<input className="operation-input" maxLength={150} disabled={busy} value={query} onChange={e=>setQuery(e.target.value)} placeholder="اسم الصنف أو الكود"/></label>
   <label>مطابقة الصف {index+1}<select disabled={busy} className="operation-input" value={choice?.itemId??''} onChange={e=>onChange({itemId:e.target.value,unit:''})}><option value="">اختر الصنف لتأكيد المطابقة</option>{options.map(item=><option value={item.id} key={item.id}>{item.name} — {item.code}</option>)}</select></label>
   <p className="text-xs">معروض حتى 30 نتيجة؛ اكتب الاسم أو الكود للوصول لباقي الأصناف.</p>
-  <label>وحدة الصف {index+1}<select disabled={busy} className="operation-input" value={choice?.unit??''} onChange={e=>onChange({unit:e.target.value as CashierReview[number]['unit']})}><option value="">اختر وحدة الكمية الموجودة بالملف</option>{[['kg','كيلو'],['gram','جرام'],['piece','قطعة / كوب'],['liter','لتر'],['ml','مل']].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+  <label>وحدة الصف {index+1}<select disabled={busy} className="operation-input" value={choice?.unit??''} onChange={e=>onChange({unit:e.target.value as CashierReview[number]['unit']})}><option value="">اختر وحدة الكمية الموجودة بالملف</option>{[['kg','كيلو'],['gram','جرام'],['piece','قطعة / كوب'],['count','عدد'],['liter','لتر'],['ml','مل']].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
  </div>;
 }

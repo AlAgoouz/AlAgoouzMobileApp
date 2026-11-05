@@ -22,6 +22,12 @@ def fixture():
 
 
 class ReportTests(unittest.TestCase):
+    def test_count_unit_is_preserved_in_inventory_excel(self):
+        source, summary = fixture()
+        source['items'][0]['baseUnit']='count'
+        book=load_workbook(io.BytesIO(workbook_bytes(prepare_report(source,summary,'2026-11-01','2026-11-30'))))
+        self.assertEqual(book['المخزون الحالي']['D2'].value,'عدد')
+
     def test_opening_cash_is_exported_separately_without_changing_profit(self):
         source,summary=fixture()
         source['financial_openings']=[dict(id='opening',date='2026-11-01',account='treasury',amount=Decimal('1234.50'))]

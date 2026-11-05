@@ -4,7 +4,7 @@ export interface ParsedCashierRow {
   rawName: string;
   rawCode?: string;
   quantity: number;
-  unitHint: 'kg' | 'gram' | 'piece' | 'liter' | 'ml';
+  unitHint: 'kg' | 'gram' | 'piece' | 'count' | 'liter' | 'ml';
   totalPrice?: number;
   unitPrice?: number;
   matchedItem?: InventoryItem;
@@ -181,8 +181,9 @@ export function mapRawCashierRows(
         quantity *= pack;
       } else if (/^(مل|مليلتر|ml)$/.test(unit)) unitHint = 'ml';
       else if (/^(لتر|liter|litre|l)$/.test(unit)) unitHint = 'liter';
+      else if (/^(عدد|count)$/.test(unit)) unitHint = 'count';
       else if (
-        /^(قطعة|قطعه|كوب|عدد|عبوة|عبوه|piece|pcs|cup|bottle)$/.test(unit)
+        /^(قطعة|قطعه|كوب|عبوة|عبوه|piece|pcs|cup|bottle)$/.test(unit)
       )
         unitHint = 'piece';
       else if (unit) error = `وحدة غير معروفة: ${unit}`;
@@ -190,7 +191,7 @@ export function mapRawCashierRows(
         error = 'حدد وحدة الوزن صراحةً لتجنب خصم كمية خاطئة';
       if (
         matchedItem &&
-        ((matchedItem.baseUnit === 'piece' && unitHint !== 'piece') ||
+        ((['piece','count'].includes(matchedItem.baseUnit) && !['piece','count'].includes(unitHint)) ||
           (matchedItem.baseUnit === 'kg' &&
             !['kg', 'gram'].includes(unitHint)) ||
           (matchedItem.baseUnit === 'liter' &&

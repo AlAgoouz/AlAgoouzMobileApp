@@ -220,6 +220,14 @@ function sale(quantity=2,item=bean):SalesInvoice{
   return {id:'sale',invoiceNumber:'SALE-1',date:businessDate(),saleType:'retail',customerName:'Shop',items:[{itemId:item.id,itemName:item.name,category:item.category,quantity,unitLabel:item.baseUnit,normalizedQtyInBaseUnit:quantity,unitPrice:2,unitCost:item.costPrice,totalPrice:total,totalCost:cost,profit:Number((total-cost).toFixed(2))}],subtotal:total,discount:0,totalAmount:total,totalCost:cost,netProfit:Number((total-cost).toFixed(2)),paidAmount:total,remainingAmount:0,paymentMethod:'نقدي',partnerName:'Owner'};
 }
 function stockState():StoreState{return {...state,items:[{...bean}]};}
+it.skipIf(!active)('accepts count products and one-to-one count recipes while rejecting cross-dimension units',()=>{
+ const counted:InventoryItem={...bean,id:'counted',code:'C1',category:'direct_product',baseUnit:'count',hasRecipe:false,recipe:[]};
+ expect(()=>save(toCloud({...state,items:[counted]}))).not.toThrow();
+ expect(sql("select bon_erp_private.base_quantity(3,'count','count'),bon_erp_private.base_quantity(3,'piece','count'),bon_erp_private.base_quantity(3,'count','piece'),bon_erp_private.base_quantity(3,'kg','count') is null,bon_erp_private.base_quantity(3,'count','liter') is null")).toBe('3|3|3|t|t');
+ const drink:InventoryItem={...bean,id:'drink-count',code:'DC1',category:'drink_recipe',baseUnit:'piece',stock:0,openingStock:0,hasRecipe:true,recipeYield:1,costPrice:2,recipe:[{ingredientId:counted.id,ingredientName:counted.name,quantity:2,unit:'count'}]};
+ expect(()=>save(toCloud({...state,items:[counted,drink]}))).not.toThrow();
+ expect(()=>save(toCloud({...state,items:[counted,{...drink,recipe:[{...drink.recipe![0],unit:'gram'}]}]}))).toThrow('INVALID_RECIPE_UNIT');
+});
 function sold(store:StoreState,invoice:SalesInvoice):StoreState{return {...store,items:deductInventory(invoice.items,store.items),salesInvoices:[invoice,...store.salesInvoices],customers:store.customers.map(c=>c.id===invoice.customerId?{...c,balance:c.balance+invoice.remainingAmount,totalSales:c.totalSales+invoice.totalAmount,invoicesCount:c.invoicesCount+1,lastPurchaseDate:invoice.date}:c)};}
 function workerState():StoreState{return {...state,employees:[{...INITIAL_EMPLOYEES[0],id:'worker',salaryType:'شهري',baseMonthlySalary:1000,payrollPeriod:currentPayrollPeriod(),openingPayable:0,workedDaysThisMonth:0,totalAdvances:0,totalDeductions:0,totalPaidOut:0,totalBonuses:0}]};}
 
@@ -316,6 +324,15 @@ function cashierPair(){
 }
 it.skipIf(!active)('accepts pending paired cashier reports without posting and permits verified cashier stock shortages',()=>{
  const {before,pending,posted}=cashierPair();seed(before);accept(pending);accept(posted);expect(posted.items[0].stock).toBe(-0.5);
+});
+it.skipIf(!active)('posts count cashier quantities without weight scaling and accepts compatible piece labels',()=>{
+ const counted:InventoryItem={...bean,id:'counted',code:'C1',category:'direct_product',baseUnit:'count',hasRecipe:false,recipe:[]};
+ for(const unit of ['count','piece']){
+  const before={...state,items:[counted]};seed(before);
+  const money=attachCashierReport(before,businessDate(),{type:'financial',file:{fileName:'financial.xlsx',sha256:'c'.repeat(64),uploadedAt:new Date().toISOString()},totalRevenue:30});
+  const pending=attachCashierReport(money,businessDate(),{type:'items',file:{fileName:'items.xlsx',sha256:'d'.repeat(64),uploadedAt:new Date().toISOString()},lines:[{itemId:counted.id,quantity:3,unitLabel:unit,normalizedQtyInBaseUnit:3}]});
+  const posted=approveCashierDay(pending,pending.cashierDays[0].id,'Owner');accept(posted);expect(posted.items[0].stock).toBe(7);expect(posted.cashierDays[0].totalCost).toBe(3);
+ }
 });
 it.skipIf(!active)('rejects forged cashier consumption, cost, shortage evidence and changed approved reports',()=>{
  const {before,posted}=cashierPair();seed(before);

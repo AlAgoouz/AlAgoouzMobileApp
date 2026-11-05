@@ -1,3 +1,4 @@
+import {unitLabel as displayUnit} from '../lib/units';
 import {Tag as HeaderTag,Package as HeaderPackage,TriangleAlert as HeaderTriangleAlert,Users as HeaderUsers,ReceiptText as HeaderReceiptText,DatabaseBackup as HeaderDatabaseBackup,Wallet as HeaderWallet,Cloud as HeaderCloud,CircleUser as HeaderCircleUser} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
 import {Modal} from './Modal';
@@ -524,11 +525,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               const isLow =
                 isStockItem(item) && item.stock <= item.minStock;
               const unitLabel =
-                item.baseUnit === "kg"
-                  ? "كجم"
-                  : item.baseUnit === "liter"
-                    ? "لتر"
-                    : "قطعة";
+                displayUnit(item.baseUnit);
 
               return (
                 <div
@@ -666,7 +663,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               </div>
               <div>
                 <label className="text-xs font-bold text-[#7A6855] block mb-1">
-                  الرصيد ({editingItem.baseUnit === "kg" ? "كجم" : "عدد"})
+                  الرصيد ({displayUnit(editingItem.baseUnit)})
                 </label>
                 <input
                   type="number"
@@ -788,7 +785,7 @@ export const ShortagesScreen: React.FC<{
                   </span>
                   <span className="text-xs font-black bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
                     المتبقي: {item.stock}{" "}
-                    {item.baseUnit === "kg" ? "كجم" : "وحدة"}
+                    {displayUnit(item.baseUnit)}
                   </span>
                 </div>
                 <div className="text-xs text-[#7A6855]">
