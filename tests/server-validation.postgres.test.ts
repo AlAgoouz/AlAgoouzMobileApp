@@ -9,7 +9,7 @@ import {adjustCatalogItem} from '../src/lib/catalogAdjustments';
 import {businessDate} from '../src/lib/dates';
 import {receiveStock} from '../src/lib/costing';
 import {recordFinancialOpening} from '../src/lib/financialOpening';
-import {completeCatalogNameDraft} from '../src/lib/catalogNameDrafts';
+import {completeCatalogNameDraft,changeCatalogNameDraft} from '../src/lib/catalogNameDrafts';
 import {attachCashierReport,approveCashierDay} from '../src/lib/cashierDays';
 import {salesForReports} from '../src/lib/cashierDays';
 import {buildReport,reportRange,reportPoints} from '../src/lib/reporting';
@@ -140,6 +140,15 @@ function save(value:any){return sql(`begin;set local request.jwt.claim.sub='${ow
 const accept=(store:StoreState)=>expect(save(toCloud(store))).toContain('"version": 1');
 const reject=(store:StoreState,reason:string)=>{expect(()=>save(toCloud(store))).toThrow(reason);expect(sql("select version from public.bon_elagouz_store where id='main_store'")).toBe('0');};
 const nameDraft={id:'legacy-draft',name:'Imported name',sourceRepository:'AlAgoouz/Erp-AlAgoouz',sourceCommit:'a'.repeat(40),sourcePath:'source.ts',importedAt:'2026-11-05T00:00:00.000Z'};
+it.skipIf(!active)('authorizes catalog name rename and deletion without changing inventory or accounting',()=>{
+ seed(stockState());const pending={...stockState(),catalogNameDrafts:[nameDraft]};
+ sql(`begin;set local request.jwt.claim.sub='${owner}';update public.bon_elagouz_store set catalog_name_drafts=${literal(pending.catalogNameDrafts)};commit;`);
+ const renamed=changeCatalogNameDraft(pending,nameDraft.id,'Corrected name'),removed=changeCatalogNameDraft(pending,nameDraft.id,null);accept(renamed);accept(removed);
+ const employee='22222222-2222-4222-8222-222222220097';userAccessFixture(employee,{view:true,expenses:true});
+ for(const next of [renamed,removed])expect(()=>asUser(employee,`select public.bon_erp_save_store(0,${literal(toCloud(next))},'${crypto.randomUUID()}')`)).toThrow('USER_PERMISSION_DENIED');
+ const result=readJson(`select public.bon_erp_save_store(0,${literal(toCloud(removed))},'${crypto.randomUUID()}');select jsonb_build_object('drafts',catalog_name_drafts,'items',items,'sales',sales_invoices,'expenses',expenses,'partners',partners) from public.bon_elagouz_store`);
+ expect(result).toEqual({drafts:[],items:pending.items,sales:pending.salesInvoices,expenses:pending.expenses,partners:pending.partners});
+});
 it.skipIf(!active)('keeps pending names separate from accounting and enforces catalog access on the server',()=>{
  seed(stockState());const next={...stockState(),catalogNameDrafts:[nameDraft]};accept(next);
  const employee='22222222-2222-4222-8222-222222220095';userAccessFixture(employee,{view:true,expenses:true});

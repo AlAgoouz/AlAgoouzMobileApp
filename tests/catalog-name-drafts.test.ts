@@ -2,13 +2,30 @@ import {it,expect,vi} from 'vitest';
 import fs from 'node:fs';
 import {extractNames} from '../scripts/catalog/extract-legacy-names.mjs';
 import {emptyStore,validateStore,createBackup,parseBackup} from '../src/lib/storeState';
-import {completeCatalogNameDraft,saveCatalogNameDraft} from '../src/lib/catalogNameDrafts';
+import {completeCatalogNameDraft,saveCatalogNameDraft,changeCatalogNameDraft,saveCatalogNameDraftChange} from '../src/lib/catalogNameDrafts';
 import {StoreEngine} from '../src/lib/storeEngine';
 import {assertUserChanges} from '../src/lib/userAccess';
 import type {CatalogNameDraft,InventoryItem} from '../src/types/erp';
 const draft:CatalogNameDraft={id:'legacy-name',name:'بن برازيلى ريو وسط',sourceRepository:'AlAgoouz/Erp-AlAgoouz',sourceCommit:'53102139a375b3354dafdc7293c68a815b083209',sourcePath:'backend/src/scripts/preciseProductImageCurator.ts',importedAt:'2026-11-05T00:00:00.000Z'};
 const staged={...emptyStore,catalogNameDrafts:[draft]};
 const item:Omit<InventoryItem,'id'>={name:draft.name,code:'IT-1',category:'raw_bean',baseUnit:'kg',stock:0,minStock:0,costPrice:25,lastPurchasePrice:25,retailPrice:40,wholesalePrice:0,canSellDirectly:true,hasRecipe:false,recipe:[],supplierPrices:[]};
+it('renames and removes only the pending name while retaining source evidence and accounting',()=>{
+ const renamed=changeCatalogNameDraft(staged,draft.id,'بن برازيلي ريو وسط',{name:'Owner',id:'owner'});
+ expect(renamed.catalogNameDrafts[0]).toEqual({...draft,name:'بن برازيلي ريو وسط'});
+ expect(renamed.auditLogs[0].description).toContain(draft.name);
+ const removed=changeCatalogNameDraft(renamed,draft.id,null);
+ expect(removed.catalogNameDrafts).toEqual([]);expect({...removed,auditLogs:[]}).toEqual(emptyStore);
+ expect(()=>changeCatalogNameDraft(staged,draft.id,'   ')).toThrow('مطلوب');
+ expect(()=>changeCatalogNameDraft({...staged,catalogNameDrafts:[draft,{...draft,id:'other',name:'Other'}]},draft.id,'Other')).toThrow('مكررة');
+ expect(()=>changeCatalogNameDraft({...staged,items:[{...item,id:'active',name:'Existing'}]},draft.id,'Existing')).toThrow('بنفس الاسم');
+});
+it.each(['rename','delete'])('retries an uncertain %s without a second mutation or audit event',async kind=>{
+ const save=vi.fn().mockRejectedValueOnce(Error('network')).mockResolvedValue(1),engine=new StoreEngine({load:async()=>({state:staged,version:0}),save});await engine.load();
+ const name=kind==='rename'?'Corrected name':null;
+ await expect(saveCatalogNameDraftChange(engine,draft.id,name)).rejects.toThrow('network');await saveCatalogNameDraftChange(engine,draft.id,name);
+ expect(save.mock.calls[0][2]).toBe(save.mock.calls[1][2]);expect(engine.state.auditLogs).toHaveLength(1);expect(engine.hasPending).toBe(false);
+ expect(engine.state.catalogNameDrafts).toHaveLength(kind==='rename'?1:0);
+});
 it('extracts explicit property names without executing untrusted source code',()=>{
  expect(extractNames("const EXACT_PRODUCT_IMAGES={'عصير فراولة ':'url','عصير فراولة':'url',بن:'url'}")).toEqual({rawCount:3,duplicateCount:1,names:['عصير فراولة','بن']});
  expect(()=>extractNames("const EXACT_PRODUCT_IMAGES={evil:runCode()}")).toThrow();

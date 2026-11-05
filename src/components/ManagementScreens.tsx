@@ -61,12 +61,14 @@ function allValidNumbers(values: string[]): boolean {
 // 0. شاشة المنتجات والتسعير (ProductsCatalogScreen) - الأساس الذي تعتمد عليه الدورة التشغيلية كلها
 // ============================================================================
 interface ProductsCatalogScreenProps {
+  canManage?:boolean;
   nameDrafts?:CatalogNameDraft[];
+  onChangeNameDraft?:(id:string,name:string|null)=>Promise<void>;
   onCompleteNameDraft?:(id:string,item:Omit<InventoryItem,'id'>)=>Promise<void>;
   items: InventoryItem[];
   onAddNewItem: (item: Omit<InventoryItem, "id">) => void|boolean;
   onUpdateItem: (id: string, patch: Partial<InventoryItem>) => void | boolean;
-  onDeleteItem: (id: string) => void;
+  onDeleteItem: (id: string) => void|boolean|Promise<void|boolean>;
   onNavigateToProduction: () => void;
   onNavigateToInventory: () => void;
   onNavigateToPurchase: () => void;
@@ -74,7 +76,7 @@ interface ProductsCatalogScreenProps {
 }
 
 export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
-  nameDrafts=[],onCompleteNameDraft,
+  nameDrafts=[],onCompleteNameDraft,onChangeNameDraft,canManage=true,
   items,
   onAddNewItem,
   onUpdateItem,
@@ -91,6 +93,8 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
     null,
   );
   const [showAddModal, setShowAddModal] = useState(false);
+  const [deleting,setDeleting]=useState<InventoryItem|null>(null),[deleteBusy,setDeleteBusy]=useState(false),[deleteError,setDeleteError]=useState('');
+  const confirmDelete=async()=>{if(!deleting||deleteBusy)return;setDeleteBusy(true);setDeleteError('');try{if(await onDeleteItem(deleting.id)===false)throw Error('تعذر حذف المنتج؛ راجع ارتباطه بالحركات والوصفات');setDeleting(null);}catch(e){setDeleteError(e instanceof Error?e.message:'تعذر تأكيد الحذف');}finally{setDeleteBusy(false);}};
   // قيم نصية مؤقتة لحقول الأرقام حتى لا يفقد المستخدم ما يكتبه عند الإدخال الوسيط
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
   const [editError, setEditError] = useState("");
@@ -199,7 +203,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
         </button></OperationHeader>
 
       <div className="p-3.5 space-y-3.5">
-        <CatalogNameDraftPanel drafts={nameDrafts} items={items} onComplete={onCompleteNameDraft}/>
+        <CatalogNameDraftPanel drafts={nameDrafts} items={items} onComplete={onCompleteNameDraft} onChange={onChangeNameDraft}/>
         {/* كارت الملخص التوضيحي للدورة التشغيلية وزر إضافة منتج */}
         <div className="bg-gradient-to-br from-[#1E1612] via-[#2A1F1A] to-[#17110E] rounded-3xl p-4 text-[#FAF8F4] border border-[#C59B27]/60 shadow-xl space-y-3">
           <div className="flex items-center justify-between">
@@ -340,7 +344,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                   className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm space-y-2.5 transition"
                 >
                   {/* السطر العلوي: الكود، التصنيف، الاسم، وأزرار التعديل والحذف */}
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center flex-wrap gap-1.5 mb-1">
                         <span className="text-[10px] font-black bg-[#FAF8F4] text-[#7A6855] px-2 py-0.5 rounded border border-[#E6DEC8]">
@@ -362,27 +366,23 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
                       </h3>
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    {canManage&&<div className="grid grid-cols-2 gap-2 shrink-0 w-full sm:w-auto">
                       <button
                         onClick={() => openEditItem(item)}
-                        className="text-xs font-extrabold text-[#1E1612] bg-[#FDF8EB] border border-[#C59B27] px-2.5 py-1 rounded-xl hover:bg-[#F5EBD0] transition"
+                        aria-label={`تعديل المنتج ${item.name}`}
+                        className="min-h-[44px] text-xs font-extrabold text-[#1E1612] bg-[#FDF8EB] border border-[#C59B27] px-3 py-2 rounded-xl hover:bg-[#F5EBD0] transition"
                       >
-                        تعديل السعر/البيانات
+                        تعديل
                       </button>
                       <button
-                        onClick={() => {
-                          if (
-                            window.confirm(`هل تريد حذف المنتج (${item.name})؟`)
-                          ) {
-                            onDeleteItem(item.id);
-                          }
-                        }}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-xl border border-red-100"
+                        onClick={() => {setDeleting(item);setDeleteError('');}}
+                        aria-label={`حذف المنتج ${item.name}`}
+                        className="min-h-[44px] px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 rounded-xl border border-red-100 inline-flex items-center justify-center gap-2"
                         title="حذف المنتج"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />حذف
                       </button>
-                    </div>
+                    </div>}
                   </div>
 
                   {/* شبكة الأسعار والربحية */}
@@ -463,6 +463,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
       </div>
 
       {/* نافذة تعريف وإضافة منتج جديد */}
+      {deleting&&<Modal title="حذف المنتج" description={`هل تريد حذف (${deleting.name})؟ لا يمكن حذف منتج مرتبط بفواتير أو وصفات أو حركات مخزون.`} busy={deleteBusy} onClose={()=>setDeleting(null)} footer={<div className="record-actions"><button disabled={deleteBusy} onClick={()=>setDeleting(null)}>إلغاء</button><button disabled={deleteBusy} className="text-red-700" onClick={()=>void confirmDelete()}>{deleteBusy?'جارٍ تأكيد الحذف…':'تأكيد حذف المنتج'}</button></div>}>{deleteError&&<p role="alert">{deleteError}</p>}</Modal>}
       {showAddModal && <ItemDefinitionModal items={items} onSave={onAddNewItem} onClose={()=>setShowAddModal(false)}/>}
 
       {/* نافذة تعديل بيانات وتسعير المنتج */}

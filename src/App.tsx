@@ -1,6 +1,6 @@
 import {useDashboardRead} from './hooks/useDashboardRead';
 import {saveFinancialOpening} from './lib/financialOpening';
-import {saveCatalogNameDraft} from './lib/catalogNameDrafts';
+import {saveCatalogNameDraft,saveCatalogNameDraftChange} from './lib/catalogNameDrafts';
 import {PagedSalesHistory} from './components/PagedSalesHistory';
 import {ScreenLoading} from './components/ScreenLoading';
 import {Modal} from './components/Modal';
@@ -1132,7 +1132,9 @@ export default function App() {
 
         {activeScreen === "products" && (
           <ProductsCatalogScreen
+            canManage={canWrite(member,'catalog')}
             nameDrafts={cloud.state.catalogNameDrafts}
+            onChangeNameDraft={canWrite(member,'catalog')?(id,name)=>saveCatalogNameDraftChange(engine,id,name,{name:currentPartner.name,id:member?.userId}):undefined}
             onCompleteNameDraft={canWrite(member,'catalog')?(id,item)=>saveCatalogNameDraft(engine,id,item,{name:currentPartner.name,id:member?.userId}):undefined}
             items={items}
             onAddNewItem={(newItem) => {
@@ -1187,16 +1189,17 @@ export default function App() {
                 );
               });
             }}
-            onDeleteItem={(id) => {
-              safeAction(() => {
+            onDeleteItem={async(id) => {
+              if(engine.hasPending)await confirmSave();
+              if(!engine.state.items.some(i=>i.id===id))return;
+              if(!safeAction(() => {
                 if (!canDeleteCatalogItem(engine.state,id)) {
-                  showToast("لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.");
-                  return;
+                  throw Error("لا يمكن حذف صنف مرتبط بوصفة أو فاتورة أو حركة مخزون.");
                 }
                 setItems((prev) => prev.filter((i) => i.id !== id));
                 addAuditLog("تعديل وصفة/صنف", `حذف منتج من الكتالوج`);
-                showToast("🗑️ تم حذف المنتج بنجاح!");
-              });
+              }))throw Error('تعذر حذف المنتج؛ راجع حالة الحفظ أو التنبيه');
+              await confirmSave();showToast("تم حذف المنتج بنجاح");
             }}
             onNavigateToProduction={() => setActiveScreen("production")}
             onNavigateToInventory={() => setActiveScreen("inventory")}
