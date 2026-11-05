@@ -101,6 +101,23 @@ export async function verifyDesign(){
       await limit(page,title);
       assert.equal(await page.locator('.operation-header').count(),1,'Every internal section must share one header');
       assert.equal(await page.locator('.operation-header h1').count(),1);
+      if(title==='المنتجات والتسعير'){
+        const register=page.getByRole('list',{name:'سجل المنتجات الجاهزة'});
+        assert.equal(await register.getByRole('listitem').count(),50,'Catalog rendering must remain bounded');
+        await page.getByRole('combobox',{name:'عدد النتائج في الصفحة'}).selectOption('25');
+        assert.equal(await register.getByRole('listitem').count(),25);
+        await page.getByRole('combobox',{name:'انتقل إلى صفحة المنتجات الجاهزة'}).selectOption('3');
+        await page.getByRole('searchbox',{name:'البحث في المنتجات الجاهزة'}).fill('P99');
+        assert.equal(await register.getByRole('listitem').count(),1,'Search must reset pagination and cover the whole catalog');
+        await page.getByRole('searchbox',{name:'البحث في المنتجات الجاهزة'}).fill('');
+        await page.getByRole('combobox',{name:'عدد النتائج في الصفحة'}).selectOption('50');
+        await register.getByRole('button',{name:'تفاصيل',exact:true}).first().click();
+        for(const width of [320,360,430,768,1024,1440]){
+          await page.setViewportSize({width,height:900});await limit(page,`catalog-register-${width}`);
+          await page.screenshot({path:`design-catalog-register-${width}-mobile.png`,fullPage:false});
+        }
+        await page.setViewportSize({width:360,height:800});
+      }
       if(title==='فواتير البيع'){
         await page.getByRole('button',{name:'السجل السابق',exact:true}).click();
         await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).first().waitFor();

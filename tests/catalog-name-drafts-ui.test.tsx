@@ -38,8 +38,8 @@ it('confirms entered details and retains them when the server rejects activation
  fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف والوصفة'}));await waitFor(()=>expect(screen.getByRole('alert').textContent).toBe('لم يتأكد الحفظ'));
  expect(save).toHaveBeenCalledWith('legacy',expect.objectContaining({name:'بن برازيلى',category:'raw_bean',baseUnit:'kg',stock:0,costPrice:25,retailPrice:40}));expect(screen.getByRole('dialog')).toBeTruthy();
 });
-it('bounds the queue to twelve rows and allows readonly searching',()=>{
+it('bounds the register to fifty rows and allows readonly searching',()=>{
  render(<CatalogNameDraftPanel drafts={Array.from({length:81},(_,i)=>({...drafts[0],id:'draft'+i,name:'Name '+i}))} items={[]}/>);
- expect(screen.getAllByRole('listitem')).toHaveLength(12);expect(screen.queryByRole('button',{name:/استكمال/})).toBeNull();
+ expect(screen.getAllByRole('listitem')).toHaveLength(50);expect(screen.queryByRole('button',{name:/استكمال/})).toBeNull();
  fireEvent.change(screen.getByLabelText('بحث في الأسماء المستوردة'),{target:{value:'Name 80'}});expect(screen.getAllByRole('listitem')).toHaveLength(1);
 });
