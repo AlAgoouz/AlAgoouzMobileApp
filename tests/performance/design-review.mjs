@@ -112,7 +112,9 @@ export async function verifyDesign(){
         await page.getByLabel('ملف التقرير',{exact:true}).setInputFiles({name:'synthetic-2030-wrong-filename.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:XLSX.write(book,{type:'buffer',bookType:'xlsx'})});
         await page.getByText('يوم البيع 2026-11-01 مقروء من داخل التقرير؛ تاريخ الطباعة واسم الملف لا يغيّرانه.',{exact:true}).waitFor();
         assert.equal(await page.getByLabel('يوم العمل',{exact:true}).inputValue(),'2026-11-01');
-        assert.equal(await page.getByLabel('نوع التقرير',{exact:true}).inputValue(),'items');
+        // The disabled native select's label can include its option text in
+        // Chromium; scope the assertion to the upload form's unique select.
+        assert.equal(await page.locator('section[aria-label="رفع ومعالجة التقارير"] form select').inputValue(),'items');
         assert.equal(await page.getByLabel('يوم العمل',{exact:true}).evaluate(e=>e.readOnly),true);
         await limit(page,'uws-detected-day');await page.screenshot({path:'design-uws-detected-day-mobile.png',fullPage:false});
       }
