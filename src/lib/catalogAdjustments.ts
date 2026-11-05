@@ -19,6 +19,9 @@ export function adjustCatalogItem(state:StoreState,id:string,patch:Partial<Inven
   const before=state.items.find((item)=>item.id===id);
   if(!before)throw new Error('الصنف لم يعد موجودًا؛ حدّث الشاشة');
   const next={...before,...patch,id:before.id,openingStock:before.openingStock};
+  next.code=next.code.trim();
+  if(!next.code)throw Error('كود المنتج مطلوب');
+  if(state.items.some(item=>item.id!==id&&(item.code.trim().toUpperCase()===next.code.toUpperCase()||item.barcode===next.code)))throw Error('كود المنتج مستخدم لصنف آخر');
   if(before.costingVersion===2&&next.costPrice!==before.costPrice)throw Error('التكلفة تتحدث من فواتير الشراء أو الإنتاج بمتوسط متحرك؛ لا تعدلها يدويًا بعد تسجيل الدفعات');
   if(requiresRecipe(next.category)&&(!next.hasRecipe||!next.recipe?.length))throw Error('هذا النوع يحتاج وصفة؛ أضف صنفًا بوصفته أو أكمل الوصفة من قسم الوصفات');
   if(next.stock<0&&next.stock!==before.stock)throw Error('الرصيد السالب ينشأ من تقرير الكاشير فقط؛ الجرد الفعلي لا يقل عن صفر');

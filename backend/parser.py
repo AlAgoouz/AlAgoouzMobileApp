@@ -147,24 +147,29 @@ def parse_report(data: bytes, filename: str, kind: str, catalog=None, expected_d
         return {'rows':[financial],'columns':list(financial),'rowCount':1,'headerRow':financial['sourceRow'],'sha256':hashlib.sha256(data).hexdigest(),'warnings':[],'matches':[]}
     if len(matrix) < 2:
         raise InvalidReport("EMPTY_REPORT")
+    from uws_items import is_uws_items, parse_uws_items
+    uws=parse_uws_items(matrix,row_numbers,expected_date,InvalidReport,localized_number) if kind=='items' and is_uws_items(matrix) else None
     header_index = 0
-    if kind == "items":
-        for index, row in enumerate(matrix[:20]):
-            labels = {normalize(value) for value in row}
-            if labels & ALIASES["quantity"] and labels & (ALIASES["code"] | ALIASES["name"]):
-                header_index = index
-                break
-    columns = [str(v) if str(v) else f"column_{i + 1}" for i, v in enumerate(matrix[header_index])]
-    if any(len(c) > 120 for c in columns) or len({normalize(c) for c in columns}) != len(columns):
-        raise InvalidReport("AMBIGUOUS_COLUMNS")
-    rows = []
-    for values in matrix[header_index + 1:]:
-        if len(values) > len(columns):
-            raise InvalidReport("ROW_COLUMNS_MISMATCH")
-        rows.append({key: values[index] if index < len(values) else "" for index, key in enumerate(columns)})
+    if uws:
+        rows=uws['rows'];columns=['code','name','quantity','unit','total']
+    else:
+        if kind == "items":
+            for index, row in enumerate(matrix[:20]):
+                labels = {normalize(value) for value in row}
+                if labels & ALIASES["quantity"] and labels & (ALIASES["code"] | ALIASES["name"]):
+                    header_index = index
+                    break
+        columns = [str(v) if str(v) else f"column_{i + 1}" for i, v in enumerate(matrix[header_index])]
+        if any(len(c) > 120 for c in columns) or len({normalize(c) for c in columns}) != len(columns):
+            raise InvalidReport("AMBIGUOUS_COLUMNS")
+        rows = []
+        for values in matrix[header_index + 1:]:
+            if len(values) > len(columns):
+                raise InvalidReport("ROW_COLUMNS_MISMATCH")
+            rows.append({key: values[index] if index < len(values) else "" for index, key in enumerate(columns)})
     if not rows or len(rows) > MAX_ROWS:
         raise InvalidReport("REPORT_SIZE_LIMIT")
-    warnings, matches = [], []
+    warnings, matches = list(uws['warnings']) if uws else [], []
     if kind == "items" and catalog:
         code_column = next((c for c in columns if normalize(c) in ALIASES["code"]), None)
         name_column = next((c for c in columns if normalize(c) in ALIASES["name"]), None)
@@ -178,7 +183,7 @@ def parse_report(data: bytes, filename: str, kind: str, catalog=None, expected_d
             name = normalize(row.get(name_column, "")) if name_column else ""
             candidates = by_code.get(code, []) if code else by_name.get(name, [])
             quantity = localized_number(row.get(quantity_column, "")) if quantity_column else None
-            matches.append({"itemId": candidates[0] if len(candidates) == 1 else None, "quantity": quantity, "requiresReview": len(candidates) != 1 or quantity is None or Decimal(quantity) <= 0})
+            matches.append({"itemId": candidates[0] if len(candidates) == 1 else None, "quantity": quantity, "requiresReview": len(candidates) != 1 or quantity is None or Decimal(quantity) <= 0 or bool(row.get('sourceIssue'))})
         if any(m["requiresReview"] for m in matches):
             warnings.append("ITEMS_REQUIRE_REVIEW")
     if header_index:
@@ -186,6 +191,7 @@ def parse_report(data: bytes, filename: str, kind: str, catalog=None, expected_d
     if any(isinstance(value, str) and value.startswith("=") for row in rows for value in row.values()):
         warnings.append("FORMULA_TEXT_REQUIRES_REVIEW")
     result = {"rows": rows, "columns": columns, "rowCount": len(rows), "headerRow": header_index + 1, "sha256": hashlib.sha256(data).hexdigest(), "warnings": warnings, "matches": matches}
+    if uws: result.update({key:uws[key] for key in ['businessDate','sourceFormat','modifiers']})
     if kind == 'items' and catalog:
         from suggestions import suggest_rows
         result['suggestions'] = suggest_rows(rows,columns,catalog,ALIASES,normalize)

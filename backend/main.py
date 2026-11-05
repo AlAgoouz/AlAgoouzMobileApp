@@ -27,7 +27,7 @@ async def private_responses(request, call_next):
 
 @app.get("/api/health")
 async def health():
-    return {"service": "agouz-online-imports", "parserVersion": 1, "formats": ["csv", "xls", "xlsx"], "maxBytes": 10485760}
+    return {"service": "agouz-online-imports", "parserVersion": 2, "formats": ["csv", "xls", "xlsx"], "maxBytes": 10485760}
 
 
 @app.post("/api/imports/{job_id}/enqueue", status_code=202)

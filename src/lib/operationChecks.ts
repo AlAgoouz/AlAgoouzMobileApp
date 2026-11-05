@@ -33,6 +33,7 @@ export function itemEditPatch(
   const patch: Partial<InventoryItem> = {};
   for (const key of [
     "name",
+    "code",
     "category",
     "stock",
     "minStock",

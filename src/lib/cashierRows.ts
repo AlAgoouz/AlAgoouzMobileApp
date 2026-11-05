@@ -9,6 +9,8 @@ export interface ParsedCashierRow {
   unitPrice?: number;
   matchedItem?: InventoryItem;
   error?: string;
+  sourceFormat?: 'uws-items-v1';
+  saleCount?: number;
 }
 
 export function parseLocalizedNumber(value: unknown): number | undefined {
@@ -198,6 +200,13 @@ export function mapRawCashierRows(
             !['liter', 'ml'].includes(unitHint)))
       )
         error = 'الوحدة لا تطابق وحدة الصنف';
+      if(row.sourceFormat==='uws-items-v1'){
+        if(matchedItem&&matchedItem.code.trim()!==rawCode&&matchedItem.barcode!==rawCode)error='كود المنتج لا يطابق كود الكاشير حرفيًا؛ صحّحه في الكتالوج.';
+        if(!matchedItem)error=`كود الكاشير ${rawCode} غير مربوط بمنتج واحد؛ استكمل المنتج واضبط كوده في الكتالوج.`;
+        if(row.sourceIssue==='UWS_VARIANT_WEIGHTS_REQUIRED')error='وزن كل نوع بن غير محدد تحت AlAgoouz؛ يلزم تقرير تفصيلي يربط النوع بوزنه قبل الخصم.';
+        else if(row.sourceIssue==='UWS_SEASONING_WEIGHT_REQUIRED')error='مرات إضافة التحويجة لا تحدد وزنها؛ يلزم وزن البن المحوج أو تقرير تفصيلي قبل الخصم.';
+        else if(row.sourceIssue)error='التقرير يحتاج تفاصيل إضافية قبل خصم هذا الصنف.';
+      }
       return {
         rawName,
         rawCode,
@@ -207,6 +216,7 @@ export function mapRawCashierRows(
         unitPrice,
         matchedItem,
         error,
+        ...(row.sourceFormat==='uws-items-v1'?{sourceFormat:'uws-items-v1' as const,saleCount:Number(row.saleCount)}:{}),
       };
     });
 }
@@ -249,6 +259,9 @@ export function reviewedCashierRows(rows:Record<string,unknown>[],catalog:Invent
  const parsed=mapRawCashierRows(nonempty,catalog);
  return nonempty.map((row,index)=>{
   const base=parsed[index],choice=choices[index];
+    // Printed reports have authoritative codes and units. Correct the catalog,
+    // never reinterpret their quantities through a manual matching override.
+    if(base.sourceFormat==='uws-items-v1')return base;
   if(!choice)return base;
   const selected=catalog.find(item=>item.id===choice.itemId);
   if(!selected||!choice.unit)return {...base,matchedItem:undefined,error:'اختر الصنف ووحدة الكمية لتأكيد المطابقة'};

@@ -322,6 +322,10 @@ function cashierPair(){
   const pending=attachCashierReport(withMoney,businessDate(),{type:'items',file:{fileName:'items.xlsx',sha256:'b'.repeat(64),uploadedAt:new Date().toISOString()},lines:[{itemId:drink.id,quantity:5,unitLabel:'piece',normalizedQtyInBaseUnit:5}]});
   return {before,pending,posted:approveCashierDay(pending,pending.cashierDays[0].id,'Owner')};
 }
+it.skipIf(!active)('assigns a cashier code to an existing product without changing its recorded sales, stock or costs',()=>{
+ const {posted}=cashierPair();seed(posted);const changed=adjustCatalogItem(posted,bean.id,{code:'200018'},'Owner');
+ expect(changed.cashierDays).toEqual(posted.cashierDays);expect(changed.stocktakingRecords).toEqual(posted.stocktakingRecords);expect(changed.items.find(item=>item.id===bean.id)).toEqual({...posted.items.find(item=>item.id===bean.id),code:'200018'});accept(changed);
+});
 it.skipIf(!active)('accepts pending paired cashier reports without posting and permits verified cashier stock shortages',()=>{
  const {before,pending,posted}=cashierPair();seed(before);accept(pending);accept(posted);expect(posted.items[0].stock).toBe(-0.5);
 });
@@ -386,6 +390,37 @@ it.skipIf(!active)('requires one Begun amount and the report date at the databas
  for(const rows of [[{metric:'Total Revenue',amount:'5.00'}],[{metric:'Begun',amount:'-5.00'}],[{metric:'Begun',amount:'5.00'},{metric:'Begun',amount:'5.00'}]])expect(()=>workerCall(job,'finish',{rows,sha256:'a'.repeat(64)})).toThrow('BEGUN_RESULT_REQUIRED');
  expect(()=>workerCall(job,'finish',{rows:[{metric:'Begun',amount:'5.00',businessDate:'2026-11-02'}],sha256:'a'.repeat(64)})).toThrow('BEGUN_REPORT_DATE_MISMATCH');
  expect(workerCall(job,'finish').status).toBe('ready');
+});
+const uwsRow={code:'200018',name:'Fixture beans',quantity:'0.375',unit:'kg',total:'10.00',sourceFormat:'uws-items-v1',businessDate:'2026-11-01',sourceRow:4,saleCount:3};
+function uwsFixture(row:Record<string,unknown>=uwsRow){
+ const item={...bean,code:String(row.code),baseUnit:row.unit==='count'?'count' as const:'kg' as const};const before={...stockState(),items:[item]};seed(before);
+ const job=importJob(owner,'2026-11-01','items');workerCall(job);const finish=workerCall(job,'finish',{rows:[row],sha256:'d'.repeat(64)});
+ const pending=attachCashierReport(before,'2026-11-01',{type:'items',file:{fileName:'fixture.xls',sha256:'d'.repeat(64),uploadedAt:'2026-11-01',sourceQueueId:finish.queueId},lines:[{itemId:item.id,quantity:Number(row.quantity),unitLabel:String(row.unit),normalizedQtyInBaseUnit:Number(row.quantity)}]});
+ return {before,pending,finish};
+}
+it.skipIf(!active)('binds printed item quantities, units, codes, and source day even when the interface is bypassed',()=>{
+ const {pending}=uwsFixture();accept(pending);
+ const changed=structuredClone(pending);changed.cashierDays[0].itemsReport!.lines[0].quantity=3;changed.cashierDays[0].itemsReport!.lines[0].normalizedQtyInBaseUnit=3;reject(changed,'CASHIER_UWS_QUANTITY_MISMATCH');
+ const redated=structuredClone(pending);redated.cashierDays[0].date='2026-11-02';reject(redated,'CASHIER_UWS_SOURCE_MISMATCH');
+ const noId=structuredClone(pending);delete noId.cashierDays[0].itemsReport!.sourceQueueId;reject(noId,'CASHIER_UWS_SOURCE_MISMATCH');
+ const noLine=structuredClone(pending);noLine.cashierDays[0].itemsReport!.lines.push({...noLine.cashierDays[0].itemsReport!.lines[0]});reject(noLine,'CASHIER_UWS_LINES_MISMATCH');
+ const wrongCode={...pending,items:[{...pending.items[0],code:'NOT-POS-CODE'}]};reject(wrongCode,'CASHIER_UWS_CODE_MISMATCH');
+ const wrongUnit=structuredClone(pending);wrongUnit.cashierDays[0].itemsReport!.lines[0].unitLabel='gram';wrongUnit.cashierDays[0].itemsReport!.lines[0].normalizedQtyInBaseUnit=0.000375;reject(wrongUnit,'CASHIER_UWS_QUANTITY_MISMATCH');
+});
+it.skipIf(!active)('does not let an unrelated generic queue hide a printed source hash',()=>{
+ const {pending}=uwsFixture();
+ const other=sql(`insert into public.cashier_sync_queue(file_name,sale_date,raw_rows,content_hash,report_kind) values('generic.csv','2026-11-01','[{"code":"X","quantity":1}]','${'e'.repeat(64)}','items') returning id`);
+ const forged=structuredClone(pending);forged.cashierDays[0].itemsReport!.sourceQueueId=other;reject(forged,'CASHIER_UWS_SOURCE_MISMATCH');
+});
+it.skipIf(!active)('retains unresolved printed rows for review but refuses inferred variant and seasoning deductions',()=>{
+ const variant=uwsFixture({...uwsRow,code:'300010',sourceIssue:'UWS_VARIANT_WEIGHTS_REQUIRED'});reject(variant.pending,'CASHIER_UWS_DETAILS_REQUIRED');
+ sql('truncate public.cashier_sync_queue,bon_erp_private.import_jobs;');
+ const seasoning=uwsFixture({...uwsRow,code:'300014',quantity:'3',unit:'count',sourceIssue:'UWS_SEASONING_WEIGHT_REQUIRED'});reject(seasoning.pending,'CASHIER_UWS_DETAILS_REQUIRED');
+});
+it.skipIf(!active)('rejects malformed printed rows and wrong dates at the queue boundary',()=>{
+ const job=importJob(owner,'2026-11-01','items');workerCall(job);
+ for(const row of [{...uwsRow,businessDate:'2026-11-02'},{...uwsRow,quantity:'-1'},{...uwsRow,unit:'gram'},{...uwsRow,unit:'count',quantity:'2'},{...uwsRow,saleCount:0}])expect(()=>workerCall(job,'finish',{rows:[row],sha256:'d'.repeat(64)})).toThrow();
+ expect(workerCall(job,'finish',{rows:[uwsRow],sha256:'d'.repeat(64)}).status).toBe('ready');
 });
 it.skipIf(!active)('binds the posted cashier amount to its Begun source even when the interface is bypassed',()=>{
  const job=importJob();workerCall(job);const finish=workerCall(job,'finish');
