@@ -3,6 +3,8 @@ import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import * as XLSX from 'xlsx';
+import {fixture} from './fixture.mjs';
+import {projectRead} from './read-fixture.mjs';
 export async function verifyDesign(){
   assert.equal(process.env.CI,'true','DESIGN_REVIEW_REQUIRES_ISOLATED_CI');
   const browser=await chromium.launch({headless:true});
@@ -181,6 +183,21 @@ export async function verifyDesign(){
     assert.equal(await hoveredCard.evaluate(e=>getComputedStyle(e).transform),'none','Reduced-motion cards must remain stable');
     evidence.cardHover=true;
     await page.setViewportSize({width:360,height:800});
+    // Financial acceptance uses a disposable response, never hosted business data.
+    const moneyFixture=fixture(0);
+    moneyFixture.financial_openings=[{id:'opening',date:'2026-11-01',account:'treasury',amount:1000,priorPeriodSettled:true,history:[]}];
+    moneyFixture.cashier_days=Array.from({length:4},(_,i)=>({id:'money-'+i,date:`2026-11-0${i+1}`,status:'pending',financialReport:{fileName:`day-${i}.csv`,sha256:String(i+1).repeat(64),uploadedAt:'2026-11-05T10:00:00Z',totalRevenue:(i+1)*100}}));
+    await page.route('**/rest/v1/rpc/bon_erp_dashboard_v2',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(projectRead(moneyFixture,'bon_erp_dashboard_v2',route.request().postDataJSON()))}));
+    await page.getByRole('button',{name:'الرئيسية',exact:true}).click();
+    // Sections and home share a cached dashboard; start a fresh document so the
+    // isolated financial response is actually requested, with the same login.
+    await page.reload();
+    await page.getByText('بانتظار استكمال تكلفة الأصناف',{exact:true}).waitFor();
+    const cashRegion=page.getByRole('region',{name:'رصيد أموال النشاط'});
+    assert.ok((await cashRegion.innerText()).includes(new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(2000)),'Opening plus financial receipts must be visible');
+    assert.equal(await page.locator('.point-profit').count(),0,'Unknown cost must not produce zero-profit points');
+    await limit(page,'financial-only-revenue-mobile');
+    await page.screenshot({path:'design-financial-revenue-mobile.png',fullPage:true});evidence.financialOnlyRevenue=true;
     await page.goto(origin+'/#type=recovery');
     // A mail link opens a new document. A hash-only goto from this already-open
     // SPA is same-document navigation and does not rerun its initial-link guard.

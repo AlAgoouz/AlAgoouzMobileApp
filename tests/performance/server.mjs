@@ -15,7 +15,7 @@ const server=http.createServer(async(req,res)=>{
   if(u.pathname==='/__perf__/reset'){for(const key in metrics)metrics[key]=0;return send({ok:true});}
   if(u.pathname==='/auth/v1/user')return send(user);
   const readName=u.pathname.split('/').at(-1);
-  if(['bon_erp_dashboard','bon_erp_sales_page','bon_erp_sale_detail','bon_erp_item_search'].includes(readName)){
+  if(['bon_erp_dashboard','bon_erp_dashboard_v2','bon_erp_sales_page','bon_erp_sale_detail','bon_erp_item_search'].includes(readName)){
     let body='';for await(const chunk of req)body+=chunk;
     return send(projectRead(row,readName,JSON.parse(body||'{}')));
   }

@@ -31,6 +31,7 @@ export function approveCashierDay(state:StoreState,id:string,actor:string):Store
  return {...state,items,cashierDays:state.cashierDays.map(d=>d.id===id?next:d),auditLogs:[{id:crypto.randomUUID(),timestamp:next.approvedAt!,partnerName:actor,actionType:'مزامنة كاشير',description:`اعتماد يوم الكاشير ${day.date} بالتقريرين؛ ${shortages.length} أصناف بعجز`,amount:day.financialReport.totalRevenue},...state.auditLogs]};
 }
 // Derived reporting view only: no second sales document or invented item revenue is persisted.
-export function salesForReports(state:Pick<StoreState,'salesInvoices'|'cashierDays'>):SalesInvoice[]{
- return [...state.salesInvoices,...state.cashierDays.filter(d=>d.status==='approved').map(d=>({id:d.id,invoiceNumber:`DAY-${d.date}`,date:d.date,saleType:'cashier_sync' as const,customerName:'مبيعات يوم الكاشير',items:[],subtotal:d.financialReport!.totalRevenue,discount:0,totalAmount:d.financialReport!.totalRevenue,totalCost:d.totalCost!,netProfit:round(d.financialReport!.totalRevenue-d.totalCost!),paidAmount:d.financialReport!.totalRevenue,remainingAmount:0,paymentMethod:'نقدي' as const,partnerName:d.partnerName!}))];
+export type ReportSale=Omit<SalesInvoice,'totalCost'|'netProfit'>&{totalCost:number|null;netProfit:number|null};
+export function salesForReports(state:Pick<StoreState,'salesInvoices'|'cashierDays'>):ReportSale[]{
+ return [...state.salesInvoices,...state.cashierDays.filter(d=>d.financialReport).map(d=>({id:d.id,invoiceNumber:`DAY-${d.date}`,date:d.date,saleType:'cashier_sync' as const,customerName:'مبيعات يوم الكاشير',items:[],subtotal:d.financialReport!.totalRevenue,discount:0,totalAmount:d.financialReport!.totalRevenue,totalCost:d.status==='approved'?d.totalCost!:null,netProfit:d.status==='approved'?round(d.financialReport!.totalRevenue-d.totalCost!):null,paidAmount:d.financialReport!.totalRevenue,remainingAmount:0,paymentMethod:'نقدي' as const,partnerName:d.partnerName??'تقرير مالي'}))];
 }

@@ -68,7 +68,7 @@ export function financialPosition(state:StoreState,from:string,to:string){
  for(const p of state.accountPayments){
   try{const value=cents(p.amount)*(p.targetType==='customer'?1n:-1n);cash(p.date,value);if(p.reversedAt){const day=timestamp(p.reversedAt);if(day)cash(day,-value);}}catch{issues.add('قيمة دفعة تحتاج مراجعة');}
  }
- for(const day of state.cashierDays)if(day.status==='approved'){
+ for(const day of state.cashierDays)if(day.financialReport){
   try{if(!day.financialReport)throw Error();cash(day.date,cents(day.financialReport.totalRevenue));}catch{issues.add('يوم كاشير بلا مبلغ مؤكد');}
  }
  for(const e of state.expenses){

@@ -20,7 +20,7 @@ sales_schema=pa.DataFrameSchema({
     'id':pa.Column(str,unique=True),'number':pa.Column(str),'date':pa.Column(str),
     'customer':pa.Column(str),'channel':pa.Column(str),
     'amount':pa.Column(D,checks=pa.Check.ge(0)),
-    'cost':pa.Column(D,checks=pa.Check.ge(0)),'net':pa.Column(D),
+    'cost':pa.Column(D,checks=pa.Check.ge(0),nullable=True),'net':pa.Column(D,nullable=True),
 },strict=True)
 expense_schema=pa.DataFrameSchema({'id':pa.Column(str,unique=True),'date':pa.Column(str),'title':pa.Column(str),'category':pa.Column(str),'amount':pa.Column(D,checks=pa.Check.ge(0))},strict=True)
 
@@ -71,11 +71,11 @@ def prepare_report(source,summary,from_date,to_date):
         sales.append(dict(id='invoice:'+text(row,'id'),number=text(row,'invoiceNumber'),date=day,customer=text(row,'customerName'),channel=text(row,'saleType'),amount=number(row,'totalAmount',nonnegative=True),cost=number(row,'totalCost',nonnegative=True),net=number(row,'netProfit')))
     for row in records(source,'cashier_days'):
         day=business_day(row)
-        if row['status']!='approved' or not from_date<=day<=to_date:
+        if not row.get('financialReport') or not from_date<=day<=to_date:
             continue
         amount=number(row['financialReport'],'totalRevenue',nonnegative=True)
-        cost=number(row,'totalCost',nonnegative=True)
-        sales.append(dict(id='day:'+text(row,'id'),number='DAY-'+day,date=day,customer='يوم كاشير معتمد',channel='cashier_sync',amount=amount,cost=cost,net=amount-cost))
+        cost=number(row,'totalCost',nonnegative=True) if row['status']=='approved' else None
+        sales.append(dict(id='day:'+text(row,'id'),number='DAY-'+day,date=day,customer='يوم كاشير مكتمل التكلفة' if cost is not None else 'إيراد مالي بانتظار تكلفة الأصناف',channel='cashier_sync',amount=amount,cost=cost,net=None if cost is None else amount-cost))
     for row in records(source,'expenses'):
         day=business_day(row)
         if row.get('isCancelled') or row['category']=='مسحوبات شركاء' or not from_date<=day<=to_date:
@@ -85,13 +85,22 @@ def prepare_report(source,summary,from_date,to_date):
     spending=expense_schema.validate(pl.DataFrame(expenses,schema={'id':pl.String,'date':pl.String,'title':pl.String,'category':pl.String,'amount':D}))
     totals=frame.select(pl.col('amount').sum(),pl.col('cost').sum(),pl.col('net').sum()).row(0)
     spent=spending.select(pl.col('amount').sum()).item()
-    actual={'revenue':totals[0],'cost':totals[1],'gross':totals[2],'spent':spent,'net':totals[2]-spent}
+    pending=sum(row['cost'] is None for row in sales)
+    actual={'revenue':totals[0],'cost':None if pending else totals[1],'gross':None if pending else totals[2],'spent':spent,'net':None if pending else totals[2]-spent}
     if source['version']!=summary['version'] or summary['report']['count']!=len(sales):
         raise ValueError('EXPORT_SNAPSHOT_MISMATCH')
     for key,value in actual.items():
-        if abs(value-number(summary['report'],key))>Decimal('0.000001'):
+        if key not in summary['report']:
             raise ValueError('EXPORT_TOTAL_MISMATCH')
+        expected=number(summary['report'],key,optional=True)
+        if (value is None)!=(expected is None) or (value is not None and abs(value-expected)>Decimal('0.000001')):
+            raise ValueError('EXPORT_TOTAL_MISMATCH')
+    if summary['report'].get('pendingCostDays',0)!=pending:
+        raise ValueError('EXPORT_COST_COVERAGE_MISMATCH')
     daily=frame.select('date',pl.col('amount').alias('sales'),pl.col('net').alias('profit')).vstack(spending.select('date',pl.lit(Decimal(0),dtype=D).alias('sales'),(-pl.col('amount')).alias('profit'))).group_by('date').agg(pl.col('sales').sum(),pl.col('profit').sum()).sort('date').to_dicts()
+    unknown_dates={r['date'] for r in sales if r['cost'] is None}
+    for row in daily:
+        if row['date'] in unknown_dates:row['profit']=None
     return Report(source,summary,sales,expenses,daily,from_date,to_date)
 
 
@@ -118,7 +127,7 @@ def workbook_bytes(report):
         page.repeat_rows(0);page.set_footer('&Cبُن العجوز — &P / &N')
         return page
     labels={'revenue':'المبيعات المسجلة','cost':'تكلفة البضاعة','gross':'مجمل الربح','spent':'مصروفات التشغيل','net':'صافي الربح'}
-    sheet('ملخص الفترة',['البيان','القيمة'],[['من',report.from_date],['إلى',report.to_date],['إصدار البيانات',report.source['version']]]+[[label,number(report.summary['report'],key)] for key,label in labels.items()]+[['ملاحظة','المبيعات تستبعد المرتجعات وتضم أيام الكاشير المعتمدة مرة واحدة.'],['الأرصدة','المخزون والعملاء والموردون والشركاء أرصدة حالية.']])
+    sheet('ملخص الفترة',['البيان','القيمة'],[['من',report.from_date],['إلى',report.to_date],['إصدار البيانات',report.source['version']]]+[[label,number(report.summary['report'],key,True)] for key,label in labels.items()]+[['ملاحظة','إيراد تقرير المبيعات المالي يظهر فور حفظه؛ التكلفة والربح ينتظران اعتماد الأصناف. الخانة الفارغة للتكلفة أو الربح تعني عدم الاكتمال، ولا تعني صفرًا.'],['الأرصدة','رصيد البداية مستقل عن المبيعات والأرباح؛ المخزون والعملاء والموردون والشركاء أرصدة حالية.']])
     sheet('المبيعات',['المستند','التاريخ','العميل','القناة','المبيعات','التكلفة','مجمل الربح'],[[r['number'],r['date'],r['customer'],channels.get(r['channel'],r['channel']),r['amount'],r['cost'],r['net']] for r in report.sales])
     sheet('المصروفات',['التاريخ','البيان','التصنيف','المبلغ'],[[r[k] for k in ['date','title','category','amount']] for r in report.expenses])
     daily=sheet('الأيام المسجلة',['التاريخ','المبيعات','الصافي'],[[r['date'],r['sales'],r['profit']] for r in report.daily])
@@ -130,12 +139,17 @@ def workbook_bytes(report):
     sheet('العملاء',['العميل','الهاتف','المنطقة','المديونية الحالية','إجمالي المبيعات المسجل'],[[text(r,'name'),text(r,'phone',True),text(r,'area',True),number(r,'balance'),number(r,'totalSales')] for r in records(report.source,'customers')])
     sheet('الموردون',['المورد','الهاتف','العنوان','المندوب','إجمالي المشتريات المسجل'],[[text(r,'name'),text(r,'phone',True),text(r,'address',True),text(r,'representativeName',True),number(r,'totalPurchases')] for r in records(report.source,'suppliers')])
     sheet('المشتريات',['الفاتورة','التاريخ','المورد','الصافي دون الضريبة','الضريبة المنفصلة','الإجمالي','الحالة'],[[text(r,'invoiceNumber'),business_day(r),text(r,'supplierName'),number(r,'netAmount',True),number(r,'taxAmount',True),number(r,'totalAmount'),'ملغاة' if r.get('isCancelled') else 'معتمدة'] for r in records(report.source,'purchase_invoices')])
-    sheet('حصص الشركاء',['الشريك','النسبة %','حصة ربح الفترة فقط','المدفوع من الجيب حاليًا','المسحوبات حاليًا'],[[text(r,'name'),number(r,'sharePercent'),number(report.summary['report'],'net')*number(r,'sharePercent')/100,number(r,'totalPaidFromPocket'),number(r,'totalWithdrawals')] for r in records(report.source,'partners')])
+    net=number(report.summary['report'],'net',True)
+    sheet('حصص الشركاء',['الشريك','النسبة %','حصة ربح الفترة فقط','المدفوع من الجيب حاليًا','المسحوبات حاليًا'],[[text(r,'name'),number(r,'sharePercent'),None if net is None else net*number(r,'sharePercent')/100,number(r,'totalPaidFromPocket'),number(r,'totalWithdrawals')] for r in records(report.source,'partners')])
     openings=records(report.source,'financial_openings') if 'financial_openings' in report.source else []
     if len(openings)>1:raise ValueError('INVALID_FINANCIAL_OPENING')
     if openings:
         r=openings[0]
         sheet('بداية المدة',['تاريخ بداية التشغيل','مكان الرصيد','الرصيد الافتتاحي الحالي','المعالجة'],[[business_day(r),'خزنة الشركة',number(r,'amount',nonnegative=True),'رصيد مرحّل مستقل عن المبيعات والأرباح وحصص الشركاء']])
+    cash=report.summary.get('cash')
+    if cash:
+        labels={'opening':'رصيد بداية الفترة','inflow':'المتحصلات','resources':'بداية الفترة + المتحصلات','outflow':'المدفوعات والمسحوبات','closing':'الرصيد الدفتري'}
+        sheet('حركة أموال النشاط',['البيان','القيمة'],[['من',cash['start']],['حتى',cash['to']]]+[[label,number(cash,key,True)] for key,label in labels.items()]+[['ملاحظات','، '.join(cash['issues'])]])
     book.close()
     data=output.getvalue()
     if len(data)>8*1024*1024:raise ValueError('EXPORT_SIZE_LIMIT')

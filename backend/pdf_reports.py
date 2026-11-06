@@ -42,7 +42,7 @@ def pdf_bytes(title,period,sections):
             if url!='agouz-font:amiri':raise ValueError('PDF_RESOURCE_DENIED')
             return URLFetcherResponse(url,body=font,headers={'Content-Type':'font/ttf'})
     fetch=LocalFontFetcher(allowed_protocols={'agouz-font'},fail_on_errors=True)
-    escape=lambda v:html.escape(str(v),quote=True)
+    escape=lambda v:html.escape('غير مكتمل' if v is None else str(v),quote=True)
     parts=[]
     for heading,columns,rows in sections:
         if len(rows)>1000:raise ValueError('PDF_ROW_LIMIT')
@@ -61,9 +61,9 @@ def report_pdf(report):
     opening=report.source.get('financial_openings',[])
     extra=[('رصيد أول المدة المستقل عن الربح',['التاريخ','خزنة الشركة'],[[opening[0]['date'],number(opening[0],'amount',nonnegative=True)]])] if opening else []
     return pdf_bytes('ملخص النتائج المالية','من '+report.from_date+' إلى '+report.to_date,[
-        ('ملخص الفترة',['البيان','جنيه مصري'],[[label,number(report.summary['report'],key)] for key,label in labels.items()]),
+        ('ملخص الفترة',['البيان','جنيه مصري'],[[label,number(report.summary['report'],key,True) if report.summary['report'].get(key) is not None else 'بانتظار تكلفة الأصناف'] for key,label in labels.items()]),
         ('الأيام المسجلة',['التاريخ','المبيعات','الصافي'],[[r['date'],r['sales'],r['profit']] for r in report.daily]),
-        ('نطاق التقرير',['ملاحظات'],[['المبيعات تستبعد المرتجعات وتضم أيام الكاشير المعتمدة مرة واحدة.'],['الصافي بعد مصروفات التشغيل، دون المسحوبات الشخصية.'],['إصدار البيانات: '+str(report.source['version'])]])]+extra)
+        ('نطاق التقرير',['ملاحظات'],[['المبيعات تضم الإيراد المالي لكل يوم مرة واحدة؛ الربح ينتظر اكتمال تكلفة الأصناف، والقيمة غير المكتملة ليست صفرًا.'],['الصافي بعد مصروفات التشغيل، دون المسحوبات الشخصية. رصيد البداية مستقل عن المبيعات والربح.'],['إصدار البيانات: '+str(report.source['version'])]])]+extra+([('حركة أموال النشاط',['البيان','القيمة'],[[label,number(report.summary['cash'],key,True) if report.summary['cash'].get(key) is not None else 'غير متاح'] for key,label in {'opening':'رصيد بداية الفترة','inflow':'المتحصلات','resources':'بداية الفترة + المتحصلات','outflow':'المدفوعات','closing':'الرصيد الدفتري'}.items()])] if report.summary.get('cash') else []))
 
 
 def invoice_pdf(invoice):

@@ -22,6 +22,30 @@ def fixture():
 
 
 class ReportTests(unittest.TestCase):
+    def test_financial_only_day_is_revenue_with_unknown_cost_and_no_partner_allocation(self):
+        source,summary=fixture()
+        source['cashier_days'][1]['financialReport']={'totalRevenue':Decimal('123.45')}
+        summary['report'].update(count=3,revenue=Decimal('140.80'),cost=None,gross=None,net=None,pendingCostDays=1)
+        summary['cash']=dict(start='2026-11-01',to='2026-11-04',opening=Decimal('1000'),inflow=Decimal('140.80'),outflow=0,resources=Decimal('1140.80'),closing=Decimal('1140.80'),pendingRefunds=0,issues=[])
+        report=prepare_report(source,summary,'2026-11-01','2026-11-30')
+        self.assertEqual(len(report.sales),3)
+        self.assertEqual(report.daily,[dict(date='2026-11-04',sales=Decimal('140.800000'),profit=None)])
+        self.assertIsNone(next(r for r in report.sales if r['id']=='day:pending')['cost'])
+        book=load_workbook(io.BytesIO(workbook_bytes(report)))
+        self.assertIsNone(book['حصص الشركاء']['C2'].value)
+        self.assertEqual(book['حركة أموال النشاط']['B6'].value,1140.8)
+        for key,value in [('cost',0),('gross',0),('net',0),('pendingCostDays',0)]:
+            wrong=copy.deepcopy(summary);wrong['report'][key]=value
+            with self.assertRaises(ValueError):prepare_report(source,wrong,'2026-11-01','2026-11-30')
+
+    def test_inventory_approval_completes_cost_without_repeating_revenue(self):
+        source,summary=fixture()
+        source['cashier_days'][1].update(financialReport={'totalRevenue':Decimal('123.45')},status='approved',totalCost=Decimal('23.45'))
+        summary['report'].update(count=3,revenue=Decimal('140.80'),cost=Decimal('26.57'),gross=Decimal('114.23'),net=Decimal('114.13'),pendingCostDays=0)
+        report=prepare_report(source,summary,'2026-11-01','2026-11-30')
+        self.assertEqual(report.daily[0]['sales'],Decimal('140.800000'))
+        self.assertEqual(report.daily[0]['profit'],Decimal('114.130000'))
+
     def test_count_unit_is_preserved_in_inventory_excel(self):
         source, summary = fixture()
         source['items'][0]['baseUnit']='count'
@@ -93,6 +117,12 @@ class ReportTests(unittest.TestCase):
         (folder/'Agouz-report-ar.pdf').write_bytes(data)
         (folder/'Agouz-invoice-ar.pdf').write_bytes(receipt)
         (folder/'Agouz-report-ar.xlsx').write_bytes(workbook_bytes(report))
+        source,summary=fixture();source['cashier_days'][1]['financialReport']={'totalRevenue':Decimal('123.45')}
+        summary['report'].update(count=3,revenue=Decimal('140.80'),cost=None,gross=None,net=None,pendingCostDays=1)
+        pending=report_pdf(prepare_report(source,summary,'2026-11-01','2026-11-30'))
+        self.assertTrue(pending.startswith(b'%PDF-'))
+        self.assertNotIn('None',''.join(p.extract_text() for p in PdfReader(io.BytesIO(pending)).pages))
+        (folder/'Agouz-pending-cost-ar.pdf').write_bytes(pending)
 
 
 class GeneratedTests(unittest.TestCase):
