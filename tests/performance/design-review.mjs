@@ -197,6 +197,7 @@ export async function verifyDesign(){
     await page.getByRole('button',{name:'إضافة المكون',exact:true}).click();
     assert.equal(await page.getByLabel('إجمالي تكلفة الوصفة').innerText(),new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(7.2)+' ج.م');
     await page.getByLabel('كمية خام الوصفة',{exact:true}).fill('');
+    await page.locator('button:disabled').filter({hasText:'اعتماد الوصفة وتجهيز المنتج'}).waitFor();
     assert.equal(await page.getByRole('button',{name:'اعتماد الوصفة وتجهيز المنتج',exact:true}).isDisabled(),true);
     await page.getByLabel('كمية خام الوصفة',{exact:true}).fill('18');
     for(const width of [320,360,768,1440]){await page.setViewportSize({width,height:900});await limit(page,`recipe-editor-${width}`);await page.screenshot({path:`design-recipe-editor-${width}-mobile.png`,fullPage:true});}
