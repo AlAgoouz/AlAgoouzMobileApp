@@ -2,6 +2,8 @@ import {unitLabel as displayUnit} from './lib/units';
 import {useDashboardRead} from './hooks/useDashboardRead';
 import {saveFinancialOpening} from './lib/financialOpening';
 import {saveCatalogNameDraft,saveCatalogNameDraftChange} from './lib/catalogNameDrafts';
+import {saveRecipeDefinition,saveRecipe} from './lib/recipeCatalog';
+import type {CatalogNameDraft,RecipeProductDefinition} from './types/erp';
 import {PagedSalesHistory} from './components/PagedSalesHistory';
 import {ScreenLoading} from './components/ScreenLoading';
 import {Modal} from './components/Modal';
@@ -165,6 +167,7 @@ const ShortagesScreen = React.lazy(() =>
     default: module.ShortagesScreen,
   })),
 );
+const RecipesScreen=React.lazy(()=>import('./components/RecipesScreen').then(m=>({default:m.RecipesScreen})));
 const SuppliersAndCustomersScreen = React.lazy(() =>
   import("./components/ManagementScreens").then((module) => ({
     default: module.SuppliersAndCustomersScreen,
@@ -215,6 +218,8 @@ export default function App() {
   const cloud = useErpStore(needsFullStore);
   const { engine, member } = cloud;
   const dashboard=useDashboardRead(member?.userId,!!member&&canView(member)&&['home','sections','sales_invoices'].includes(activeScreen),reportPeriod);
+  const [recipeTargetId,setRecipeTargetId]=useState<string>();
+  const openRecipes=(targetId?:string)=>{setRecipeTargetId(targetId);setActiveScreen('recipes');};
   useEffect(()=>{if(activeScreen!=='sales_invoices')setHistoryEditing(false);},[activeScreen]);
   useEffect(()=>setSelectedFinancialPartnerId(''),[member?.userId,member?.partnerId]);
   const confirmSave=async()=>{await engine.flush();if(engine.snapshot.status!=='ready')throw Error(engine.snapshot.error||'لم يصل تأكيد اعتماد العملية؛ راجع حالة الحفظ');};
@@ -239,6 +244,7 @@ export default function App() {
   const linkedFinancialPartner=partners.find(p=>p.id===loggedPartnerId);
   const financialPartner=partners.find(p=>p.id===(selectedFinancialPartnerId||loggedPartnerId));
   const currentPartner={...(linkedFinancialPartner??unloadedPartner),id:linkedFinancialPartner?.id??'user:'+member?.userId,name:member?.displayName||linkedFinancialPartner?.name||'مستخدم',username:member?.username??'',role:member?.isOwner?'مالك النظام':'مستخدم النظام'};
+  const defineRecipe=async(id:string,name:string,definition:RecipeProductDefinition,original?:CatalogNameDraft)=>{await saveRecipeDefinition(engine,id,name,definition,{name:currentPartner.name,id:member?.userId},original);openRecipes('draft:'+id);};
   const requireFinancialPartner=()=>{if(!financialPartner)throw Error('اختر حساب الشريك المالي للحركة؛ حساب المستخدم لا ينشئ حصة مالية');return financialPartner;};
   const safeAction = (action: () => void) => {
     try {
@@ -1062,11 +1068,15 @@ export default function App() {
           />
         )}
 
+        {activeScreen==='recipes'&&<RecipesScreen items={items} drafts={cloud.state.catalogNameDrafts} initialTargetId={recipeTargetId} canManage={canWrite(member,'catalog')} onDefine={defineRecipe} onSave={async(target,recipe)=>{await saveRecipe(engine,target,recipe,{name:currentPartner.name,id:member?.userId});showToast('تم تأكيد حفظ الوصفة وتكلفتها');}} onBack={()=>setActiveScreen('sections')}/>}
         {activeScreen === "production" && (
           <ProductionAndRecipesScreen
             items={items}
             productionBatches={productionBatches}
             currentPartnerName={currentPartner.name}
+            onOpenRecipes={()=>openRecipes()}
+            reservedCodes={cloud.state.catalogNameDrafts.flatMap(d=>d.definition?[d.definition.code]:[])}
+            onDefineRecipe={canWrite(member,'catalog')?defineRecipe:undefined}
             onExecuteProduction={(...args) => {
               try {
                 return engine.transaction(() =>
@@ -1075,51 +1085,6 @@ export default function App() {
               } catch (error) {
                 return { ok: false, message: (error as Error).message };
               }
-            }}
-            onSaveItemRecipe={(
-              targetId: string,
-              recipe: RecipeIngredient[],
-              retail?: number,
-              wholesale?: number,
-            ) =>
-              safeAction(() => {
-                setItems((prev) => {
-                  const updated = prev.map((item) =>
-                    item.id === targetId
-                      ? {
-                          ...item,
-                          hasRecipe: recipe.length > 0,
-                          recipe,
-                          retailPrice: retail ?? item.retailPrice,
-                          wholesalePrice: wholesale ?? item.wholesalePrice,
-                        }
-                      : item,
-                  );
-                  return recalculateAllRecipeCosts(updated);
-                });
-                addAuditLog("تعديل وصفة/صنف", `تحديث وصفة صنف`);
-              })
-            }
-            onCreateNewBlendOrDrink={(newItem) =>
-              safeAction(() => {
-                const created: InventoryItem = {
-                  ...newItem,
-                  id: crypto.randomUUID(),
-                  openingStock: newItem.stock,
-                };
-                setItems((prev) => [created, ...prev]);
-                addAuditLog("تعديل وصفة/صنف", `إضافة صنف: ${created.name}`);
-              })
-            }
-            onDeleteItem={(id) => {
-              safeAction(() => {
-                if (!canDeleteCatalogItem(engine.state,id)) {
-                  showToast("لا يمكن حذف صنف مرتبط بوصفة أو فاتورة.");
-                  return;
-                }
-                setItems((prev) => prev.filter((i) => i.id !== id));
-                showToast("🗑️ تم حذف الصنف بنجاح");
-              });
             }}
             onBack={() => setActiveScreen("home")}
           />
@@ -1135,6 +1100,8 @@ export default function App() {
         {activeScreen === "products" && (
           <ProductsCatalogScreen
             canManage={canWrite(member,'catalog')}
+            onOpenRecipe={openRecipes}
+            onDefineRecipe={canWrite(member,'catalog')?defineRecipe:undefined}
             nameDrafts={cloud.state.catalogNameDrafts}
             onChangeNameDraft={canWrite(member,'catalog')?(id,name)=>saveCatalogNameDraftChange(engine,id,name,{name:currentPartner.name,id:member?.userId}):undefined}
             onCompleteNameDraft={canWrite(member,'catalog')?(id,item)=>saveCatalogNameDraft(engine,id,item,{name:currentPartner.name,id:member?.userId}):undefined}

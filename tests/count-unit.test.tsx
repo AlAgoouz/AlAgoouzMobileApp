@@ -24,7 +24,7 @@ it('saves a distinct count unit and round-trips it through the cloud schema',asy
  fireEvent.change(screen.getByLabelText('نوع الصنف'),{target:{value:'direct_product'}});
  fireEvent.change(screen.getByLabelText('اسم الصنف'),{target:{value:item.name}});
  fireEvent.change(screen.getByLabelText('الوحدة الأساسية'),{target:{value:'count'}});
- fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف والوصفة'}));await waitFor(()=>expect(save).toHaveBeenCalledOnce());
+ fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف'}));await waitFor(()=>expect(save).toHaveBeenCalledOnce());
  expect(save.mock.calls[0][0]).toMatchObject({baseUnit:'count'});
  const state=validateStore({...emptyStore,items:[item]});expect(fromCloud(toCloud(state)).items[0].baseUnit).toBe('count');
 });

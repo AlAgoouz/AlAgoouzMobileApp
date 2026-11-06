@@ -15,5 +15,5 @@ it('leaves pricing manual after selecting a unit and saves the amounts entered b
  fireEvent.change(screen.getByLabelText('نوع الصنف'),{target:{value:'raw_bean'}});fireEvent.change(screen.getByLabelText('الوحدة الأساسية'),{target:{value:'kg'}});
  for(const label of ['تكلفة الوحدة قبل الضريبة','سعر البيع المباشر'])expect((screen.getByLabelText(label) as HTMLInputElement).value).toBe('');
  for(const [label,value]of [['تكلفة الوحدة قبل الضريبة','123'],['سعر البيع المباشر','150'],['الرصيد الافتتاحي','0'],['حد النواقص','0']])fireEvent.change(screen.getByLabelText(label),{target:{value}});
- fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف والوصفة'}));await waitFor(()=>expect(save).toHaveBeenCalledWith('draft',expect.objectContaining({costPrice:123,lastPurchasePrice:123,retailPrice:150,stock:0,baseUnit:'kg'})));
+ fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف'}));await waitFor(()=>expect(save).toHaveBeenCalledWith('draft',expect.objectContaining({costPrice:123,lastPurchasePrice:123,retailPrice:150,stock:0,baseUnit:'kg'})));
 });

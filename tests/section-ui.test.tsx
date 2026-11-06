@@ -65,16 +65,12 @@ it('blocks financial files without a confirmed Begun amount and offers no altern
 });
 const blend={...raw,id:'blend',code:'BL1',name:'Blend',category:'manufactured_blend' as const,hasRecipe:true,recipe:[{ingredientId:raw.id,ingredientName:raw.name,quantity:1000,unit:'gram' as const}]};
 const customer={...INITIAL_CUSTOMERS[0],id:'customer',name:'Customer',phone:'01012345678',area:'Cairo'};
-it('shows exactly seven categories and saves the recipe with the new blend',()=>{
- const save=vi.fn(()=>true);render(<ItemDefinitionModal items={[raw]} onSave={save} onClose={()=>{}}/>);
+it('shows seven categories and saves recipe definitions separately from operational items',async()=>{
+ const save=vi.fn(),define=vi.fn().mockResolvedValue(undefined);render(<ItemDefinitionModal items={[raw]} onSave={save} onSaveRecipeDefinition={define} onClose={()=>{}}/>);
  expect((screen.getByLabelText('نوع الصنف') as HTMLSelectElement).options).toHaveLength(7);
- fireEvent.change(screen.getByLabelText('نوع الصنف'),{target:{value:'manufactured_blend'}});
- fireEvent.change(screen.getByLabelText('اسم الصنف'),{target:{value:'New blend'}});
- fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف والوصفة'}));expect(save).not.toHaveBeenCalled();
- fireEvent.change(screen.getByLabelText('المكون'),{target:{value:raw.id}});
- fireEvent.change(screen.getByLabelText('كمية المكون'),{target:{value:'1000'}});
- fireEvent.click(screen.getByRole('button',{name:'إضافة المكون'}));fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف والوصفة'}));
- expect(save).toHaveBeenCalledWith(expect.objectContaining({category:'manufactured_blend',costingVersion:2,hasRecipe:true,recipe:[expect.objectContaining({ingredientId:raw.id,quantity:1000})]}));
+ fireEvent.change(screen.getByLabelText('نوع الصنف'),{target:{value:'manufactured_blend'}});fireEvent.change(screen.getByLabelText('اسم الصنف'),{target:{value:'New blend'}});
+ expect(screen.queryByLabelText('المكون')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'حفظ والانتقال إلى الوصفات'}));
+ await waitFor(()=>expect(define).toHaveBeenCalledWith(expect.any(String),'New blend',expect.objectContaining({category:'manufactured_blend',baseUnit:'kg'})));expect(save).not.toHaveBeenCalled();
 });
 it('requires a customer and offers only blends with a manual invoice selling price',async()=>{
  const save=vi.fn(async()=>true);render(<WholesaleInvoiceScreen items={[raw,blend]} customers={[customer]} currentPartnerName="Owner" onSaveSale={save} onBack={()=>{}}/>);

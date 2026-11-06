@@ -155,8 +155,13 @@ const invoice = base
     refundDue: money.optional(),
   })
   .passthrough();
+export const recipeProductDefinitionSchema=z.object({code:id,category:z.enum(['manufactured_blend','drink_recipe','seasoning_recipe']),baseUnit:z.enum(['kg','piece','count','liter']),retailPrice:money,openingStock:money,minStock:money});
+const draftCommon={name:text.trim().min(1).max(200),definition:recipeProductDefinitionSchema.optional()};
 export const schema = z.object({
-  catalogNameDrafts:z.array(base.extend({name:text.trim().min(1).max(200),sourceRepository:text.min(1).max(200),sourceCommit:text.regex(/^[a-f0-9]{40}$/),sourcePath:text.min(1).max(500),importedAt:text.datetime()})).max(2000).default([]),
+  catalogNameDrafts:z.array(z.union([
+    base.extend({...draftCommon,origin:z.literal('github').optional(),sourceRepository:text.min(1).max(200),sourceCommit:text.regex(/^[a-f0-9]{40}$/),sourcePath:text.min(1).max(500),importedAt:text.datetime()}),
+    base.extend({...draftCommon,origin:z.literal('manual'),createdAt:text.datetime()}),
+  ])).max(2000).default([]),
   financialOpenings:z.array(base.extend({date:id,account:z.literal('treasury'),amount:money.max(999999999999.99),priorPeriodSettled:z.literal(true),history:z.array(z.object({id,recordedAt:id,actorId:id,actorName:id,amount:money.max(999999999999.99),reason:text.min(6).max(500)})).min(1).max(1000)})).max(1).default([]),
   cashierDays:z.array(base.extend({date:id,status:z.enum(['pending','approved']),
     financialReport:z.object({fileName:id,sha256:text.regex(/^[a-f0-9]{64}$/),uploadedAt:id,sourceQueueId:id.optional(),totalRevenue:money}).optional(),
@@ -432,6 +437,14 @@ export function validateStore(value: unknown): StoreState {
       throw new Error(`معرفات مكررة في ${key}`);
   }
   const ids = new Set(parsed.items.map((i) => i.id));
+  const reserved=new Set<string>();
+  for(const draft of parsed.catalogNameDrafts){
+    const d=draft.definition;if(!d)continue;
+    const code=d.code.trim().toUpperCase();
+    if(!code||reserved.has(code)||parsed.items.some(i=>i.code.trim().toUpperCase()===code||i.barcode===d.code))throw Error('كود منتج تحت الاستكمال مستخدم أو محجوز');
+    if(d.category==='manufactured_blend'&&d.baseUnit!=='kg'||d.category==='drink_recipe'&&d.baseUnit!=='piece'||d.category!=='manufactured_blend'&&(d.openingStock!==0||d.minStock!==0))throw Error('وحدة أو رصيد تعريف المنتج ذي الوصفة غير صالح');
+    reserved.add(code);
+  }
   for (const transaction of parsed.employeeTransactions) {
     if (transaction.accountingVersion !== 1) continue;
     if (!parsed.employees.some((e)=>e.id===transaction.employeeId) || !parsed.partners.some((p)=>p.id===transaction.partnerId))

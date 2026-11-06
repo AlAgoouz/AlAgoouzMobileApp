@@ -64,6 +64,25 @@ it('never trusts a forged local owner identifier', async () => {
   expect(result.current.member).toBeNull();
   expect(result.current.status).toBe('signed-out');
 });
+it('keeps loaded forms mounted through a failed write and retry without treating an initial load failure as ready',async()=>{
+ const {sb}=client(),original=sb.rpc.getMockImplementation()!;let finish:((result:any)=>void)|undefined;
+ sb.rpc.mockImplementation(((name:string)=>name==='bon_erp_save_store'?new Promise(resolve=>{finish=resolve;}):original(name)) as any);
+ const {result}=renderHook(()=>useErpStore());await waitFor(()=>expect(result.current.fullReady).toBe(true));
+ act(()=>result.current.engine.replace({...emptyStore}));let saving:Promise<void>;
+ act(()=>{saving=result.current.engine.flush();});expect(result.current.status).toBe('saving');expect(result.current.fullReady).toBe(true);
+ await act(async()=>{finish!({data:null,error:{message:'network'}});await saving!;});expect(result.current.status).toBe('error');expect(result.current.fullReady).toBe(true);
+ act(()=>{saving=result.current.engine.flush();});await act(async()=>{finish!({data:{version:1},error:null});await saving!;});expect(result.current.status).toBe('ready');expect(result.current.fullReady).toBe(true);
+});
+it('keeps operational screens unavailable when the initial store request fails',async()=>{
+ const {sb}=client();sb.from.mockImplementation((()=>({select:()=>({eq:()=>({single:async()=>({data:null,error:{message:'offline'}})})})})) as any);
+ const {result}=renderHook(()=>useErpStore());await waitFor(()=>expect(result.current.status).toBe('error'));expect(result.current.fullReady).toBe(false);
+ sb.from.mockImplementation((()=>({select:()=>({eq:()=>({single:async()=>({data:{...toCloud(emptyStore),version:1},error:null})})})})) as any);
+ await act(()=>result.current.engine.refresh());expect(result.current.fullReady).toBe(true);
+});
+it('does not mark a malformed initial store as loaded',async()=>{
+ const {sb}=client();sb.from.mockImplementation((()=>({select:()=>({eq:()=>({single:async()=>({data:{...toCloud(emptyStore),version:1,items:[{id:'invalid'}]},error:null})})})})) as any);
+ const {result}=renderHook(()=>useErpStore());await waitFor(()=>expect(result.current.status).toBe('error'));expect(result.current.fullReady).toBe(false);expect(result.current.engine.hasLoaded).toBe(false);
+});
 
 it('requests recovery and confirmation through Supabase with the approved application origin',async()=>{
   const {sb}=client('partner',null);
