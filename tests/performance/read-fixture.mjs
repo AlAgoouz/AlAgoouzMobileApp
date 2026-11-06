@@ -14,7 +14,7 @@ export function projectRead(row,name,args){
   const records=(kind==='cashier'?days:all.filter(i=>kind==='wholesale'?i.saleType==='wholesale':i.saleType!=='wholesale')).filter(i=>[i.invoiceNumber??'',i.customerName??'',i.date,...(i.items??[]).map(l=>l.itemName)].some(v=>v.toLowerCase().includes(query))).sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
   return {kind,version:row.version,total:records.length,rows:records.slice(args.p_offset,args.p_offset+args.p_limit).map(({items,itemsReport,consumption,...value})=>({...value,itemsCount:items?.length??itemsReport?.lines.length??0}))};
  }
- if(name==='bon_erp_dashboard'){
+ if(name==='bon_erp_dashboard'||name==='bon_erp_dashboard_v2'){
   const active=salesForReports({salesInvoices:all,cashierDays:days}).filter(i=>i.date>=args.p_from&&i.date<=args.p_to&&!i.isReturned),expenses=row.expenses.filter(e=>e.date>=args.p_from&&e.date<=args.p_to&&!e.isCancelled&&e.category!=='مسحوبات شركاء');
   const pendingCostDays=active.filter(i=>i.totalCost===null).length;
   const sum=(records,field)=>records.reduce((s,i)=>s+i[field],0),revenue=sum(active,'totalAmount'),cost=pendingCostDays?null:sum(active,'totalCost'),gross=pendingCostDays?null:sum(active,'netProfit'),spent=sum(expenses,'amount');

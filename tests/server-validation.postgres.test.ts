@@ -77,18 +77,18 @@ it.skipIf(!active)('exports only the requested period with matching authoritativ
  const today=businessDate(),invoices=[{...sale(),id:'in-range',date:today},{...sale(),id:'outside',date:'2020-01-01'}];
  const source={...stockState(),salesInvoices:invoices};seed(source);
  const before=sql("select row_to_json(s)::text from public.bon_elagouz_store s where id='main_store'");
- const report=readJson(`select public.bon_erp_export_report('${today}','${today}')`);
+ const report=readJson(`select public.bon_erp_export_report_v2('${today}','${today}')`);
  expect(report.sales_invoices.map((row:SalesInvoice)=>row.id)).toEqual(['in-range']);
- expect(report.summary).toEqual(readJson(`select public.bon_erp_dashboard('${today}','${today}')`));
+ expect(report.summary).toEqual(readJson(`select public.bon_erp_dashboard_v2('${today}','${today}')`));
  expect(report.summary.report.revenue).toBe(invoices[0].totalAmount);
  expect(report.version).toBe(report.summary.version);
  expect(sql("select row_to_json(s)::text from public.bon_elagouz_store s where id='main_store'")).toBe(before);
- expect(()=>asUser(owner,"select public.bon_erp_export_report('2026-02-30','2026-03-01')")).toThrow();
+ expect(()=>asUser(owner,"select public.bon_erp_export_report_v2('2026-02-30','2026-03-01')")).toThrow();
 });
 it.skipIf(!active)('checks live report export access and refuses unbounded arrays',()=>{
  const viewer='22222222-2222-4222-8222-222222220091',cashier='22222222-2222-4222-8222-222222220092';
  userAccessFixture(viewer,{view:true});userAccessFixture(cashier,{},'cashier');
- const query="select public.bon_erp_export_report('0001-01-01','9999-12-31')";
+ const query="select public.bon_erp_export_report_v2('0001-01-01','9999-12-31')";
  expect(()=>asUser(viewer,query)).not.toThrow();
  expect(()=>asUser(cashier,query)).toThrow('USER_PERMISSION_DENIED');
  sql(`update public.erp_members set disabled_at=now() where user_id='${viewer}'`);
@@ -103,7 +103,7 @@ it.skipIf(!active)('matches bounded dashboard figures to the established financi
  const expenses=[{id:'exp',title:'Daily',date:businessDate(),category:'إيجار',amount:3,paidFrom:'درج المحل',partnerName:'Owner'},{id:'withdrawal',title:'Owner',date:businessDate(),category:'مسحوبات شركاء',amount:999,paidFrom:'درج المحل',partnerName:'Owner'},{id:'cancelled',title:'Cancelled',date:businessDate(),category:'إيجار',amount:999,paidFrom:'درج المحل',partnerName:'Owner',isCancelled:true}] as StoreState['expenses'];
  const source={...paired,salesInvoices:invoices,expenses};seed(source);
  const range=reportRange({kind:'all',from:'',to:''}),expected=buildReport(salesForReports(source),expenses,range);
- const result=dashboardSchema.parse(readJson("select public.bon_erp_dashboard('0001-01-01','9999-12-31')"));
+ const result=dashboardSchema.parse(readJson("select public.bon_erp_dashboard_v2('0001-01-01','9999-12-31')"));
  for(const field of ['revenue','cost','gross','spent','net','margin'] as const)expect(result.report[field]).toBeCloseTo(expected[field],8);
  expect(result.report.count).toBe(expected.active.length);expect(result.balances.inventory).toBe(-0.5);expect(result.approved).toBe(1);
  expect(reportPoints(result.report.entries,range,result.report.firstDate,result.report.lastDate)).toEqual(expected.points);
@@ -114,7 +114,7 @@ it.skipIf(!active)('preserves sparse month and year charts without returning inv
  for(const dates of [['2026-01-01','2026-12-31'],['2000-01-01','2026-12-31'],['1800-01-01','2026-12-31']]){
   const invoices=dates.map((date,i)=>({...sale(),date,id:'chart-'+i}));seed({...stockState(),salesInvoices:invoices});
   const range=reportRange({kind:'all',from:'',to:''}),expected=buildReport(invoices,[],range);
-  const model=dashboardSchema.parse(readJson("select public.bon_erp_dashboard('0001-01-01','9999-12-31')"));
+  const model=dashboardSchema.parse(readJson("select public.bon_erp_dashboard_v2('0001-01-01','9999-12-31')"));
   expect(reportPoints(model.report.entries,range,model.report.firstDate,model.report.lastDate)).toEqual(expected.points);
   expect(model.report.entries.length).toBeLessThanOrEqual(2);
  }
@@ -123,22 +123,22 @@ it.skipIf(!active)('counts financial-only cashier reports and opening funds with
  let source=recordFinancialOpening(stockState(),'2026-11-01',1000,'Opening settled period',{id:owner,name:'Owner'});
  for(let n=1;n<=4;n++)source=attachCashierReport(source,`2026-11-0${n}`,{type:'financial',file:{fileName:`report${n}.xls`,sha256:String(n).repeat(64),uploadedAt:'2026-11-05T10:00:00Z'},totalRevenue:n*100});
  seed(source);const fingerprint=sql("select md5(to_jsonb(s)::text) from public.bon_elagouz_store s where id='main_store'");
- const model=dashboardSchema.parse(readJson("select public.bon_erp_dashboard('2026-11-01','2026-11-04')"));
+ const model=dashboardSchema.parse(readJson("select public.bon_erp_dashboard_v2('2026-11-01','2026-11-04')"));
  expect(model.report).toMatchObject({revenue:1000,count:4,cost:null,gross:null,net:null,margin:null,pendingCostDays:4});
  expect(model.report.entries.map(e=>e.profit)).toEqual([null,null,null,null]);
  expect(model.cash).toEqual(financialPosition(source,'2026-11-01','2026-11-04'));
  expect(model.cash).toMatchObject({opening:1000,inflow:1000,resources:2000,closing:2000});
  expect(model.channels.find(c=>c.id==='cashier_sync')?.value).toBe(1000);expect(model.approved).toBe(0);expect(model.pending).toBe(4);
- const exported=readJson("select public.bon_erp_export_report('2026-11-01','2026-11-04')");expect(exported.summary).toEqual(model);expect(exported.cashier_days).toHaveLength(4);
- const later=dashboardSchema.parse(readJson("select public.bon_erp_dashboard('2026-11-03','2026-11-04')"));
+ const exported=readJson("select public.bon_erp_export_report_v2('2026-11-01','2026-11-04')");expect(exported.summary).toEqual(model);expect(exported.cashier_days).toHaveLength(4);
+ const later=dashboardSchema.parse(readJson("select public.bon_erp_dashboard_v2('2026-11-03','2026-11-04')"));
  expect(later.cash).toMatchObject({opening:1300,inflow:700,resources:2000,closing:2000});expect(later.report.revenue).toBe(700);
  expect(sql("select md5(to_jsonb(s)::text) from public.bon_elagouz_store s where id='main_store'")).toBe(fingerprint);
 });
 it.skipIf(!active)('keeps the same revenue and cash when a financial day later gets its inventory cost',()=>{
  const paired=cashierPair();let pending=recordFinancialOpening(paired.pending,'2026-11-01',1000,'Opening settled period',{id:owner,name:'Owner'});seed(pending);
- const before=dashboardSchema.parse(readJson(`select public.bon_erp_dashboard('2026-11-01','${businessDate()}')`));
+ const before=dashboardSchema.parse(readJson(`select public.bon_erp_dashboard_v2('2026-11-01','${businessDate()}')`));
  const posted=approveCashierDay(pending,pending.cashierDays[0].id,'Owner');seed(posted);
- const after=dashboardSchema.parse(readJson(`select public.bon_erp_dashboard('2026-11-01','${businessDate()}')`));
+ const after=dashboardSchema.parse(readJson(`select public.bon_erp_dashboard_v2('2026-11-01','${businessDate()}')`));
  expect(after.report.revenue).toBe(before.report.revenue);expect(after.cash).toEqual(before.cash);expect(before.report.net).toBeNull();expect(after.report.net).not.toBeNull();expect(after.report.pendingCostDays).toBe(0);
 });
 it.skipIf(!active)('reconciles server cash with collections, allocations, cancellations and noncash exclusions',()=>{
@@ -154,17 +154,17 @@ it.skipIf(!active)('bounds invoice pages and searches line names across the enti
  const searched=salesPageSchema.parse(readJson("select public.bon_erp_sales_page('legacy','Unique ingredient',0,50)"));expect(searched.total).toBe(1);expect(searched.rows[0].id).toBe('history-120');
  const detail=readJson("select public.bon_erp_sale_detail('history-120','invoice')");expect(detail.items[0].itemName).toBe('Unique ingredient');
  expect(()=>asUser(owner,"select public.bon_erp_sales_page('legacy','',0,51)")).toThrow('INVALID_PAGE');
- expect(()=>asUser(owner,"select public.bon_erp_dashboard('2026-02-30','2026-03-01')")).toThrow();
+ expect(()=>asUser(owner,"select public.bon_erp_dashboard_v2('2026-02-30','2026-03-01')")).toThrow();
 });
 it.skipIf(!active)('keeps read APIs caller-authorized and immediately refuses disabled and cashier accounts',()=>{
  const viewer='22222222-2222-4222-8222-222222229101',cashier='22222222-2222-4222-8222-222222229102';userAccessFixture(viewer,{view:true});userAccessFixture(cashier,{},'cashier');
- const query="select public.bon_erp_dashboard('0001-01-01','9999-12-31')";
+ const query="select public.bon_erp_dashboard_v2('0001-01-01','9999-12-31')";
  expect(()=>asUser(viewer,query)).not.toThrow();expect(()=>asUser(cashier,query)).toThrow('USER_PERMISSION_DENIED');
  sql(`update public.erp_members set disabled_at=now() where user_id='${viewer}'`);expect(()=>asUser(viewer,query)).toThrow('USER_PERMISSION_DENIED');
  expect(()=>sql('set role anon;'+query)).toThrow('permission denied');
  const cashQuery="select public.bon_erp_cash_summary('2026-11-01','2026-11-04')";
  expect(()=>asUser(cashier,cashQuery)).toThrow('USER_PERMISSION_DENIED');expect(()=>asUser(viewer,cashQuery)).toThrow('USER_PERMISSION_DENIED');expect(()=>sql('set role anon;'+cashQuery)).toThrow('permission denied');
- expect(sql("select bool_and(not p.prosecdef) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and proname in ('bon_erp_dashboard','bon_erp_sales_page','bon_erp_sale_detail','bon_erp_item_search')")).toBe('t');
+ expect(sql("select bool_and(not p.prosecdef) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and proname in ('bon_erp_dashboard_v2','bon_erp_cash_summary','bon_erp_export_report_v2','bon_erp_sales_page','bon_erp_sale_detail','bon_erp_item_search')")).toBe('t');
 });
 function save(value:any){return sql(`begin;set local request.jwt.claim.sub='${owner}';set local role authenticated;select public.bon_erp_save_store(0,${literal(value)},gen_random_uuid(),null);rollback;`);}
 const accept=(store:StoreState)=>expect(save(toCloud(store))).toContain('"version": 1');
@@ -213,7 +213,7 @@ it.skipIf(!active)('activates one completed definition atomically and preserves 
 it.skipIf(!active)('accepts an actual complete store through the versioned API',()=>expect(save(toCloud(state))).toContain('"version": 1'));
 it.skipIf(!active)('records a settled opening asset once without changing revenue, profit, partners or debt',()=>{
  const next=recordFinancialOpening(stockState(),'2026-11-01',1000,'ترحيل رصيد أكتوبر بعد التسوية',{id:owner,name:'Owner'});seed(stockState());accept(next);
- const result=readJson(`select public.bon_erp_save_store(0,${literal(toCloud(next))},'${crypto.randomUUID()}');select jsonb_build_object('report',public.bon_erp_dashboard('2026-11-01','2026-11-30')->'report','opening',(select financial_openings->0->'amount' from public.bon_elagouz_store),'partners',(select partners from public.bon_elagouz_store),'expenses',(select expenses from public.bon_elagouz_store))`);
+ const result=readJson(`select public.bon_erp_save_store(0,${literal(toCloud(next))},'${crypto.randomUUID()}');select jsonb_build_object('report',public.bon_erp_dashboard_v2('2026-11-01','2026-11-30')->'report','opening',(select financial_openings->0->'amount' from public.bon_elagouz_store),'partners',(select partners from public.bon_elagouz_store),'expenses',(select expenses from public.bon_elagouz_store))`);
  expect(result.opening).toBe(1000);expect(result.report.revenue).toBe(0);expect(result.report.net).toBe(0);expect(result.expenses).toEqual([]);expect(result.partners).toEqual(state.partners);
 });
 it.skipIf(!active)('requires the master and immutable correction history for opening changes',()=>{

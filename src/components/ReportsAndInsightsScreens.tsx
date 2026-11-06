@@ -16,7 +16,6 @@ import {RecordPagination,useRecordPage} from './RecordPagination';
 import {Share2, Users, TrendingUp, PiggyBank, FileText, Package, Download, LayoutGrid, Sparkles, Award} from 'lucide-react';
 import {
   InventoryItem,
-  SalesInvoice,
   Expense,
   Customer,
   Partner,
@@ -137,7 +136,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
               </div>
             </div>
             <span className="bg-[#C59B27] text-[#1E1612] text-xs font-black px-3 py-1 rounded-full">
-              {profitMarginPercent!==null&&totalSales>0?`هامش مجمل الربح ${profitMarginPercent.toFixed(1)}%`:'الهامش غير متاح دون مبيعات'}
+              {profitMarginPercent===null?'بانتظار تكلفة الأصناف':totalSales>0?`هامش مجمل الربح ${profitMarginPercent.toFixed(1)}%`:'الهامش غير متاح دون مبيعات'}
             </span>
           </div>
 
@@ -256,7 +255,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
               {amountText(grossProfit)}
             </div>
             <div className="text-[11px] font-bold text-[#7A6855]">
-              {profitMarginPercent!==null&&totalSales>0?`هامش ${profitMarginPercent.toFixed(1)}%`:'غير متاح دون مبيعات'}
+              {profitMarginPercent===null?'بانتظار تكلفة الأصناف':totalSales>0?`هامش ${profitMarginPercent.toFixed(1)}%`:'غير متاح دون مبيعات'}
             </div>
           </div>
 
@@ -411,7 +410,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-[#D4AF37] text-xs font-extrabold">
                     <TrendingUp className="w-4 h-4" />
-                    <span>صافي الربح النهائي (بعد خصم المصروفات)</span>
+                    <span>صافي ربح الفترة (بعد خصم المصروفات)</span>
                   </div>
                   <output aria-label="صافي ربح الفترة" className={`block text-3xl font-black tracking-tight ${stats.netProfit!==null&&stats.netProfit<0?'text-rose-300':'text-[#FBF5B7]'}`}>
                     {amountText(stats.netProfit)}

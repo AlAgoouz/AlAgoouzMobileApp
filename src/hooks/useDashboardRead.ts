@@ -11,7 +11,7 @@ export function useDashboardRead(userId:string|undefined,enabled:boolean,period:
   let alive=true,version:number|undefined,queueCount:number|undefined,checking=false;
   setResult({key,data:null,error:''});
   const load=async()=>{
-   try{const data=dashboardSchema.parse(await readRpc('bon_erp_dashboard',{p_from:range.from,p_to:range.to}));if(alive){version=data.version;queueCount=data.queued;setResult({key,data,error:''});}}
+   try{const data=dashboardSchema.parse(await readRpc('bon_erp_dashboard_v2',{p_from:range.from,p_to:range.to}));if(alive){version=data.version;queueCount=data.queued;setResult({key,data,error:''});}}
    catch{if(alive)setResult({key,data:null,error:'تعذر تحميل ملخص المحل. أعد المحاولة؛ الأرقام لم تُحمّل بعد.'});}
   };
   const check=async()=>{
