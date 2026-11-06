@@ -67,11 +67,12 @@ export class StoreEngine {
     try {
       const remote = await this.transport.load();
       if (epoch !== this.epoch) return;
+      const state = validateStore(remote.state);
       this.pending = undefined;
       this.hydrated = true;
       this.publish({
         ...remote,
-        state: validateStore(remote.state),
+        state,
         status: 'ready',
         error: '',
       });
@@ -239,13 +240,16 @@ export class StoreEngine {
           error:
             'جهاز آخر حفظ تعديلات جديدة؛ احتفظ بنسخة من عملك ثم أعد التحميل.',
         });
-      } else
+      } else {
+        const state = validateStore(remote.state);
+        this.hydrated = true;
         this.publish({
           ...remote,
-          state: validateStore(remote.state),
+          state,
           status: 'ready',
           error: '',
         });
+      }
     } catch (error) {
       if (epoch === this.epoch && !this.pending)
         this.publish({
@@ -257,5 +261,8 @@ export class StoreEngine {
   }
   get hasPending() {
     return Boolean(this.pending);
+  }
+  get hasLoaded() {
+    return this.hydrated;
   }
 }

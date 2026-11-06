@@ -293,7 +293,9 @@ export function useErpStore(loadFull=true) {
   }
   return {
     ...snapshot,
-    fullReady:hydrationKey===member?.userId&&['ready','dirty'].includes(snapshot.status),
+    // Keep mounted forms through acknowledgement waits and write failures. The
+    // blocking status dialog still prevents actions; hydration is not save status.
+    fullReady:hydrationKey===member?.userId&&engine.hasLoaded&&!['signed-out','loading'].includes(snapshot.status),
     engine,
     member,
     authReady,

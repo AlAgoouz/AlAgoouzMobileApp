@@ -205,6 +205,12 @@ export async function verifyDesign(){
     await page.getByRole('button',{name:'اعتماد الوصفة وتجهيز المنتج',exact:true}).click();
     await page.getByText(/Isolated fixture refuses writes/).first().waitFor();
     assert.equal(await page.getByLabel('كمية خام الوصفة',{exact:true}).inputValue(),'18');
+    await page.screenshot({path:'design-recipe-save-failure-mobile.png',fullPage:true});
+    await page.unroute('**/rest/v1/rpc/bon_erp_save_store');
+    await page.route('**/rest/v1/rpc/bon_erp_save_store',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:1})}));
+    await page.getByRole('button',{name:'إعادة محاولة الحفظ',exact:true}).click();
+    await page.getByRole('dialog').waitFor({state:'hidden'});
+    assert.equal(await page.getByLabel('كمية خام الوصفة',{exact:true}).inputValue(),'18');
     evidence.recipeEditor=true;
     await page.unroute('**/rest/v1/bon_elagouz_store?*');await page.unroute('**/rest/v1/rpc/bon_erp_save_store');
     await page.setViewportSize({width:360,height:800});
