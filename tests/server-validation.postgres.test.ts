@@ -69,7 +69,9 @@ it.skipIf(!active)('keeps master protection bound to identity across email chang
 beforeAll(()=>{if(active){setup();sql(`insert into auth.users values('${owner}','test@local.test',now());insert into public.erp_members(user_id,username,partner_id,role)values('${owner}','owner','p1','partner');insert into bon_erp_private.owner_config(id,email,owner_user_id)values(true,'test@local.test','${owner}');`);}},120000);
 function seed(store:StoreState){
   const fields=Object.entries(toCloud(store));
-  sql(`delete from public.bon_elagouz_store;insert into public.bon_elagouz_store(id,version,${fields.map(([name])=>name).join(',')})values('main_store',0,${fields.map(([,value])=>literal(value)).join(',')});`);
+  // Opening-balance triggers require the owner's identity even for a disposable
+  // fixture inserted by postgres. Keep the real authorization checks enabled.
+  sql(`begin;set local request.jwt.claim.sub='${owner}';delete from public.bon_elagouz_store;insert into public.bon_elagouz_store(id,version,${fields.map(([name])=>name).join(',')})values('main_store',0,${fields.map(([,value])=>literal(value)).join(',')});commit;`);
 }
 beforeEach(()=>{if(active){seed(state);sql('truncate table bon_erp_private.import_jobs,public.cashier_sync_queue;delete from storage.objects where bucket_id=\'agouz-cashier-imports\';');}});
 afterAll(()=>{if(active)dispose();});

@@ -189,6 +189,9 @@ export async function verifyDesign(){
     moneyFixture.cashier_days=Array.from({length:4},(_,i)=>({id:'money-'+i,date:`2026-11-0${i+1}`,status:'pending',financialReport:{fileName:`day-${i}.csv`,sha256:String(i+1).repeat(64),uploadedAt:'2026-11-05T10:00:00Z',totalRevenue:(i+1)*100}}));
     await page.route('**/rest/v1/rpc/bon_erp_dashboard_v2',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(projectRead(moneyFixture,'bon_erp_dashboard_v2',route.request().postDataJSON()))}));
     await page.getByRole('button',{name:'الرئيسية',exact:true}).click();
+    // Sections and home share a cached dashboard; start a fresh document so the
+    // isolated financial response is actually requested, with the same login.
+    await page.reload();
     await page.getByText('بانتظار استكمال تكلفة الأصناف',{exact:true}).waitFor();
     const cashRegion=page.getByRole('region',{name:'رصيد أموال النشاط'});
     assert.ok((await cashRegion.innerText()).includes(new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(2000)),'Opening plus financial receipts must be visible');
