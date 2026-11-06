@@ -192,7 +192,7 @@ export async function verifyDesign(){
     await page.reload();await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
     await page.locator('.section-tile').filter({has:page.locator('.section-tile-title',{hasText:'الوصفات'})}).click();
     await page.getByLabel('المنتج صاحب الوصفة').selectOption('draft:recipe-draft');
-    await page.getByLabel('المكون',{exact:true}).selectOption('recipe-raw');
+    await page.getByRole('combobox',{name:/^المكون/}).selectOption('recipe-raw');
     await page.getByLabel('كمية المكون',{exact:true}).fill('١٨');
     await page.getByRole('button',{name:'إضافة المكون',exact:true}).click();
     assert.equal(await page.getByLabel('إجمالي تكلفة الوصفة').innerText(),new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(7.2)+' ج.م');
