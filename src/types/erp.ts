@@ -50,14 +50,18 @@ export interface InventoryItem {
   costHistory?: ItemCostRecord[];
 }
 
-export interface CatalogNameDraft {
-  id:string;
-  name:string;
-  sourceRepository:string;
-  sourceCommit:string;
-  sourcePath:string;
-  importedAt:string;
+export interface RecipeProductDefinition {
+  code:string;
+  category:'manufactured_blend'|'drink_recipe'|'seasoning_recipe';
+  baseUnit:InventoryItem['baseUnit'];
+  retailPrice:number;
+  openingStock:number;
+  minStock:number;
 }
+export type CatalogNameDraft={id:string;name:string;definition?:RecipeProductDefinition}&(
+  {origin?:'github';sourceRepository:string;sourceCommit:string;sourcePath:string;importedAt:string}
+  |{origin:'manual';createdAt:string}
+);
 
 export interface ItemCostRecord {
   id:string;

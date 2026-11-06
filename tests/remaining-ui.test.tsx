@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
   StaffAndPayrollScreen,
   StocktakingScreen,
@@ -58,27 +58,12 @@ it("keeps a rejected expense editable and assigns its Cairo business date", () =
       .value,
   ).toBe("Test expense");
 });
-it("requires recipe ingredients while creating a new blend", () => {
-  const save = vi.fn((item) => {
-    validateStore({ ...emptyStore, items: [{ ...item, id: "new-blend" }] });
-    return true;
-  });
-  render(
-    <ProductionAndRecipesScreen
-      items={[]}
-      productionBatches={[]}
-      currentPartnerName="Owner"
-      onExecuteProduction={() => ({ ok: false, message: "" })}
-      onSaveItemRecipe={() => {}}
-      onCreateNewBlendOrDrink={save}
-      onBack={() => {}}
-    />,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "جديد" }));
-  fireEvent.change(screen.getByLabelText('اسم الصنف'),{target:{value:'New blend'}});
-  fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف والوصفة'}));
-  expect(save).not.toHaveBeenCalled();
-  expect(screen.getByRole('alert').textContent).toContain('حدد مكونات الوصفة');
+it('limits production definitions to blends and routes their recipes elsewhere',async()=>{
+ const define=vi.fn().mockResolvedValue(undefined),execute=vi.fn();render(<ProductionAndRecipesScreen items={[]} productionBatches={[]} currentPartnerName="Owner" onExecuteProduction={execute} onDefineRecipe={define} onBack={()=>{}}/>);
+ fireEvent.click(screen.getByRole('button',{name:'جديد'}));
+ expect((screen.getByLabelText('نوع الصنف') as HTMLSelectElement).options).toHaveLength(1);
+ fireEvent.change(screen.getByLabelText('اسم الصنف'),{target:{value:'New blend'}});fireEvent.click(screen.getByRole('button',{name:'حفظ والانتقال إلى الوصفات'}));
+ await waitFor(()=>expect(define).toHaveBeenCalledWith(expect.any(String),'New blend',expect.objectContaining({category:'manufactured_blend'})));expect(execute).not.toHaveBeenCalled();
 });
 const bean = {
   ...INITIAL_ITEMS.find((i) => i.category === "raw_bean")!,

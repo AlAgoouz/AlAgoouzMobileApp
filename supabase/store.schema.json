@@ -7,46 +7,178 @@
       "maxItems": 2000,
       "type": "array",
       "items": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "minLength": 1
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "definition": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "manufactured_blend",
+                      "drink_recipe",
+                      "seasoning_recipe"
+                    ]
+                  },
+                  "baseUnit": {
+                    "type": "string",
+                    "enum": [
+                      "kg",
+                      "piece",
+                      "count",
+                      "liter"
+                    ]
+                  },
+                  "retailPrice": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "openingStock": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "minStock": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "code",
+                  "category",
+                  "baseUnit",
+                  "retailPrice",
+                  "openingStock",
+                  "minStock"
+                ],
+                "additionalProperties": false
+              },
+              "origin": {
+                "type": "string",
+                "const": "github"
+              },
+              "sourceRepository": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "sourceCommit": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{40}$"
+              },
+              "sourcePath": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "importedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "sourceRepository",
+              "sourceCommit",
+              "sourcePath",
+              "importedAt"
+            ],
+            "additionalProperties": false
           },
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200
-          },
-          "sourceRepository": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200
-          },
-          "sourceCommit": {
-            "type": "string",
-            "pattern": "^[a-f0-9]{40}$"
-          },
-          "sourcePath": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 500
-          },
-          "importedAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "definition": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "manufactured_blend",
+                      "drink_recipe",
+                      "seasoning_recipe"
+                    ]
+                  },
+                  "baseUnit": {
+                    "type": "string",
+                    "enum": [
+                      "kg",
+                      "piece",
+                      "count",
+                      "liter"
+                    ]
+                  },
+                  "retailPrice": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "openingStock": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "minStock": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "code",
+                  "category",
+                  "baseUnit",
+                  "retailPrice",
+                  "openingStock",
+                  "minStock"
+                ],
+                "additionalProperties": false
+              },
+              "origin": {
+                "type": "string",
+                "const": "manual"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "origin",
+              "createdAt"
+            ],
+            "additionalProperties": false
           }
-        },
-        "required": [
-          "id",
-          "name",
-          "sourceRepository",
-          "sourceCommit",
-          "sourcePath",
-          "importedAt"
-        ],
-        "additionalProperties": false
+        ]
       }
     },
     "financial_openings": {

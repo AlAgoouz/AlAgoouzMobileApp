@@ -13,7 +13,7 @@ import {CatalogNameDraftPanel} from './CatalogNameDraftPanel';
 import {CatalogListControls,CatalogListNavigation} from './CatalogListControls';
 import {CatalogProductRows} from './CatalogProductRows';
 import {browseCatalog,type CatalogSort} from '../lib/catalogBrowse';
-import type {CatalogNameDraft} from '../types/erp';
+import type {CatalogNameDraft,RecipeProductDefinition} from '../types/erp';
 import {categoryLabel,itemCategories,requiresRecipe,isStockItem,isRecipeOnUse} from '../lib/itemPolicy';
 import React, { useState, useMemo } from "react";
 import {RecordPagination,useRecordPage} from './RecordPagination';
@@ -65,6 +65,8 @@ function allValidNumbers(values: string[]): boolean {
 // 0. شاشة المنتجات والتسعير (ProductsCatalogScreen) - الأساس الذي تعتمد عليه الدورة التشغيلية كلها
 // ============================================================================
 interface ProductsCatalogScreenProps {
+  onOpenRecipe?:(targetId?:string)=>void;
+  onDefineRecipe?:(id:string,name:string,definition:RecipeProductDefinition,original?:CatalogNameDraft)=>Promise<void>;
   canManage?:boolean;
   nameDrafts?:CatalogNameDraft[];
   onChangeNameDraft?:(id:string,name:string|null)=>Promise<void>;
@@ -80,6 +82,7 @@ interface ProductsCatalogScreenProps {
 }
 
 export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
+  onOpenRecipe,onDefineRecipe,
   nameDrafts=[],onCompleteNameDraft,onChangeNameDraft,canManage=true,
   items,
   onAddNewItem,
@@ -207,10 +210,10 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
             <button aria-pressed={catalogPane==='pending'} onClick={()=>setCatalogPane('pending')}>تحتاج استكمال ({nameDrafts.length})</button>
             <button aria-pressed={catalogPane==='ready'} onClick={()=>setCatalogPane('ready')}>جاهزة للاستخدام ({items.length})</button>
           </nav>
-          <details className="catalog-shortcuts"><summary>انتقالات سريعة</summary><div><button onClick={onNavigateToPurchase}>المشتريات</button><button onClick={onNavigateToProduction}>الوصفات والإنتاج</button><button onClick={onNavigateToInventory}>أرصدة المخزن</button></div></details>
+          <details className="catalog-shortcuts"><summary>انتقالات سريعة</summary><div><button onClick={onNavigateToPurchase}>المشتريات</button><button onClick={()=>onOpenRecipe?.()}>الوصفات</button><button onClick={onNavigateToProduction}>إنتاج التوليفات</button><button onClick={onNavigateToInventory}>أرصدة المخزن</button></div></details>
         </div>
         <section className="catalog-pane" hidden={catalogPane!=='pending'} aria-label="المنتجات التي تحتاج استكمالًا">
-          <CatalogNameDraftPanel drafts={nameDrafts} items={items} onComplete={onCompleteNameDraft} onChange={onChangeNameDraft} onShowReady={()=>setCatalogPane('ready')}/>
+          <CatalogNameDraftPanel drafts={nameDrafts} items={items} onComplete={onCompleteNameDraft} onChange={onChangeNameDraft} onDefineRecipe={onDefineRecipe} onOpenRecipe={id=>onOpenRecipe?.('draft:'+id)} onShowReady={()=>setCatalogPane('ready')}/>
         </section>
         <section className="catalog-pane space-y-3" hidden={catalogPane!=='ready'} aria-label="المنتجات الجاهزة">
           <div className="catalog-summary"><span>أصناف مباشرة <b>{catalogStats.rawAndSpices}</b></span><span>أصناف لها وصفة <b>{catalogStats.blendsAndDrinks}</b></span><span>متوسط هامش البيع الإرشادي <b>{catalogStats.avgMargin}%</b></span></div>
@@ -219,13 +222,13 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
           </div>
           <CatalogListControls label="البحث في المنتجات الجاهزة" search={search} onSearch={value=>{catalogPage.setPage(0);setSearch(value);}} sort={catalogSort} onSort={value=>{catalogPage.setPage(0);setCatalogSort(value);}} pageSize={catalogPageSize} onPageSize={value=>{catalogPage.setPage(0);setCatalogPageSize(value);}}/>
           <CatalogListNavigation page={catalogPage} label="انتقل إلى صفحة المنتجات الجاهزة"/>
-          {filtered.length?<CatalogProductRows items={catalogPage.visible} canManage={canManage} onEdit={openEditItem} onDelete={item=>{setDeleting(item);setDeleteError('');}} onRecipe={onNavigateToProduction}/>:<p role="status" className="catalog-empty">لا توجد منتجات جاهزة مطابقة لهذا العرض.</p>}
+          {filtered.length?<CatalogProductRows items={catalogPage.visible} canManage={canManage} onEdit={openEditItem} onDelete={item=>{setDeleting(item);setDeleteError('');}} onRecipe={item=>onOpenRecipe?.('item:'+item.id)}/>:<p role="status" className="catalog-empty">لا توجد منتجات جاهزة مطابقة لهذا العرض.</p>}
         </section>
       </div>
 
       {/* نافذة تعريف وإضافة منتج جديد */}
       {deleting&&<Modal title="حذف المنتج" description={`هل تريد حذف (${deleting.name})؟ لا يمكن حذف منتج مرتبط بفواتير أو وصفات أو حركات مخزون.`} busy={deleteBusy} onClose={()=>setDeleting(null)} footer={<div className="record-actions"><button disabled={deleteBusy} onClick={()=>setDeleting(null)}>إلغاء</button><button disabled={deleteBusy} className="text-red-700" onClick={()=>void confirmDelete()}>{deleteBusy?'جارٍ تأكيد الحذف…':'تأكيد حذف المنتج'}</button></div>}>{deleteError&&<p role="alert">{deleteError}</p>}</Modal>}
-      {showAddModal && <ItemDefinitionModal items={items} onSave={onAddNewItem} onClose={()=>setShowAddModal(false)}/>}
+      {showAddModal && <ItemDefinitionModal items={items} reservedCodes={nameDrafts.flatMap(d=>d.definition?[d.definition.code]:[])} onSaveRecipeDefinition={onDefineRecipe} onSave={onAddNewItem} onClose={()=>setShowAddModal(false)}/>}
 
       {/* نافذة تعديل بيانات وتسعير المنتج */}
       {editingItem && (

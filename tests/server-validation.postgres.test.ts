@@ -10,6 +10,7 @@ import {businessDate} from '../src/lib/dates';
 import {receiveStock} from '../src/lib/costing';
 import {recordFinancialOpening,financialPosition} from '../src/lib/financialOpening';
 import {completeCatalogNameDraft,changeCatalogNameDraft} from '../src/lib/catalogNameDrafts';
+import {recordRecipeDefinition,activateRecipeDraft,updateCatalogRecipe} from '../src/lib/recipeCatalog';
 import {attachCashierReport,approveCashierDay} from '../src/lib/cashierDays';
 import {salesForReports} from '../src/lib/cashierDays';
 import {buildReport,reportRange,reportPoints} from '../src/lib/reporting';
@@ -172,6 +173,46 @@ function save(value:any){return sql(`begin;set local request.jwt.claim.sub='${ow
 const accept=(store:StoreState)=>expect(save(toCloud(store))).toContain('"version": 1');
 const reject=(store:StoreState,reason:string)=>{expect(()=>save(toCloud(store))).toThrow(reason);expect(sql("select version from public.bon_elagouz_store where id='main_store'")).toBe('0');};
 const nameDraft={id:'legacy-draft',name:'Imported name',sourceRepository:'AlAgoouz/Erp-AlAgoouz',sourceCommit:'a'.repeat(40),sourcePath:'source.ts',importedAt:'2026-11-05T00:00:00.000Z'};
+const drinkDefinition={code:'DR-1',category:'drink_recipe' as const,baseUnit:'piece' as const,retailPrice:20,openingStock:0,minStock:0};
+const coffeeRecipe=[{ingredientId:'bean',ingredientName:'Coffee',quantity:18,unit:'gram' as const}];
+it.skipIf(!active)('keeps imported and manual recipe definitions nonoperational and restores their complete metadata',()=>{
+ const source=stockState();seed(source);
+ const imported={...source,catalogNameDrafts:[nameDraft]};
+ const defined=recordRecipeDefinition(recordRecipeDefinition(imported,nameDraft.id,nameDraft.name,drinkDefinition,{name:'Owner'}),'manual','Seasoning',{...drinkDefinition,code:'SE-1',category:'seasoning_recipe',baseUnit:'kg'},{name:'Owner'});
+ const result=readJson(`select public.bon_erp_save_store(0,${literal(toCloud(defined))},'${crypto.randomUUID()}');select jsonb_build_object('drafts',catalog_name_drafts,'items',items,'sales',sales_invoices,'production',production_batches,'expenses',expenses) from public.bon_elagouz_store`);
+ expect(result).toEqual({drafts:defined.catalogNameDrafts,items:source.items,sales:[],production:[],expenses:[]});
+ expect(readJson(`select public.bon_erp_restore_store(0,${literal(toCloud(defined))},'${crypto.randomUUID()}');select catalog_name_drafts from public.bon_elagouz_store`)).toEqual(defined.catalogNameDrafts);
+});
+it.skipIf(!active)('reserves pending codes against both other definitions and operational item edits',()=>{
+ const pending=recordRecipeDefinition(stockState(),'pending','Drink',drinkDefinition,{name:'Owner'});seed(pending);
+ const duplicate={...pending,catalogNameDrafts:[...pending.catalogNameDrafts,{...pending.catalogNameDrafts[0],id:'other',name:'Another drink'}]};reject(duplicate,'RECIPE_DEFINITION_CODE_OR_NAME_USED');
+ reject({...pending,items:pending.items.map(i=>({...i,code:'dr-1'}))},'RECIPE_DEFINITION_CODE_OR_NAME_USED');
+ for(const definition of [{...drinkDefinition,baseUnit:'kg'},{...drinkDefinition,openingStock:1},{...drinkDefinition,code:' B2 '}])reject({...pending,catalogNameDrafts:[{...pending.catalogNameDrafts[0],definition}]} as StoreState,'INVALID_RECIPE_DEFINITION');
+});
+it.skipIf(!active)('requires catalog permission for recipe definitions and preserves their provenance against stale clients',()=>{
+ const source=stockState(),pending=recordRecipeDefinition({...source,catalogNameDrafts:[nameDraft]},nameDraft.id,nameDraft.name,drinkDefinition,{name:'Owner'});seed(source);
+ const production='22222222-2222-4222-8222-222222220088',catalog='22222222-2222-4222-8222-222222220089';userAccessFixture(production,{view:true,production:true});userAccessFixture(catalog,{view:true,catalog:true});
+ expect(()=>asUser(production,`select public.bon_erp_save_store(0,${literal(toCloud(pending))},'${crypto.randomUUID()}')`)).toThrow('USER_PERMISSION_DENIED');
+ expect(()=>asUser(catalog,`select public.bon_erp_save_store(0,${literal(toCloud(pending))},'${crypto.randomUUID()}')`)).not.toThrow();
+ seed(pending);reject({...pending,catalogNameDrafts:[nameDraft]},'RECIPE_DEFINITION_CLIENT_UPGRADE_REQUIRED');
+ reject({...pending,catalogNameDrafts:[{...pending.catalogNameDrafts[0],sourceCommit:'b'.repeat(40)}]},'CATALOG_DRAFT_SOURCE_IMMUTABLE');
+});
+it.skipIf(!active)('activates complete recipes atomically without consuming ingredients or creating production',()=>{
+ const pending=recordRecipeDefinition(stockState(),'pending','Drink',drinkDefinition,{name:'Owner'});seed(pending);
+ const ready=activateRecipeDraft(pending,'pending',coffeeRecipe,{name:'Owner'});accept(ready);
+ const result=readJson(`select public.bon_erp_save_store(0,${literal(toCloud(ready))},'${crypto.randomUUID()}');select jsonb_build_object('drafts',catalog_name_drafts,'items',items,'production',production_batches,'sales',sales_invoices) from public.bon_elagouz_store`);
+ expect(result).toEqual({drafts:[],items:ready.items,production:[],sales:[]});expect(result.items[0]).toEqual(pending.items[0]);
+ const invalid={...ready,items:ready.items.map(i=>i.code==='DR-1'?{...i,recipe:[]}:i)};reject(invalid,'EMPTY_RECIPE');
+ const unregistered={...pending,salesInvoices:[sale(1,{...bean,id:'pending'})]};expect(()=>save(toCloud(unregistered))).toThrow();
+});
+it.skipIf(!active)('updates a blend recipe without rewriting its inventory average or recorded transactions',()=>{
+ const pending=recordRecipeDefinition(stockState(),'blend','Blend',{...drinkDefinition,code:'BL-1',category:'manufactured_blend',baseUnit:'kg',openingStock:2},{name:'Owner'});
+ const ready=activateRecipeDraft(pending,'blend',[{...coffeeRecipe[0],quantity:1000}],{name:'Owner'});seed(ready);const blend=ready.items.find(i=>i.code==='BL-1')!;
+ const next=updateCatalogRecipe(ready,blend,[{...coffeeRecipe[0],quantity:500}],{name:'Owner'});accept(next);
+ const result=readJson(`select public.bon_erp_save_store(0,${literal(toCloud(next))},'${crypto.randomUUID()}');select jsonb_build_object('items',items,'production',production_batches,'sales',sales_invoices,'purchases',purchase_invoices,'audits',stocktaking_records) from public.bon_elagouz_store`);
+ expect(result.items.find((i:InventoryItem)=>i.id===blend.id)).toMatchObject({stock:2,costPrice:blend.costPrice,recipe:[{...coffeeRecipe[0],quantity:500}]});
+ expect(result.production).toEqual([]);expect(result.sales).toEqual([]);expect(result.purchases).toEqual([]);expect(result.audits).toEqual([]);
+});
 it.skipIf(!active)('drops withdrawn price metadata from stale clients and restores without altering manually entered product prices',()=>{
  const existing=stockState();seed(existing);
  const pending={...existing,catalogNameDrafts:[nameDraft]},stale={...pending,catalogNameDrafts:[{...nameDraft,legacyPrices:{purchasePrice:45,salePrice:65,sourceKind:'github_seed'}}]};

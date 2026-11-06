@@ -21,7 +21,7 @@ export async function verifyDesign(){
     await trigger.click();
     const dialog=page.getByRole('dialog');await dialog.waitFor();
     const baseUnit=dialog.getByLabel('الوحدة الأساسية',{exact:true});
-    if(await baseUnit.count()){
+    if(await baseUnit.count()&&await baseUnit.locator('option[value="count"]').count()){
       await baseUnit.selectOption('count');
       assert.equal(await baseUnit.inputValue(),'count','New product forms must expose the distinct count unit');
     }
@@ -100,7 +100,7 @@ export async function verifyDesign(){
       await page.setViewportSize({width,height:800});await limit(page,`sections-${width}`);evidence.widths.push(width);
     }
     await page.setViewportSize({width:360,height:800});
-    const titles=await page.locator('.section-tile-title').allTextContents();assert.equal(titles.length,17);
+    const titles=await page.locator('.section-tile-title').allTextContents();assert.equal(titles.length,18);
     for(const title of titles){
       await page.locator('.section-tile').filter({has:page.locator('.section-tile-title',{hasText:title})}).click();
       await page.locator('.sections-hub').waitFor({state:'hidden'});
@@ -144,7 +144,7 @@ export async function verifyDesign(){
         await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).first().click();
         await page.getByRole('dialog').waitFor();await page.getByRole('button',{name:'إغلاق النافذة',exact:true}).click();
       }
-      const addDialogs={'المنتجات والتسعير':'منتج جديد','الإنتاج والوصفات':'جديد','مخزن البن':'إضافة','عملاء الجملة':'إضافة','الموردين':'إضافة','المستخدمين':'إضافة مستخدم','العمال والرواتب':'عامل جديد'};
+      const addDialogs={'المنتجات والتسعير':'منتج جديد','إنتاج التوليفات':'جديد','الوصفات':'تعريف منتج بوصفة','مخزن البن':'إضافة','عملاء الجملة':'إضافة','الموردين':'إضافة','المستخدمين':'إضافة مستخدم','العمال والرواتب':'عامل جديد'};
       if(addDialogs[title])await reviewModal(page,page.getByRole('button',{name:addDialogs[title],exact:true}),String(evidence.sections.length+1),title==='المستخدمين');
       if(title==='المصاريف'){
         await page.getByRole('button',{name:'حسابي',exact:true}).click();
@@ -182,6 +182,30 @@ export async function verifyDesign(){
     await page.emulateMedia({reducedMotion:'reduce'});await limit(page,'sections-card-reduced-motion');
     assert.equal(await hoveredCard.evaluate(e=>getComputedStyle(e).transform),'none','Reduced-motion cards must remain stable');
     evidence.cardHover=true;
+    await page.setViewportSize({width:360,height:800});
+    // Recipe editing uses disposable responses; a save is deliberately refused
+    // to verify that missing acknowledgement retains all local ingredients.
+    const recipeFixture=fixture(0);
+    recipeFixture.items=[{...recipeFixture.items[0],id:'recipe-raw',code:'R1',name:'خام الوصفة',category:'raw_bean',baseUnit:'kg',costPrice:400}];
+    recipeFixture.catalog_name_drafts=[{id:'recipe-draft',name:'مشروب تحت الاستكمال',origin:'manual',createdAt:'2026-11-06T00:00:00Z',definition:{code:'DR-1',category:'drink_recipe',baseUnit:'piece',retailPrice:50,openingStock:0,minStock:0}}];
+    await page.route('**/rest/v1/bon_elagouz_store?*',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(new URL(route.request().url()).searchParams.get('select')==='version'?{version:0}:recipeFixture)}));
+    await page.reload();await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
+    await page.locator('.section-tile').filter({has:page.locator('.section-tile-title',{hasText:'الوصفات'})}).click();
+    await page.getByLabel('المنتج صاحب الوصفة').selectOption('draft:recipe-draft');
+    await page.getByLabel('المكون',{exact:true}).selectOption('recipe-raw');
+    await page.getByLabel('كمية المكون',{exact:true}).fill('١٨');
+    await page.getByRole('button',{name:'إضافة المكون',exact:true}).click();
+    assert.equal(await page.getByLabel('إجمالي تكلفة الوصفة').innerText(),new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(7.2)+' ج.م');
+    await page.getByLabel('كمية خام الوصفة',{exact:true}).fill('');
+    assert.equal(await page.getByRole('button',{name:'اعتماد الوصفة وتجهيز المنتج',exact:true}).isDisabled(),true);
+    await page.getByLabel('كمية خام الوصفة',{exact:true}).fill('18');
+    for(const width of [320,360,768,1440]){await page.setViewportSize({width,height:900});await limit(page,`recipe-editor-${width}`);await page.screenshot({path:`design-recipe-editor-${width}-mobile.png`,fullPage:true});}
+    await page.route('**/rest/v1/rpc/bon_erp_save_store',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Isolated fixture refuses writes'})}));
+    await page.getByRole('button',{name:'اعتماد الوصفة وتجهيز المنتج',exact:true}).click();
+    await page.getByText(/Isolated fixture refuses writes/).first().waitFor();
+    assert.equal(await page.getByLabel('كمية خام الوصفة',{exact:true}).inputValue(),'18');
+    evidence.recipeEditor=true;
+    await page.unroute('**/rest/v1/bon_elagouz_store?*');await page.unroute('**/rest/v1/rpc/bon_erp_save_store');
     await page.setViewportSize({width:360,height:800});
     // Financial acceptance uses a disposable response, never hosted business data.
     const moneyFixture=fixture(0);

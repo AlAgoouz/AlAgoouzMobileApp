@@ -23,19 +23,20 @@ it('opens the source name with unknown type, unit, stock and prices left empty',
  const save=vi.fn();render(<CatalogNameDraftPanel drafts={drafts} items={[]} onComplete={save}/>);fireEvent.click(screen.getByRole('button',{name:'استكمال بن برازيلى'}));
  expect((screen.getByLabelText('اسم الصنف') as HTMLInputElement).value).toBe('بن برازيلى');
  for(const label of ['نوع الصنف','الوحدة الأساسية','الرصيد الافتتاحي','حد النواقص','تكلفة الوحدة قبل الضريبة','سعر البيع المباشر'])expect((screen.getByLabelText(label) as HTMLInputElement).value).toBe('');
- fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف والوصفة'}));expect(save).not.toHaveBeenCalled();expect(screen.getByRole('alert').textContent).toContain('اختر');
+ fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف'}));expect(save).not.toHaveBeenCalled();expect(screen.getByRole('alert').textContent).toContain('اختر');
 });
-it('requires a recipe when a draft is defined as a blend',()=>{
- const save=vi.fn();render(<CatalogNameDraftPanel drafts={drafts} items={[]} onComplete={save}/>);fireEvent.click(screen.getByRole('button',{name:'استكمال بن برازيلى'}));
+it('routes a defined blend to the recipe section without activating it',async()=>{
+ const save=vi.fn(),define=vi.fn().mockResolvedValue(undefined);render(<CatalogNameDraftPanel drafts={drafts} items={[]} onComplete={save} onDefineRecipe={define}/>);fireEvent.click(screen.getByRole('button',{name:'استكمال بن برازيلى'}));
  fireEvent.change(screen.getByLabelText('نوع الصنف'),{target:{value:'manufactured_blend'}});
  for(const label of ['الرصيد الافتتاحي','حد النواقص','سعر البيع المباشر'])fireEvent.change(screen.getByLabelText(label),{target:{value:'0'}});
- fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف والوصفة'}));expect(save).not.toHaveBeenCalled();expect(screen.getByRole('alert').textContent).toContain('مكونات الوصفة');
+ expect(screen.queryByLabelText('المكون')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'حفظ والانتقال إلى الوصفات'}));
+ await waitFor(()=>expect(define).toHaveBeenCalledWith('legacy','بن برازيلى',expect.objectContaining({category:'manufactured_blend',baseUnit:'kg'}),drafts[0]));expect(save).not.toHaveBeenCalled();
 });
 it('confirms entered details and retains them when the server rejects activation',async()=>{
  const save=vi.fn().mockRejectedValue(Error('لم يتأكد الحفظ'));render(<CatalogNameDraftPanel drafts={drafts} items={[]} onComplete={save}/>);fireEvent.click(screen.getByRole('button',{name:'استكمال بن برازيلى'}));
  fireEvent.change(screen.getByLabelText('نوع الصنف'),{target:{value:'raw_bean'}});fireEvent.change(screen.getByLabelText('الوحدة الأساسية'),{target:{value:'kg'}});
  for(const [label,value]of [['الرصيد الافتتاحي','0'],['حد النواقص','0'],['تكلفة الوحدة قبل الضريبة','25'],['سعر البيع المباشر','40']])fireEvent.change(screen.getByLabelText(label),{target:{value}});
- fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف والوصفة'}));await waitFor(()=>expect(screen.getByRole('alert').textContent).toBe('لم يتأكد الحفظ'));
+ fireEvent.click(screen.getByRole('button',{name:'حفظ الصنف'}));await waitFor(()=>expect(screen.getByRole('alert').textContent).toBe('لم يتأكد الحفظ'));
  expect(save).toHaveBeenCalledWith('legacy',expect.objectContaining({name:'بن برازيلى',category:'raw_bean',baseUnit:'kg',stock:0,costPrice:25,retailPrice:40}));expect(screen.getByRole('dialog')).toBeTruthy();
 });
 it('bounds the register to fifty rows and allows readonly searching',()=>{
