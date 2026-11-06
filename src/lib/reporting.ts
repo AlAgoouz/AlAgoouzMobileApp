@@ -1,6 +1,7 @@
 import {businessDate} from './dates';
 import {operatingExpenses} from './ledger';
-import type {SalesInvoice,Expense} from '../types/erp';
+import type {Expense} from '../types/erp';
+import type {ReportSale} from './cashierDays';
 
 export type PeriodKind='today'|'week'|'month'|'custom'|'all';
 export interface PeriodSelection {kind:PeriodKind;from:string;to:string;}
@@ -25,21 +26,22 @@ export function previousReportRange(range:ReportRange):ReportRange|null{
  return {from:previousStart.toISOString().slice(0,10),to:previousEnd.toISOString().slice(0,10),valid:true,label:'الفترة السابقة'};
 }
 export function chartDomain(values:number[]){const min=Math.min(0,...values),max=Math.max(0,...values);return min===max?{min:0,max:1}:{min,max};}
-export interface TrendPoint {date:string;sales:number;profit:number;recorded:boolean;}
-export function buildReport(sales:SalesInvoice[],expenses:Expense[],range:ReportRange){
+export interface TrendPoint {date:string;sales:number;profit:number|null;recorded:boolean;}
+export function buildReport(sales:ReportSale[],expenses:Expense[],range:ReportRange){
  const invoices=sales.filter(i=>inReportRange(i.date,range)),active=invoices.filter(i=>!i.isReturned);
  const periodExpenses=expenses.filter(e=>inReportRange(e.date,range));
- const revenue=active.reduce((s,i)=>s+i.totalAmount,0),cost=active.reduce((s,i)=>s+i.totalCost,0),gross=active.reduce((s,i)=>s+i.netProfit,0),spent=operatingExpenses(periodExpenses);
- const entries=new Map<string,{sales:number;profit:number}>();
- const add=(date:string,sales:number,profit:number)=>{const row=entries.get(date)??{sales:0,profit:0};entries.set(date,{sales:row.sales+sales,profit:row.profit+profit});};
+ const pendingCostDays=active.filter(i=>i.totalCost===null||i.netProfit===null).length;
+ const revenue=active.reduce((s,i)=>s+i.totalAmount,0),cost=pendingCostDays?null:active.reduce((s,i)=>s+i.totalCost!,0),gross=pendingCostDays?null:active.reduce((s,i)=>s+i.netProfit!,0),spent=operatingExpenses(periodExpenses);
+ const entries=new Map<string,{sales:number;profit:number|null}>();
+ const add=(date:string,sales:number,profit:number|null)=>{const row=entries.get(date)??{sales:0,profit:0};entries.set(date,{sales:row.sales+sales,profit:row.profit===null||profit===null?null:row.profit+profit});};
  for(const i of active)add(i.date,i.totalAmount,i.netProfit);
  for(const e of periodExpenses)if(!e.isCancelled&&e.category!=='مسحوبات شركاء')add(e.date,0,-e.amount);
  const points=reportPoints([...entries].map(([date,value])=>({date,...value})),range);
- return {invoices,active,expenses:periodExpenses,revenue,cost,gross,spent,net:gross-spent,margin:revenue?((gross-spent)/revenue)*100:0,points};
+ return {invoices,active,expenses:periodExpenses,revenue,cost,gross,spent,net:gross===null?null:gross-spent,margin:gross===null?null:revenue?((gross-spent)/revenue)*100:0,points,pendingCostDays};
 }
-export const money=(value:number)=>new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(Object.is(value,-0)?0:value);
+export const money=(value:number|null)=>value===null?'غير مكتمل':new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(Object.is(value,-0)?0:value);
 
-export function reportPoints(rows:{date:string;sales:number;profit:number}[],range:ReportRange,firstDate?:string|null,lastDate?:string|null){
+export function reportPoints(rows:{date:string;sales:number;profit:number|null}[],range:ReportRange,firstDate?:string|null,lastDate?:string|null){
  const entries=new Map(rows.map(row=>[row.date,{sales:row.sales,profit:row.profit}]));
  const dates=[...entries.keys()].sort();let points:TrendPoint[]=[];
  if(dates.length){
@@ -47,11 +49,11 @@ export function reportPoints(rows:{date:string;sales:number;profit:number}[],ran
   const days=(Date.parse(last)-Date.parse(first))/86400000;
   if(days<=62){
    for(let d=new Date(first+'T12:00:00Z');d.toISOString().slice(0,10)<=last;d.setUTCDate(d.getUTCDate()+1)){
-    const date=d.toISOString().slice(0,10),entry=entries.get(date);points.push({date,sales:entry?.sales??0,profit:entry?.profit??0,recorded:!!entry});
+    const date=d.toISOString().slice(0,10),entry=entries.get(date);points.push({date,sales:entry?.sales??0,profit:entry?entry.profit:0,recorded:!!entry});
    }
   }else{
    const buckets=new Map<string,TrendPoint>();const length=days>730?4:7;
-   for(const [date,row]of entries){const key=date.slice(0,length),p=buckets.get(key)??{date:key,sales:0,profit:0,recorded:true};p.sales+=row.sales;p.profit+=row.profit;buckets.set(key,p);}
+   for(const [date,row]of entries){const key=date.slice(0,length),p=buckets.get(key)??{date:key,sales:0,profit:0,recorded:true};p.sales+=row.sales;p.profit=p.profit===null||row.profit===null?null:p.profit+row.profit;buckets.set(key,p);}
    const cursor=new Date(first.slice(0,4)+(length===4?'-01-01':first.slice(4,7)+'-01')+'T12:00:00Z');
    const stop=last.slice(0,length),filled:TrendPoint[]=[];
    // Keep missing periods explicit, without creating an unbounded chart for

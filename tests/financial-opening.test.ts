@@ -33,10 +33,10 @@ it('round-trips the exact opening and all correction evidence through a complete
 });
 it('separates income, credit, operating funds, stock cost, employee payouts and partner withdrawals',()=>{
  const state={...base(),salesInvoices:[sale({totalAmount:1000,subtotal:1000,paidAmount:150,remainingAmount:850,totalCost:600,netProfit:400}),sale({id:'old',date:'2026-10-15',paidAmount:90})],purchaseInvoices:[purchase()],accountPayments:[{id:'payment',date:'2026-11-03',targetType:'customer' as const,targetId:'c',targetName:'Customer',amount:50,partnerName:'Owner',allocations:[{invoiceId:'sale',amount:50}],openingBalanceAmount:0}],expenses:[expense(),expense({id:'withdraw',category:'مسحوبات شركاء',amount:25}),expense({id:'payroll',category:'رواتب ويوميات',amount:40}),expense({id:'pocket',amount:999,paidFrom:'من جيب الشريك'}),expense({id:'noncash',amount:777,paidFrom:'تسوية مخزون (بدون نقدية)'})],cashierDays:[{id:'day',date:'2026-11-03',status:'approved',financialReport:{fileName:'f.csv',sha256:'a'.repeat(64),uploadedAt:'now',totalRevenue:300},totalCost:200},{id:'pending',date:'2026-11-04',status:'pending',financialReport:{fileName:'p.csv',sha256:'b'.repeat(64),uploadedAt:'now',totalRevenue:900}}] as CashierDay[]};
- const result=position(state);expect(result).toMatchObject({opening:1000,inflow:450,outflow:315,resources:1450,closing:1135,issues:[]});
+ const result=position(state);expect(result).toMatchObject({opening:1000,inflow:1350,outflow:315,resources:2350,closing:2035,issues:[]});
  const range={from:'2026-11-01',to:'2026-11-30',valid:true,label:'November'};
  const withOpening=buildReport(salesForReports(state),state.expenses,range),withoutOpening=buildReport(salesForReports({...state,financialOpenings:[]}),state.expenses,range);
- expect(withOpening).toEqual(withoutOpening);expect(withOpening.revenue).toBe(1300);
+ expect(withOpening).toEqual(withoutOpening);expect(withOpening.revenue).toBe(2200);expect(withOpening.net).toBeNull();
  expect(state.partners).toEqual(emptyStore.partners);
 });
 it('carries the closing cash to the next month without adding the opening twice',()=>{

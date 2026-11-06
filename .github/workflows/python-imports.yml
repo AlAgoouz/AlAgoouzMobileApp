@@ -26,6 +26,7 @@ jobs:
         run: |
           pdftoppm -png -scale-to 1400 -f 1 -singlefile tmp/report-examples/Agouz-report-ar.pdf tmp/report-examples/report-preview
           pdftoppm -png -scale-to 1400 -f 1 -singlefile tmp/report-examples/Agouz-invoice-ar.pdf tmp/report-examples/invoice-preview
+          pdftoppm -png -scale-to 1400 -f 1 -singlefile tmp/report-examples/Agouz-pending-cost-ar.pdf tmp/report-examples/pending-cost-preview
       - uses: actions/upload-artifact@v4
         with:
           name: agouz-report-examples

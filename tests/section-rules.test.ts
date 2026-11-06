@@ -15,7 +15,7 @@ const drink:InventoryItem={...raw,id:'drink',code:'D1',name:'مشروب بوصف
 const file=(key:string)=>({fileName:key+'.xlsx',sha256:key.repeat(64),uploadedAt:'2026-11-03T04:00:00.000Z'});
 function paired(){let state={...emptyStore,items:[raw,seasoning,drink]};state=attachCashierReport(state,'2026-11-03',{type:'items',file:file('a'),lines:[{itemId:drink.id,quantity:10,unitLabel:'piece',normalizedQtyInBaseUnit:10}]});return attachCashierReport(state,'2026-11-03',{type:'financial',file:file('b'),totalRevenue:500});}
 it('posts one day revenue once and recursively consumes seasoning into negative physical stock',()=>{
- const pending=paired();expect(salesForReports(pending)).toEqual([]);expect(pending.items[0].stock).toBe(1);
+ const pending=paired();expect(salesForReports(pending)).toHaveLength(1);expect(salesForReports(pending)[0]).toMatchObject({totalAmount:500,totalCost:null,netProfit:null});expect(pending.items[0].stock).toBe(1);
  const posted=approveCashierDay(pending,pending.cashierDays[0].id,'Owner');
  expect(posted.items.find(i=>i.id===raw.id)?.stock).toBe(-1);expect(posted.items.find(i=>i.id===seasoning.id)?.stock).toBe(0);
  expect(posted.cashierDays[0].totalCost).toBe(200);expect(posted.cashierDays[0].shortages).toEqual([{itemId:'raw',shortage:1}]);
@@ -29,7 +29,7 @@ it('prevents same-day duplicates even for a different report hash and blocks cop
 });
 it('requires both day reports before posting and never treats an unknown cost as zero',()=>{
  const state=attachCashierReport({...emptyStore,items:[raw]},'2026-11-03',{type:'financial',file:file('a'),totalRevenue:50});
- expect(()=>approveCashierDay(state,state.cashierDays[0].id,'Owner')).toThrow('التقرير المالي');expect(salesForReports(state)).toHaveLength(0);
+ expect(()=>approveCashierDay(state,state.cashierDays[0].id,'Owner')).toThrow('التقرير المالي');expect(salesForReports(state)[0]).toMatchObject({totalAmount:50,totalCost:null,netProfit:null});
 });
 it('aggregates shared raw ingredients and keeps ordinary sales and production strict',()=>{
  expect(()=>deductInventory([{itemId:drink.id,normalizedQtyInBaseUnit:10}],[raw,seasoning,drink])).toThrow('غير كافٍ');

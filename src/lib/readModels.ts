@@ -4,8 +4,9 @@ const number=z.number().finite(),count=number.int().nonnegative();
 const activity=z.object({id:z.string(),description:z.string(),partnerName:z.string(),timestamp:z.string(),amount:number.optional()});
 export const dashboardSchema=z.object({
  version:count,
- report:z.object({revenue:number,cost:number,gross:number,spent:number,net:number,margin:number,count,
-  entries:z.array(z.object({date:z.string(),sales:number,profit:number})),firstDate:z.string().nullable(),lastDate:z.string().nullable()}),
+ report:z.object({revenue:number,cost:number.nullable(),gross:number.nullable(),spent:number,net:number.nullable(),margin:number.nullable(),count,pendingCostDays:count.default(0),
+  entries:z.array(z.object({date:z.string(),sales:number,profit:number.nullable()})),firstDate:z.string().nullable(),lastDate:z.string().nullable()}),
+ cash:z.object({start:z.string(),to:z.string(),opening:number.nullable(),inflow:number,outflow:number,resources:number.nullable(),closing:number.nullable(),pendingRefunds:number,issues:z.array(z.string())}).nullable().optional(),
  balances:z.object({inventory:number,debts:number,shortages:count}),pending:count,approved:count,queued:count,
  channels:z.array(z.object({id:z.string(),label:z.string(),value:number})),products:z.array(z.object({id:z.string(),name:z.string(),revenue:number})),activity:z.array(activity),counts:z.record(z.string(),count)
 });

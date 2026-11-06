@@ -8,7 +8,7 @@ import {deductInventory} from '../src/lib/inventory';
 import {adjustCatalogItem} from '../src/lib/catalogAdjustments';
 import {businessDate} from '../src/lib/dates';
 import {receiveStock} from '../src/lib/costing';
-import {recordFinancialOpening} from '../src/lib/financialOpening';
+import {recordFinancialOpening,financialPosition} from '../src/lib/financialOpening';
 import {completeCatalogNameDraft,changeCatalogNameDraft} from '../src/lib/catalogNameDrafts';
 import {attachCashierReport,approveCashierDay} from '../src/lib/cashierDays';
 import {salesForReports} from '../src/lib/cashierDays';
@@ -119,6 +119,34 @@ it.skipIf(!active)('preserves sparse month and year charts without returning inv
   expect(model.report.entries.length).toBeLessThanOrEqual(2);
  }
 });
+it.skipIf(!active)('counts financial-only cashier reports and opening funds without claiming missing cost or posting stock',()=>{
+ let source=recordFinancialOpening(stockState(),'2026-11-01',1000,'Opening settled period',{id:owner,name:'Owner'});
+ for(let n=1;n<=4;n++)source=attachCashierReport(source,`2026-11-0${n}`,{type:'financial',file:{fileName:`report${n}.xls`,sha256:String(n).repeat(64),uploadedAt:'2026-11-05T10:00:00Z'},totalRevenue:n*100});
+ seed(source);const fingerprint=sql("select md5(to_jsonb(s)::text) from public.bon_elagouz_store s where id='main_store'");
+ const model=dashboardSchema.parse(readJson("select public.bon_erp_dashboard('2026-11-01','2026-11-04')"));
+ expect(model.report).toMatchObject({revenue:1000,count:4,cost:null,gross:null,net:null,margin:null,pendingCostDays:4});
+ expect(model.report.entries.map(e=>e.profit)).toEqual([null,null,null,null]);
+ expect(model.cash).toEqual(financialPosition(source,'2026-11-01','2026-11-04'));
+ expect(model.cash).toMatchObject({opening:1000,inflow:1000,resources:2000,closing:2000});
+ expect(model.channels.find(c=>c.id==='cashier_sync')?.value).toBe(1000);expect(model.approved).toBe(0);expect(model.pending).toBe(4);
+ const exported=readJson("select public.bon_erp_export_report('2026-11-01','2026-11-04')");expect(exported.summary).toEqual(model);expect(exported.cashier_days).toHaveLength(4);
+ const later=dashboardSchema.parse(readJson("select public.bon_erp_dashboard('2026-11-03','2026-11-04')"));
+ expect(later.cash).toMatchObject({opening:1300,inflow:700,resources:2000,closing:2000});expect(later.report.revenue).toBe(700);
+ expect(sql("select md5(to_jsonb(s)::text) from public.bon_elagouz_store s where id='main_store'")).toBe(fingerprint);
+});
+it.skipIf(!active)('keeps the same revenue and cash when a financial day later gets its inventory cost',()=>{
+ const paired=cashierPair();let pending=recordFinancialOpening(paired.pending,'2026-11-01',1000,'Opening settled period',{id:owner,name:'Owner'});seed(pending);
+ const before=dashboardSchema.parse(readJson(`select public.bon_erp_dashboard('2026-11-01','${businessDate()}')`));
+ const posted=approveCashierDay(pending,pending.cashierDays[0].id,'Owner');seed(posted);
+ const after=dashboardSchema.parse(readJson(`select public.bon_erp_dashboard('2026-11-01','${businessDate()}')`));
+ expect(after.report.revenue).toBe(before.report.revenue);expect(after.cash).toEqual(before.cash);expect(before.report.net).toBeNull();expect(after.report.net).not.toBeNull();expect(after.report.pendingCostDays).toBe(0);
+});
+it.skipIf(!active)('reconciles server cash with collections, allocations, cancellations and noncash exclusions',()=>{
+ const initial=recordFinancialOpening(stockState(),'2026-11-01',1000,'Opening settled period',{id:owner,name:'Owner'});
+ const source={...initial,salesInvoices:[{...sale(),id:'sale-cash',date:'2026-11-01',customerId:'c',paidAmount:40,totalAmount:60,remainingAmount:20,isReturned:true,returnedAt:'2026-11-03T10:00:00Z',returnRefundAmount:20,returnDebtReversed:20}],accountPayments:[{id:'collection',date:'2026-11-02',targetType:'customer' as const,targetId:'c',targetName:'Customer',amount:20,partnerName:'Owner',allocations:[{invoiceId:'sale-cash',amount:20}]}],expenses:[{id:'expense',date:'2026-11-02',category:'إيجار',title:'Rent',amount:10,paidFrom:'خزنة الشركة',partnerName:'Owner',isCancelled:true,cancelledAt:'2026-11-04T10:00:00Z'},{id:'noncash',date:'2026-11-02',category:'نثريات أخرى',title:'Cost',amount:15,paidFrom:'تسوية مخزون (بدون نقدية)',partnerName:'Owner'}]};
+ seed(source);expect(readJson("select public.bon_erp_cash_summary('2026-11-01','2026-11-04')")).toEqual(financialPosition(source,'2026-11-01','2026-11-04'));
+ seed({...source,salesInvoices:[{...source.salesInvoices[0],returnRefundAmount:undefined}]});expect(readJson("select public.bon_erp_cash_summary('2026-11-01','2026-11-04')").closing).toBeNull();
+});
 it.skipIf(!active)('bounds invoice pages and searches line names across the entire history',()=>{
  const invoices=Array.from({length:121},(_,i)=>({...sale(),id:'history-'+String(i).padStart(3,'0'),invoiceNumber:'SEARCH-'+i,items:[{...sale().items[0],itemName:i===120?'Unique ingredient':'Ordinary'}]}));seed({...stockState(),salesInvoices:invoices});
  const first=salesPageSchema.parse(readJson("select public.bon_erp_sales_page('legacy','',0,50)"));expect(first.total).toBe(121);expect(first.rows).toHaveLength(50);expect(first.rows[0].items).toBeUndefined();
@@ -134,6 +162,8 @@ it.skipIf(!active)('keeps read APIs caller-authorized and immediately refuses di
  expect(()=>asUser(viewer,query)).not.toThrow();expect(()=>asUser(cashier,query)).toThrow('USER_PERMISSION_DENIED');
  sql(`update public.erp_members set disabled_at=now() where user_id='${viewer}'`);expect(()=>asUser(viewer,query)).toThrow('USER_PERMISSION_DENIED');
  expect(()=>sql('set role anon;'+query)).toThrow('permission denied');
+ const cashQuery="select public.bon_erp_cash_summary('2026-11-01','2026-11-04')";
+ expect(()=>asUser(cashier,cashQuery)).toThrow('USER_PERMISSION_DENIED');expect(()=>asUser(viewer,cashQuery)).toThrow('USER_PERMISSION_DENIED');expect(()=>sql('set role anon;'+cashQuery)).toThrow('permission denied');
  expect(sql("select bool_and(not p.prosecdef) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and proname in ('bon_erp_dashboard','bon_erp_sales_page','bon_erp_sale_detail','bon_erp_item_search')")).toBe('t');
 });
 function save(value:any){return sql(`begin;set local request.jwt.claim.sub='${owner}';set local role authenticated;select public.bon_erp_save_store(0,${literal(value)},gen_random_uuid(),null);rollback;`);}
