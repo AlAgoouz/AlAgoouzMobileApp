@@ -201,7 +201,7 @@ it.skipIf(!active)('activates complete recipes atomically without consuming ingr
  const pending=recordRecipeDefinition(stockState(),'pending','Drink',drinkDefinition,{name:'Owner'});seed(pending);
  const ready=activateRecipeDraft(pending,'pending',coffeeRecipe,{name:'Owner'});accept(ready);
  const result=readJson(`select public.bon_erp_save_store(0,${literal(toCloud(ready))},'${crypto.randomUUID()}');select jsonb_build_object('drafts',catalog_name_drafts,'items',items,'production',production_batches,'sales',sales_invoices) from public.bon_elagouz_store`);
- expect(result).toEqual({drafts:[],items:ready.items,production:[],sales:[]});expect(result.items[0]).toEqual(pending.items[0]);
+ expect(result).toEqual({drafts:[],items:ready.items,production:[],sales:[]});expect(result.items.find((i:InventoryItem)=>i.id==='bean')).toEqual(pending.items[0]);
  const invalid={...ready,items:ready.items.map(i=>i.code==='DR-1'?{...i,recipe:[]}:i)};reject(invalid,'EMPTY_RECIPE');
  const unregistered={...pending,salesInvoices:[sale(1,{...bean,id:'pending'})]};expect(()=>save(toCloud(unregistered))).toThrow();
 });
