@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {ArrowDown, ArrowUp, Eye, ImagePlus, Plus, QrCode, UtensilsCrossed} from 'lucide-react';
+import {ArrowDown, ArrowUp, Eye, ImagePlus, Plus, QrCode, Smartphone, UtensilsCrossed} from 'lucide-react';
 import type {InventoryItem} from '../types/erp';
 import {categoryLabel} from '../lib/itemPolicy';
 import {unitLabel} from '../lib/units';
@@ -11,10 +11,16 @@ import {ShopMenuView} from './ShopMenuView';
 import './menu-editor.css';
 
 const templates = [
-  {id: 'classic', name: 'هوية العجوز', detail: 'أبيض وبني وذهبي'},
-  {id: 'photos', name: 'كروت بالصور', detail: 'صورة ومساحة لكل صنف'},
-  {id: 'compact', name: 'قائمة مختصرة', detail: 'أسعار مرتبة في صفوف'},
+  {id: 'classic', name: 'هوية العجوز', detail: 'منيو أنيق بتفاصيل ذهبية'},
+  {id: 'photos', name: 'كروت بالصور', detail: 'واجهة إسبريسو وصور للأصناف'},
+  {id: 'compact', name: 'قائمة مختصرة', detail: 'صفوف واضحة لمقارنة الأسعار'},
 ] as const;
+
+const sampleItems: MenuItem[] = [
+  {id: 'example-1', name: 'توليفة العجوز', section: 'البن والتوليفات', description: 'تحميص متوازن بنكهة غنية.', photo: '', visible: true, prices: [{label: '٢٥٠ جم', amount: 115}, {label: '٥٠٠ جم', amount: 220}]},
+  {id: 'example-2', name: 'بن برازيلي', section: 'البن والتوليفات', description: '', photo: '', visible: true, prices: [{label: '٢٥٠ جم', amount: 140}]},
+  {id: 'example-3', name: 'قهوة تركي', section: 'المشروبات', description: 'تُحضّر على الطلب.', photo: '', visible: true, prices: [{label: 'فنجان', amount: 35}]},
+];
 
 function PhotoInput({label, value, onChange, onBusy, onError}: {
   label: string; value: string; onChange: (photo: string) => void;
@@ -109,7 +115,7 @@ export default function MenuEditor({catalog, onBack}: {catalog: InventoryItem[];
   const [dirty, setDirty] = useState(false);
   const [notice, setNotice] = useState<{text: string; error?: boolean}>();
   const [openItem, setOpenItem] = useState<string>();
-  const [dialog, setDialog] = useState<'preview' | 'publish' | 'share' | 'leave'>();
+  const [dialog, setDialog] = useState<'preview' | 'sample' | 'publish' | 'share' | 'leave'>();
   const [query, setQuery] = useState('');
   const busy = saving || photoBusy;
 
@@ -207,6 +213,9 @@ export default function MenuEditor({catalog, onBack}: {catalog: InventoryItem[];
 
   const search = query.trim().toLocaleLowerCase('ar-EG');
   const matches = search ? catalog.filter(product => `${product.name} ${product.code}`.toLocaleLowerCase('ar-EG').includes(search)).slice(0, 12) : [];
+  const visibleItems = menu.items.filter(item => item.visible);
+  const sample = {...menu, items: sampleItems};
+  const preview = menu.items.length ? {...menu, items: visibleItems.slice(0, 5)} : sample;
 
   return <section className="menu-editor" dir="rtl">
     <OperationHeader title="المنيو والدعاية" description="جهّز منيو المحل وشاركه برابط وكود QR ثابت." icon={UtensilsCrossed} busy={busy}
@@ -219,9 +228,23 @@ export default function MenuEditor({catalog, onBack}: {catalog: InventoryItem[];
     {loading && <p className="menu-panel" role="status">جارٍ تحميل المسودة…</p>}
     {!loading && !ready && <div className="menu-panel"><p role="alert">{notice?.text}</p><button className="menu-button" type="button" onClick={() => {setLoading(true); setAttempt(attempt + 1);}}>حاول تاني</button></div>}
     {ready && <>
+      <div className="menu-editor-layout">
       <fieldset className="menu-editor-fields" disabled={busy}>
         <section className="menu-panel">
-          <h2>الهوية والتواصل</h2>
+          <div className="menu-panel-heading">
+            <div><h2 id="menu-template-title"><span className="menu-step" aria-hidden="true">١</span>شكل المنيو</h2><p>اختار التصميم وشوف أثره في المعاينة.</p></div>
+            <button className="menu-button" type="button" onClick={() => setDialog('sample')}><Eye size={16} aria-hidden="true" />معاينة نموذج</button>
+          </div>
+          <div className="menu-templates" role="radiogroup" aria-labelledby="menu-template-title">
+            {templates.map(template => <label key={template.id} className={menu.template === template.id ? 'menu-template selected' : 'menu-template'}>
+              <input type="radio" name="menu-template" checked={menu.template === template.id} onChange={() => change({template: template.id})} />
+              <span className={`menu-template-sample sample-${template.id}`} aria-hidden="true"><i /><i /><i /><i /></span>
+              <b>{template.name}</b><small>{template.detail}</small>
+            </label>)}
+          </div>
+        </section>
+        <section className="menu-panel">
+          <h2><span className="menu-step" aria-hidden="true">٢</span>الهوية والتواصل</h2>
           <div className="menu-fields">
             <label>اسم المنيو<input maxLength={80} value={menu.name} onChange={e => change({name: e.target.value})} /></label>
             <label>نبذة قصيرة<input maxLength={300} value={menu.intro} onChange={e => change({intro: e.target.value})} /></label>
@@ -231,23 +254,15 @@ export default function MenuEditor({catalog, onBack}: {catalog: InventoryItem[];
           </div>
           <PhotoInput label="شعار مخصص" value={menu.logo} onChange={logo => change({logo})} onBusy={setPhotoBusy} onError={reportError} />
         </section>
-        <fieldset className="menu-panel menu-templates">
-          <legend>اختار التصميم</legend>
-          {templates.map(template => <label key={template.id} className={menu.template === template.id ? 'menu-template selected' : 'menu-template'}>
-            <input type="radio" name="menu-template" checked={menu.template === template.id} onChange={() => change({template: template.id})} />
-            <span className={`menu-template-sample sample-${template.id}`} aria-hidden="true"><i /><i /><i /></span>
-            <b>{template.name}</b><small>{template.detail}</small>
-          </label>)}
-        </fieldset>
         <section className="menu-panel">
-          <div className="menu-panel-heading"><div><h2>الأصناف والأسعار</h2><p>سعر المنيو مستقل. اختار صنفًا لنسخ اسمه وسعر بيعه الحالي أو أضفه يدويًا.</p></div>
+          <div className="menu-panel-heading"><div><h2><span className="menu-step" aria-hidden="true">٣</span>الأصناف والأسعار</h2><p>سعر المنيو مستقل. اختار صنفًا لنسخ اسمه وسعر بيعه الحالي أو أضفه يدويًا.</p></div>
             <button className="menu-button" type="button" disabled={menu.items.length >= menuItemLimit} onClick={() => addItem()}><Plus size={16} aria-hidden="true" />صنف يدوي</button>
           </div>
           <label className="menu-catalog-search">ابحث بالاسم أو الكود في المنتجات<input type="search" value={query} onChange={e => setQuery(e.target.value)} /></label>
           {search && <ul className="menu-catalog-results">{matches.length ? matches.map(product => <li key={product.id}>
             <button className="menu-button" type="button" disabled={menu.items.length >= menuItemLimit} onClick={() => addItem(product)}><Plus size={16} aria-hidden="true" />{product.name}<small>{product.code}</small></button>
           </li>) : <li>مفيش منتجات مطابقة.</li>}</ul>}
-          <ul className="menu-item-list">{menu.items.map((item, index) => <li key={item.id} className="menu-item-editor">
+          <ul className="menu-item-list">{menu.items.map((item, index) => <li key={item.id} className="menu-item-editor" data-expanded={openItem === item.id}>
             <div className="menu-item-heading">
               <button className="menu-item-name" type="button" aria-expanded={openItem === item.id} aria-controls={`menu-item-${item.id}`}
                 onClick={() => setOpenItem(openItem === item.id ? undefined : item.id)}>{item.name || 'صنف جديد'}<small>{item.section}</small></button>
@@ -262,11 +277,17 @@ export default function MenuEditor({catalog, onBack}: {catalog: InventoryItem[];
               onChange={values => change({items: menu.items.map(row => row.id === item.id ? {...row, ...values} : row)})}
               onBusy={setPhotoBusy} onError={reportError} />}</div>
           </li>)}</ul>
-          {!menu.items.length && <p>ابدأ بإضافة أول صنف للمنيو.</p>}
+          {!menu.items.length && <div className="menu-items-empty"><UtensilsCrossed size={20} aria-hidden="true" /><p>ابدأ بإضافة أول صنف للمنيو.</p></div>}
         </section>
       </fieldset>
+      <aside className="menu-live-preview" aria-label="معاينة مباشرة">
+        <div className="menu-live-preview-header"><Smartphone size={18} aria-hidden="true" /><b>شكل المنيو على الموبايل</b></div>
+        <p>{!menu.items.length ? 'نموذج تصميم ببيانات تجريبية' : visibleItems.length > 5 ? 'أول ٥ أصناف ظاهرة' : 'تتحدّث مع تعديلاتك'}</p>
+        <div className="menu-live-device"><ShopMenuView menu={preview} preview /></div>
+      </aside>
+      </div>
       <footer className="menu-panel menu-save">
-        <div><b>{published ? 'فيه نسخة منشورة' : 'المنيو لسه غير منشور'}</b>
+        <div><b className="menu-publication-state" data-published={published}>{published ? 'فيه نسخة منشورة' : 'المنيو لسه غير منشور'}</b>
           <p>{dirty ? 'فيه تعديلات لسه ما اتحفظتش.' : 'العملاء بيشوفوا آخر نسخة نشرتها.'}</p>
           {notice && <p className={notice.error ? 'menu-error' : 'menu-success'} role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
         </div>
@@ -279,7 +300,8 @@ export default function MenuEditor({catalog, onBack}: {catalog: InventoryItem[];
         </div>
       </footer>
     </>}
-    {dialog === 'preview' && <Modal title="معاينة المنيو" description="ده شكل آخر تعديلاتك قبل النشر." wide onClose={() => setDialog(undefined)}><ShopMenuView menu={menu} preview /></Modal>}
+    {dialog === 'preview' && <Modal title="معاينة المنيو" description="ده شكل آخر تعديلاتك قبل النشر." wide onClose={() => setDialog(undefined)}><div className="menu-full-preview"><ShopMenuView menu={menu} preview /></div></Modal>}
+    {dialog === 'sample' && <Modal title="نموذج التصميم" description="الأصناف والأسعار هنا أمثلة لتجربة القالب." wide onClose={() => setDialog(undefined)}><div className="menu-full-preview"><ShopMenuView menu={sample} preview /></div></Modal>}
     {dialog === 'share' && <MenuSharing onClose={() => setDialog(undefined)} />}
     {dialog === 'publish' && <Modal title="تأكيد نشر المنيو" description="الأصناف الظاهرة وأسعارها والصور وبيانات التواصل هتبقى متاحة لأي حد معاه الرابط." busy={saving} onClose={() => setDialog(undefined)}
       footer={<button className="menu-button menu-primary" type="button" disabled={saving} onClick={() => void save(true)}>{saving ? 'جارٍ النشر…' : 'تأكيد النشر'}</button>}>

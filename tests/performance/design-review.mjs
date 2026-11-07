@@ -143,9 +143,23 @@ export async function verifyDesign(){
       assert.equal(await page.locator('.operation-header').count(),1,'Every internal section must share one header');
       assert.equal(await page.locator('.operation-header h1').count(),1);
       if(title==='المنيو والدعاية'){
+        for(const [template, label] of [['classic','هوية العجوز'],['compact','قائمة مختصرة'],['photos','كروت بالصور']]){
+          await page.getByRole('radio',{name:new RegExp(label)}).check();
+          await page.getByRole('button',{name:'معاينة نموذج',exact:true}).click();
+          const example=page.getByRole('dialog',{name:'نموذج التصميم'});
+          const design=example.locator(`.shop-menu--${template}`);
+          await design.getByText('توليفة العجوز',{exact:true}).waitFor();
+          assert.equal(await design.locator('.shop-menu-prices dd').count(),4);
+          assert.equal(await design.locator('.shop-menu-product-photo').count(),0,'Items without photos must not leave empty media blocks');
+          await example.getByRole('button',{name:'المشروبات',exact:true}).click();
+          await limit(page,`menu-example-${template}`);
+          await page.screenshot({path:`design-menu-${template}-mobile.png`,fullPage:false});
+          await example.getByRole('button',{name:'إغلاق النافذة'}).click();
+        }
         await page.getByRole('button',{name:'صنف يدوي',exact:true}).click();
         await page.getByLabel('اسم الصنف',{exact:true}).fill('قهوة الاختبار');
         await page.getByLabel('السعر',{exact:true}).fill('37.35');
+        await page.getByLabel('صورة الصنف',{exact:true}).setInputFiles('public/menu-logo.webp');
         await page.getByRole('button',{name:'حفظ المسودة',exact:true}).click();
         await page.getByText('تم حفظ المسودة.',{exact:true}).waitFor();
         assert.equal(menuPublication,null,'Saving a draft must not update the public menu');
@@ -174,6 +188,9 @@ export async function verifyDesign(){
           });
           await publicPage.goto(origin+'/menu');
           await publicPage.locator('.shop-menu--photos').getByText('قهوة الاختبار',{exact:true}).waitFor();
+          const photo=publicPage.locator('.shop-menu-product-photo');
+          await photo.waitFor();
+          assert.ok((await photo.getAttribute('src'))?.startsWith('data:image/jpeg;base64,'));
           assert.equal(await publicPage.locator('.agouz-login').count(),0);
           assert.deepEqual(privateRequests,[]);
           await limit(publicPage,'public-menu-320');
