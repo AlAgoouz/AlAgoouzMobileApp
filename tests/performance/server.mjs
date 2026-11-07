@@ -29,7 +29,7 @@ const server=http.createServer(async(req,res)=>{
   if(u.pathname.startsWith('/rest/')||u.pathname.startsWith('/auth/')){res.writeHead(403);return res.end('Fixture is read-only');}
   const file=path.resolve(root,'.'+(['/', '/menu', '/menu/'].includes(u.pathname)?'/index.html':u.pathname));
   if(!file.startsWith(root+path.sep)||!fs.existsSync(file)){res.writeHead(404);return res.end();}
-  const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png'};
+  const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp'};
   const bytes=gzipSync(fs.readFileSync(file));res.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream','Content-Encoding':'gzip','Cache-Control':'no-store'});res.end(bytes);
 });
 server.on('upgrade',(_req,socket)=>socket.destroy());
