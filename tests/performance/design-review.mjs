@@ -151,9 +151,9 @@ export async function verifyDesign(){
           await design.getByText('توليفة العجوز',{exact:true}).waitFor();
           assert.equal(await design.locator('.shop-menu-prices dd').count(),4);
           assert.equal(await design.locator('.shop-menu-product-photo').count(),0,'Items without photos must not leave empty media blocks');
-          await example.getByRole('button',{name:'المشروبات',exact:true}).click();
           await limit(page,`menu-example-${template}`);
           await page.screenshot({path:`design-menu-${template}-mobile.png`,fullPage:false});
+          await example.getByRole('button',{name:'المشروبات',exact:true}).click();
           await example.getByRole('button',{name:'إغلاق النافذة'}).click();
         }
         await page.getByRole('button',{name:'صنف يدوي',exact:true}).click();
@@ -196,6 +196,12 @@ export async function verifyDesign(){
           await limit(publicPage,'public-menu-320');
           await publicPage.screenshot({path:'design-public-menu-mobile.png',fullPage:true});
         }finally{await guest.close();}
+        await page.setViewportSize({width:1440,height:900});
+        const livePreview=page.getByRole('complementary',{name:'معاينة مباشرة'});
+        await livePreview.getByText('قهوة الاختبار',{exact:true}).waitFor();
+        await limit(page,'menu-editor-desktop');
+        await page.screenshot({path:'design-menu-editor-desktop-mobile.png',fullPage:false});
+        await page.setViewportSize({width:360,height:800});
         evidence.menu={draft:true,preview:true,publication:true,publicAccess:true,png:true,svg:true};
         await limit(page,'menu-editor');
       }
