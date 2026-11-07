@@ -10,6 +10,11 @@
 }
 .app-workspace { background: transparent; }
 
+/* Share the same hover response across dashboard, operational and legacy cards. */
+.screen-stage :is(.metric-card,.visual-card,.attention-card,.section-tile,.record-card,.bg-white.border.rounded-2xl,.bg-white.border.rounded-3xl) {
+  transition: transform .24s cubic-bezier(.2,.7,.3,1), border-color .24s ease, box-shadow .24s ease;
+}
+
 .metric-card,
 .visual-card,
 .attention-card,
@@ -27,7 +32,7 @@
   --card-rgb: 166, 127, 53;
   padding-top: 22px;
   transition: border-color .22s ease, box-shadow .22s ease;
-  animation: metricArrival .42s ease-out both;
+  animation: metricArrival .42s ease-out backwards;
 }
 .metric-card:nth-child(2) { animation-delay: .05s; }
 .metric-card:nth-child(3) { animation-delay: .1s; }
@@ -177,13 +182,14 @@
   to { opacity: 1; transform: translateY(0); }
 }
 @media (hover:hover) and (pointer:fine) {
-  .metric-card:hover,
-  .visual-card:hover { border-color: #a77b35; box-shadow: var(--surface-highlight), 0 10px 24px -14px #49331e33, 0 2px 6px -3px #49331e18; }
-  .metric-card.metric-gold:hover { border-color: #d5b374; box-shadow: inset 0 1px 0 #ffe2a040, 0 18px 30px -14px #3625178c; }
-  .screen-stage .attention-card:hover:not(:disabled),
-  .screen-stage .section-tile:hover:not(:disabled) { transform: translateY(-4px); border-color: #a77b35; box-shadow: inset 0 1px 0 #fff, 0 10px 24px -14px #49331e33, 0 2px 6px -3px #49331e18; }
+  .screen-stage :is(.metric-card,.visual-card,.attention-card,.section-tile,.record-card,.bg-white.border.rounded-2xl,.bg-white.border.rounded-3xl):hover:not(:disabled):not(:active):not(:has(:is(.metric-card,.visual-card,.attention-card,.section-tile,.record-card,.bg-white.border.rounded-2xl,.bg-white.border.rounded-3xl):hover)) {
+    transform: translateY(-6px) scale(1.012);
+    border-color: #b1873f;
+    box-shadow: inset 0 0 0 1px #bd9454, 0 18px 36px -18px #49331e66, 0 4px 9px -4px #49331e30;
+  }
+  .screen-stage .metric-card.metric-gold:hover { border-color: #d5b374; box-shadow: inset 0 0 0 1px #d5b374, 0 18px 36px -16px #36251780; }
   .screen-stage .attention-card:active:not(:disabled),
-  .screen-stage .section-tile:active:not(:disabled) { transform: translateY(1px) scale(.99); box-shadow: inset 0 2px 4px #49331e18, 0 2px 4px #49331e0a; }
+  .screen-stage .section-tile:active:not(:disabled) { transform: translateY(-1px) scale(.995); box-shadow: inset 0 2px 4px #49331e18, 0 3px 6px #49331e16; }
 }
 @media (max-width:359px) {
   .metric-card { padding-top: 18px; border-radius: 20px; }
@@ -196,13 +202,19 @@
   .metric-card,
   .visual-card,
   .attention-card,
-  .section-tile { transition: none!important; transform: none!important; }
+  .section-tile,
+  .record-card,
+  .screen-stage .bg-white.border.rounded-2xl,
+  .screen-stage .bg-white.border.rounded-3xl { transition: none!important; transform: none!important; }
 }
 @media print {
   .metric-card,
   .visual-card,
   .attention-card,
-  .section-tile { background: #fff!important; box-shadow: none!important; border-color: #ccc!important; animation: none!important; transform: none!important; }
+  .section-tile,
+  .record-card,
+  .screen-stage .bg-white.border.rounded-2xl,
+  .screen-stage .bg-white.border.rounded-3xl { background: #fff!important; box-shadow: none!important; border-color: #ccc!important; animation: none!important; transform: none!important; }
   .metric-card::before,
   .metric-card::after { display: none; }
   .metric-card > p,
