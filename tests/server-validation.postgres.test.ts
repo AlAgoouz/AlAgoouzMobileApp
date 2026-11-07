@@ -15,6 +15,7 @@ import {attachCashierReport,approveCashierDay} from '../src/lib/cashierDays';
 import {salesForReports} from '../src/lib/cashierDays';
 import {buildReport,reportRange,reportPoints} from '../src/lib/reporting';
 import {dashboardSchema,salesPageSchema} from '../src/lib/readModels';
+import {emptyMenu,type ShopMenu} from '../src/lib/shopMenu';
 import type {StoreState} from '../src/lib/storeState';
 import type {SalesInvoice,InventoryItem} from '../src/types/erp';
 const active=!!process.env.AGOUZ_TEST_PG_CONTAINER;
@@ -76,6 +77,37 @@ function seed(store:StoreState){
 }
 beforeEach(()=>{if(active){seed(state);sql('truncate table bon_erp_private.import_jobs,public.cashier_sync_queue;delete from storage.objects where bucket_id=\'agouz-cashier-imports\';');}});
 afterAll(()=>{if(active)dispose();});
+it.skipIf(!active)('publishes only the approved menu snapshot without granting access to drafts or ERP data',()=>{
+ const employee='22222222-2222-4222-8222-222222220093';
+ userAccessFixture(employee,{view:true,catalog:true});
+ const draft:ShopMenu={...emptyMenu,items:[
+  {id:crypto.randomUUID(),name:'Visible coffee',section:'Coffee',description:'',photo:'',visible:true,prices:[{label:'250 g',amount:37.35}]},
+  {id:crypto.randomUUID(),name:'Hidden coffee',section:'Coffee',description:'Private note',photo:'',visible:false,prices:[{label:'',amount:null}]}
+ ]};
+ const rpc=(revision:number,content:unknown,publish:boolean)=>`select public.agouz_save_menu(${revision},${literal(content)},${publish})`;
+ const ownerSave=(revision:number,content:unknown,publish:boolean)=>sql(`begin;set local request.jwt.claim.sub='${owner}';set local role authenticated;${rpc(revision,content,publish)};commit;`);
+ const anon=(query:string)=>sql(`begin;set local role anon;${query};rollback;`);
+ const draftCount='select count(*) from public.agouz_menu_draft';
+ const publication='select content from public.agouz_menu_publication';
+ expect(anon(publication)).toBe('');
+ expect(()=>anon(draftCount)).toThrow('permission denied');
+ expect(()=>anon(rpc(0,draft,true))).toThrow('permission denied');
+ expect(()=>asUser(employee,rpc(0,draft,true))).toThrow('OWNER_REQUIRED');
+ expect(()=>asUser(owner,"insert into public.agouz_menu_publication(content) values('{}')")).toThrow('permission denied');
+ expect(()=>ownerSave(0,{...draft,costPrice:23},true)).toThrow('INVALID_MENU');
+ expect(()=>ownerSave(0,{...draft,items:[{...draft.items[0],prices:[{label:'',amount:null}]}]},true)).toThrow('INCOMPLETE_MENU');
+ expect(ownerSave(0,draft,false)).toBe('1');
+ expect(asUser(employee,draftCount).split('\n').at(-1)).toBe('0');
+ expect(anon(publication)).toBe('');
+ expect(ownerSave(1,draft,true)).toBe('2');
+ expect(JSON.parse(anon(publication))).toEqual({...draft,items:[draft.items[0]]});
+ const updated={...draft,template:'compact',items:[{...draft.items[0],prices:[{label:'250 g',amount:42.6}]}]};
+ expect(ownerSave(2,updated,false)).toBe('3');
+ expect(()=>ownerSave(2,updated,true)).toThrow('MENU_REVISION_CONFLICT');
+ expect(JSON.parse(anon(publication))).toEqual({...draft,items:[draft.items[0]]});
+ expect(ownerSave(3,updated,true)).toBe('4');
+ expect(JSON.parse(anon(publication))).toEqual(updated);
+});
 it.skipIf(!active)('exports only the requested period with matching authoritative totals and no write effects',()=>{
  const today=businessDate(),invoices=[{...sale(),id:'in-range',date:today},{...sale(),id:'outside',date:'2020-01-01'}];
  const source={...stockState(),salesInvoices:invoices};seed(source);
