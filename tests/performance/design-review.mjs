@@ -120,7 +120,20 @@ export async function verifyDesign(){
       await page.setViewportSize({width,height:800});await limit(page,`sections-${width}`);evidence.widths.push(width);
     }
     await page.setViewportSize({width:360,height:800});
-    const titles=await page.locator('.section-tile-title').allTextContents();assert.equal(titles.length,18);
+    let menuDraft=null,menuPublication=null;
+    const routeMenu=async route=>{
+      const path=new URL(route.request().url()).pathname;
+      if(path.endsWith('/agouz_menu_draft'))return route.fulfill({json:menuDraft?[menuDraft]:[]});
+      if(path.endsWith('/agouz_menu_publication'))return route.fulfill({json:menuPublication?[menuPublication]:[]});
+      const body=route.request().postDataJSON();
+      assert.equal(body.p_expected_revision,menuDraft?.revision??0);
+      menuDraft={revision:body.p_expected_revision+1,content:body.p_content};
+      if(body.p_publish)menuPublication={content:{...body.p_content,items:body.p_content.items.filter(item=>item.visible)},published_at:new Date().toISOString()};
+      return route.fulfill({json:menuDraft.revision});
+    };
+    await context.route('**/rest/v1/**/agouz_save_menu',routeMenu);
+    await context.route('**/rest/v1/agouz_menu_*?*',routeMenu);
+    const titles=await page.locator('.section-tile-title').allTextContents();assert.equal(titles.length,19);
     for(const title of titles){
       await page.locator('.section-tile').filter({has:page.locator('.section-tile-title',{hasText:title})}).click();
       await page.locator('.sections-hub').waitFor({state:'hidden'});
@@ -129,6 +142,46 @@ export async function verifyDesign(){
       await limit(page,title);
       assert.equal(await page.locator('.operation-header').count(),1,'Every internal section must share one header');
       assert.equal(await page.locator('.operation-header h1').count(),1);
+      if(title==='المنيو والدعاية'){
+        await page.getByRole('button',{name:'صنف يدوي',exact:true}).click();
+        await page.getByLabel('اسم الصنف',{exact:true}).fill('قهوة الاختبار');
+        await page.getByLabel('السعر',{exact:true}).fill('37.35');
+        await page.getByRole('button',{name:'حفظ المسودة',exact:true}).click();
+        await page.getByText('تم حفظ المسودة.',{exact:true}).waitFor();
+        assert.equal(menuPublication,null,'Saving a draft must not update the public menu');
+        await page.getByRole('radio',{name:/كروت بالصور/}).check();
+        await page.getByRole('button',{name:'معاينة',exact:true}).click();
+        const preview=page.getByRole('dialog');
+        await preview.locator('.shop-menu--photos').getByText('قهوة الاختبار',{exact:true}).waitFor();
+        await preview.getByRole('button',{name:'إغلاق النافذة'}).click();
+        await page.getByRole('button',{name:'نشر المنيو',exact:true}).click();
+        await page.getByRole('button',{name:'تأكيد النشر',exact:true}).click();
+        await page.getByText('تم نشر المنيو. نفس الرابط يعرض آخر نسخة للعملاء.',{exact:true}).waitFor();
+        await page.getByRole('button',{name:'مشاركة وQR',exact:true}).click();
+        const sharing=page.getByRole('dialog');
+        assert.equal(await sharing.getByLabel('رابط المنيو').inputValue(),'https://agouz.vercel.app/menu');
+        const png=await sharing.getByRole('link',{name:'تنزيل PNG'}).getAttribute('href');
+        const svg=await sharing.getByRole('link',{name:'تنزيل SVG'}).getAttribute('href');
+        assert.ok(png?.startsWith('data:image/png;base64,iVBORw0KGgo'));
+        assert.match(decodeURIComponent(svg??''),/<svg[\s\S]+<path/);
+        await sharing.getByRole('button',{name:'إغلاق النافذة'}).click();
+        const guest=await browser.newContext({viewport:{width:320,height:800}});
+        try{
+          await guest.route('**/rest/v1/agouz_menu_*?*',routeMenu);
+          const publicPage=await guest.newPage(),privateRequests=[];
+          publicPage.on('request',request=>{
+            if(/\/(?:rest|auth)\/v1\//.test(request.url())&&!request.url().includes('/agouz_menu_publication?'))privateRequests.push(request.url());
+          });
+          await publicPage.goto(origin+'/menu');
+          await publicPage.locator('.shop-menu--photos').getByText('قهوة الاختبار',{exact:true}).waitFor();
+          assert.equal(await publicPage.locator('.agouz-login').count(),0);
+          assert.deepEqual(privateRequests,[]);
+          await limit(publicPage,'public-menu-320');
+          await publicPage.screenshot({path:'design-public-menu-mobile.png',fullPage:true});
+        }finally{await guest.close();}
+        evidence.menu={draft:true,preview:true,publication:true,publicAccess:true,png:true,svg:true};
+        await limit(page,'menu-editor');
+      }
       if(title==='تقارير يوم الكاشير'){
         const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Menu Item Sales Report (UWS)\nDate Range 01 11 26 - 01 11 26\nPrinted on 04/11/26 20:00:00'],['100010 Fixture Drink 2 100.00%\n100010 Fixture Drink 2 100.00%'],['20.00 100.00%\n20.00 100.00%'],['TOTAL SLS 2 20.00\nTOTAL SLS 2 20.00']]),'Report');
         await page.getByLabel('ملف التقرير',{exact:true}).setInputFiles({name:'synthetic-2030-wrong-filename.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:XLSX.write(book,{type:'buffer',bookType:'xlsx'})});

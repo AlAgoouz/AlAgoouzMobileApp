@@ -88,6 +88,7 @@ import {
 } from "./lib/backupExport";
 
 const UsersScreen=React.lazy(()=>import('./components/UsersScreen').then(m=>({default:m.UsersScreen})));
+const MenuEditor=React.lazy(()=>import('./components/MenuEditor'));
 const CashierUploadScreen=React.lazy(()=>import('./components/CashierUploadScreen').then(m=>({default:m.CashierUploadScreen})));
 const WholesaleInvoiceScreen=React.lazy(()=>import('./components/WholesaleInvoiceScreen').then(m=>({default:m.WholesaleInvoiceScreen})));
 const CashierDayScreen=React.lazy(()=>import('./components/CashierDayScreen').then(m=>({default:m.CashierDayScreen})));
@@ -998,7 +999,7 @@ export default function App() {
       )}
 
       {/* حاوية التطبيق بهوية بُن العجوز الفاتحة والذهبية */}
-      <WorkspaceSidebar name={currentPartner.name} screen={activeScreen==='more'&&moreInitialTab!=='menu'?moreInitialTab:activeScreen==='insights'?'reports':activeScreen} onNavigate={navigateScreen}/>
+      <WorkspaceSidebar name={currentPartner.name} screen={activeScreen==='more'&&moreInitialTab!=='menu'?moreInitialTab:activeScreen==='insights'?'reports':activeScreen} onNavigate={navigateScreen} isOwner={member.isOwner}/>
       <div className="app-workspace min-h-screen bg-[#FAF8F4] text-[#1E1612] relative pb-16">
         <div className="screen-stage" key={activeScreen+':'+moreInitialTab}>
         {/* ================= 1. الشاشة الرئيسية: لوحة الإحصائيات والرسوم البيانية الاحترافية ================= */}
@@ -1007,14 +1008,13 @@ export default function App() {
         {/* ================= 2. قسم الأقسام (بالتصميم الاحترافي الأول الفخم بالإسبريسو والذهبي) ================= */}
         {activeScreen === "sections" && <SectionsHub
           counts={dashboard.data?.counts??{}}
-          onNavigate={(screen)=>{
-            if(screen==='expenses'||screen==='data_control'||screen==='partners'){setMoreInitialTab(screen);setActiveScreen('more');}
-            else setActiveScreen(screen);
-          }}
+          onNavigate={navigateScreen}
+          isOwner={member.isOwner}
         />}
 
         {needsFullStore&&!cloud.fullReady?<ScreenLoading/>:<React.Fragment>
         {activeScreen==='users'&&<UsersScreen access={member} partners={partners} onBack={()=>setActiveScreen('sections')}/>}
+        {activeScreen==='shop_menu'&&member.isOwner&&<MenuEditor catalog={items} onBack={()=>setActiveScreen('sections')}/>}
         {/* ================= الشاشات الفرعية ================= */}
         {activeScreen === "purchase" && (
           <PurchaseScreen

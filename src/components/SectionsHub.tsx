@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { AlertTriangle, BarChart3, BookOpen, Calculator, ChevronLeft, FileText, Flame, FolderSync, Package, RotateCcw, Scale, Search, ShoppingBag, Tag, Truck, UserCheck, Users, Wallet } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, Calculator, ChevronLeft, FileText, Flame, FolderSync, Package, RotateCcw, Scale, Search, ShoppingBag, Tag, Truck, UserCheck, Users, UtensilsCrossed, Wallet } from 'lucide-react';
 
-interface SectionLink { id: string; title: string; description: string; icon: typeof Package; group: string; tone: string; }
+interface SectionLink { id: string; title: string; description: string; icon: typeof Package; group: string; tone: string; ownerOnly?: boolean; }
 export const sectionLinks: SectionLink[] = [
   {id:'products',title:'المنتجات والتسعير',description:'الأصناف والوصفات وأسعار البيع',icon:Tag,group:'التشغيل اليومي',tone:'gold'},
   {id:'sales_pos',title:'فواتير الجملة',description:'فاتورة جديدة لعميلك بسعر متفق عليه',icon:Calculator,group:'التشغيل اليومي',tone:'green'},
   {id:'cashier_sync',title:'تقارير يوم الكاشير',description:'التقرير المالي والأصناف المباعة',icon:FolderSync,group:'التشغيل اليومي',tone:'blue'},
   {id:'recipes',title:'الوصفات',description:'مقادير وتكلفة المشروبات والتحويجات والتوليفات',icon:BookOpen,group:'التشغيل اليومي',tone:'gold'},
   {id:'production',title:'إنتاج التوليفات',description:'أوامر إنتاج التوليفات وسجل تشغيلاتها فقط',icon:Flame,group:'التشغيل اليومي',tone:'rose'},
+  {id:'shop_menu',title:'المنيو والدعاية',description:'تصميم المنيو العام ومشاركة رابط وكود QR',icon:UtensilsCrossed,group:'التشغيل اليومي',tone:'gold',ownerOnly:true},
   {id:'inventory',title:'مخزن البن',description:'رصيد وقيمة كل صنف في المخزون',icon:Package,group:'المخزون والمشتريات',tone:'gold'},
   {id:'purchase',title:'المشتريات',description:'شراء الخامات وسجل الفواتير',icon:ShoppingBag,group:'المخزون والمشتريات',tone:'green'},
   {id:'stocktaking',title:'جرد الميزان',description:'مطابقة الكميات الفعلية مع الرصيد',icon:Scale,group:'المخزون والمشتريات',tone:'blue'},
@@ -24,9 +25,9 @@ export const sectionLinks: SectionLink[] = [
 ];
 const groups = ['التشغيل اليومي', 'المخزون والمشتريات', 'الحسابات والإدارة'];
 const normalize = (value: string) => value.normalize('NFKC').replace(/[أإآ]/g,'ا').replace(/[\u064B-\u065F\u0640]/g,'').trim().toLowerCase();
-export function SectionsHub({onNavigate, counts}: {onNavigate:(id:string)=>void; counts:Record<string,number>}) {
+export function SectionsHub({onNavigate, counts, isOwner = false}: {onNavigate:(id:string)=>void; counts:Record<string,number>; isOwner?:boolean}) {
   const [query, setQuery] = useState('');
-  const filtered = sectionLinks.filter(link => normalize(`${link.title} ${link.description} ${link.group}`).includes(normalize(query)));
+  const filtered = sectionLinks.filter(link => (!link.ownerOnly || isOwner) && normalize(`${link.title} ${link.description} ${link.group}`).includes(normalize(query)));
   return <section className="sections-hub" aria-labelledby="sections-title">
     <header className="sections-hero">
       <div className="sections-hero-mark" aria-hidden="true"><img src="/logo.png" alt="" width="88" height="88" /></div>
