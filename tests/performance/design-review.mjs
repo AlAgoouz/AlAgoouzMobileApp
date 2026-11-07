@@ -12,6 +12,17 @@ export async function verifyDesign(){
   const origin='http://127.0.0.1:5284';
   const luminance=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>{const s=v/255;return s<=.04045?s/12.92:((s+.055)/1.055)**2.4;});return rgb.reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);};
   const contrast=(a,b)=>{const values=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (values[0]+.05)/(values[1]+.05);};
+  const settleCard=card=>card.evaluate(async e=>{await Promise.all(e.getAnimations().map(animation=>animation.finished.catch(()=>{})));});
+  const reviewCardHover=async(page,selector,label,screenshot)=>{
+    const card=page.locator(selector).first();await card.scrollIntoViewIfNeeded();await page.mouse.move(1,1);await settleCard(card);
+    const style=()=>card.evaluate(e=>{const s=getComputedStyle(e);return {transform:s.transform,shadow:s.boxShadow,border:s.borderTopColor};});
+    const before=await style();await card.hover();await settleCard(card);const after=await style();
+    assert.notEqual(after.transform,'none',`${label} must lift on pointer hover`);
+    assert.notEqual(after.shadow,before.shadow,`${label} needs a stronger hover shadow`);
+    assert.notEqual(after.border,before.border,`${label} needs a distinct hover edge`);
+    evidence.hoverCards??=[];evidence.hoverCards.push({card:label,transform:after.transform,shadowChanged:true,edgeChanged:true});
+    await page.screenshot({path:screenshot,fullPage:false,animations:'disabled'});return card;
+  };
   const limit=async (page,stage)=>{
     // Viewport updates are acknowledged before responsive styles reach the
     // compositor. Measure the settled layout, not the previous desktop frame.
@@ -185,12 +196,19 @@ export async function verifyDesign(){
     await page.setViewportSize({width:1440,height:900});
     await page.emulateMedia({reducedMotion:'no-preference'});
     await limit(page,'sections-card-effects');
-    const hoveredCard=page.locator('.section-tile').first();await hoveredCard.hover();
-    await page.screenshot({path:'design-card-hover-mobile.png',fullPage:true,animations:'disabled'});
-    assert.notEqual(await hoveredCard.evaluate(e=>getComputedStyle(e).transform),'none','Actionable cards must visibly respond to desktop hover');
+    const hoveredCard=await reviewCardHover(page,'.section-tile','section','design-card-hover-mobile.png');
     await page.emulateMedia({reducedMotion:'reduce'});await limit(page,'sections-card-reduced-motion');
     assert.equal(await hoveredCard.evaluate(e=>getComputedStyle(e).transform),'none','Reduced-motion cards must remain stable');
     evidence.cardHover=true;
+    await page.getByRole('button',{name:'نظرة على المحل',exact:true}).click();await page.getByText('ملخص الإحصائيات والأرباح المباشر',{exact:true}).waitFor();
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    for(const [selector,label] of [['.metric-card','metric'],['.visual-card','panel'],['.attention-card','attention']]){
+      const card=await reviewCardHover(page,selector,label,`design-hover-${label}-mobile.png`);
+      await page.emulateMedia({reducedMotion:'reduce'});await settleCard(card);
+      assert.equal(await card.evaluate(e=>getComputedStyle(e).transform),'none',`${label} must respect reduced motion`);
+      await page.emulateMedia({reducedMotion:'no-preference'});
+    }
+    await page.emulateMedia({reducedMotion:'reduce'});
     await page.setViewportSize({width:360,height:800});
     // Recipe editing uses disposable responses; a save is deliberately refused
     // to verify that missing acknowledgement retains all local ingredients.
@@ -210,6 +228,11 @@ export async function verifyDesign(){
     assert.equal(await page.getByRole('button',{name:'اعتماد الوصفة وتجهيز المنتج',exact:true}).isDisabled(),true);
     await page.getByLabel('كمية خام الوصفة',{exact:true}).fill('18');
     for(const width of [320,360,768,1440]){await page.setViewportSize({width,height:900});await limit(page,`recipe-editor-${width}`);await page.screenshot({path:`design-recipe-editor-${width}-mobile.png`,fullPage:true});}
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    const ingredientCard=await reviewCardHover(page,'.record-card','record','design-hover-record-mobile.png');
+    assert.equal(await ingredientCard.evaluate(e=>getComputedStyle(e.parentElement.closest('.visual-card')).transform),'none','Nested records must not lift their parent card too');
+    await page.emulateMedia({reducedMotion:'reduce'});await settleCard(ingredientCard);
+    assert.equal(await ingredientCard.evaluate(e=>getComputedStyle(e).transform),'none','Record cards must respect reduced motion');
     await page.route('**/rest/v1/rpc/bon_erp_save_store',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Isolated fixture refuses writes'})}));
     await page.getByRole('button',{name:'اعتماد الوصفة وتجهيز المنتج',exact:true}).click();
     await page.getByText(/Isolated fixture refuses writes/).first().waitFor();
