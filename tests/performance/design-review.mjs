@@ -10,6 +10,8 @@ export async function verifyDesign(){
   const browser=await chromium.launch({headless:true});
   const evidence={login:false,recovery:false,resend:false,recoveredPasswordForm:false,sections:[],widths:[],workspaceWidths:[],accountHasNoSectionMenu:false,reportTabsAccessible:false,periods:false,reducedMotion:false,pageErrors:[],layoutErrors:[]};
   const origin='http://127.0.0.1:5284';
+  const luminance=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>{const s=v/255;return s<=.04045?s/12.92:((s+.055)/1.055)**2.4;});return rgb.reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);};
+  const contrast=(a,b)=>{const values=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (values[0]+.05)/(values[1]+.05);};
   const limit=async (page,stage)=>{
     // Viewport updates are acknowledged before responsive styles reach the
     // compositor. Measure the settled layout, not the previous desktop frame.
@@ -20,6 +22,13 @@ export async function verifyDesign(){
   const reviewModal=async(page,trigger,label,longPermissions=false)=>{
     await trigger.click();
     const dialog=page.getByRole('dialog');await dialog.waitFor();
+    const field=dialog.locator('input:not([type=checkbox]):not([type=radio]):not(:disabled),select:not(:disabled),textarea:not(:disabled)').first();
+    if(await field.count()){
+      const colors=await field.evaluate(e=>{const s=getComputedStyle(e);return {text:s.color,border:s.borderTopColor,background:s.backgroundColor};});
+      const ratios={text:contrast(colors.text,colors.background),boundary:contrast(colors.border,colors.background)};
+      assert.ok(ratios.text>=4.5&&ratios.boundary>=3,`Dialog fields need readable text and visible boundaries: ${JSON.stringify(ratios)}`);
+      evidence.fieldContrast??=[];evidence.fieldContrast.push({dialog:label,...ratios});
+    }
     const baseUnit=dialog.getByLabel('الوحدة الأساسية',{exact:true});
     if(await baseUnit.count()&&await baseUnit.locator('option[value="count"]').count()){
       await baseUnit.selectOption('count');
