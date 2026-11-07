@@ -25,21 +25,21 @@
 .operation-actions button[title]:not(:has(span)) { min-width:44px; }
 .operation-back:focus-visible,.operation-actions button:focus-visible { outline:2px solid #f3d591;outline-offset:3px; }
 
-.agouz-modal { position:fixed;inset:0;margin:auto;width:calc(100% - 32px);max-width:520px;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);padding:0;border:1px solid #c7ac7c;border-radius:25px;background:#fffdf8;color:#35281e;box-shadow:inset 0 1px 0 #fff,0 28px 80px #160e0a42,0 5px 15px #160e0a20;overflow:hidden; }
+.agouz-modal { position:fixed;inset:0;margin:auto;width:calc(100% - 32px);max-width:520px;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);padding:0;border:1px solid #a88b59;border-radius:25px;background:var(--surface);color:var(--ink);box-shadow:inset 0 1px 0 #fff,0 28px 80px #160e0a66,0 5px 15px #160e0a33;overflow:hidden; }
 .agouz-modal[open] { display:flex;flex-direction:column;animation:dialogArrival .2s ease-out; }
 .agouz-modal-wide { max-width:760px; }
 .agouz-modal::backdrop { background:#21170fa6;animation:dialogShade .18s ease-out; }
-.modal-heading { display:flex;gap:12px;align-items:flex-start;padding:20px;border-bottom:1px solid #e5d9c2;background:radial-gradient(ellipse at 0 0,#dbc28e20,transparent 65%),linear-gradient(145deg,#fffcf5,#f5ecdc);flex-shrink:0; }
+.modal-heading { display:flex;gap:12px;align-items:flex-start;padding:20px;border-bottom:1px solid #bc9659;background:linear-gradient(125deg,#4a3523,#2d231b);color:#fff1d1;flex-shrink:0; }
 .modal-heading > div { flex:1;min-width:0; }
 .modal-symbol { display:grid;place-items:center;width:43px;height:43px;flex-shrink:0;border:1px solid #dac59c;border-radius:14px;background:linear-gradient(145deg,#fffcf3,#e8d9b8);color:#94702f;box-shadow:inset 0 1px 0 #fff,0 4px 8px -5px #66441840; }
-.modal-eyebrow { font-size:10px;font-weight:800;color:#9a7c43;margin-bottom:3px; }
+.modal-eyebrow { font-size:10px;font-weight:800;color:#e1c48d;margin-bottom:3px; }
 .modal-heading h2 { font-size:17px;font-weight:900;line-height:1.75;overflow-wrap:anywhere; }
-.modal-description { font-size:12px;color:#7b6a53;line-height:1.9;margin-top:4px;overflow-wrap:anywhere; }
+.modal-description { font-size:12px;color:#e2d3b9;line-height:1.9;margin-top:4px;overflow-wrap:anywhere; }
 .modal-close { display:grid;place-items:center;flex-shrink:0;width:40px;min-height:40px;border:1px solid #dfd1b7;border-radius:13px;background:#fffcf6;color:#7b6240; }
 .modal-body { padding:20px;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;font-size:13px;line-height:1.85; }
 .modal-body > * + * { margin-top:14px; }
 .modal-body label { font-size:12px;font-weight:700;color:#6e583e; }
-.modal-body input:not([type=checkbox]):not([type=radio]),.modal-body select,.modal-body textarea { min-height:46px;max-width:100%;min-width:0;font-size:14px;font-weight:500;color:#35281e;border:1px solid #dfd3c0;border-radius:12px;background:#fffefa; }
+.modal-body input:not([type=checkbox]):not([type=radio]),.modal-body select,.modal-body textarea { min-height:46px;max-width:100%;min-width:0;font-size:14px;font-weight:500;color:var(--ink);border:1px solid var(--control-line);border-radius:12px;background:var(--control); }
 .modal-body label > input:not([type=checkbox]):not([type=radio]),.modal-body label > select,.modal-body label > textarea { display:block;width:100%;margin-top:7px; }
 .modal-body input[type=checkbox],.modal-body input[type=radio] { width:18px;height:18px;min-height:18px;flex:0 0 18px;margin-top:3px;accent-color:#8d6b2e; }
 .modal-body fieldset { min-width:0; }
@@ -48,7 +48,7 @@
 .agouz-modal button { touch-action:manipulation;transition:background-color .16s,box-shadow .16s; }
 .modal-body button,.modal-footer button { min-height:44px;border-radius:12px; }
 .agouz-modal button:disabled { opacity:.55;cursor:wait; }
-.modal-footer { display:flex;gap:10px;flex-wrap:wrap;flex-shrink:0;padding:14px 20px 18px;border-top:1px solid #e8dece;background:#faf5eb; }
+.modal-footer { display:flex;gap:10px;flex-wrap:wrap;flex-shrink:0;padding:14px 20px 18px;border-top:1px solid var(--line);background:var(--surface-inset); }
 .modal-footer > div { display:flex;gap:10px;flex-wrap:wrap;width:100%;padding-top:0; }
 .modal-footer button { flex:1;padding:10px 14px;font-size:13px;font-weight:800; }
 .modal-footer .login-submit,.modal-footer .login-back { width:auto;margin:0; }
