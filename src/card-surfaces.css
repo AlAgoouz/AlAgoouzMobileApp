@@ -1,13 +1,12 @@
-/* The rim, inner highlight and two shadow levels stay visible on touch screens.
-   Only actionable tiles lift; read-only figures keep their stable geometry. */
+/* White surfaces use gold edges and restrained shadows for separation. */
 :root {
   --surface-radius: 24px;
-  --surface-shadow: 0 12px 24px -14px #49331e66, 0 3px 6px -2px #49331e26;
-  --surface-highlight: inset 0 1px 0 #ffffffed, inset 0 -1px 0 #6d51290b;
+  --surface-shadow: 0 7px 20px -11px #49331e33, 0 2px 5px -2px #49331e14;
+  --surface-highlight: inset 0 1px 0 #fff;
 }
 
 .agouz-app {
-  background: radial-gradient(ellipse at 8% 0, #b3905226, transparent 48%), var(--paper);
+  background: var(--paper);
 }
 .app-workspace { background: transparent; }
 
@@ -19,7 +18,7 @@
 .screen-stage .bg-white.border.rounded-3xl {
   border-color: var(--line);
   border-radius: var(--surface-radius);
-  background: linear-gradient(145deg, #fffdf8 12%, var(--surface) 80%, #f4e8d3);
+  background: var(--surface);
   box-shadow: var(--surface-highlight), var(--surface-shadow);
 }
 
@@ -63,9 +62,9 @@
 .card-icon,
 .attention-icon,
 .section-icon {
-  border: 1px solid #e2d3b9;
-  background: linear-gradient(145deg, #fffdf6, #eee1c7);
-  box-shadow: inset 0 1px 0 #ffffffef, 0 5px 9px -6px #68481e45;
+  border: 1px solid #d4ba85;
+  background: #fff;
+  box-shadow: 0 3px 7px -5px #68481e33;
 }
 .metric-icon { width: 43px; height: 43px; border-radius: 14px; }
 
@@ -87,7 +86,7 @@
 }
 .metric-card.metric-positive {
   --card-rgb: 51, 116, 84;
-  background: linear-gradient(145deg, #fcfff9, #f0f7ef);
+  background: #fff;
   border-color: #82a28a;
 }
 .metric-positive .metric-icon {
@@ -96,7 +95,7 @@
 }
 .metric-card.metric-negative {
   --card-rgb: 177, 65, 51;
-  background: linear-gradient(145deg, #fffdfa, #fbefeb);
+  background: #fff;
   border-color: #c68a7d;
 }
 .metric-negative .metric-icon { background: linear-gradient(145deg, #fff9f5, #f0d9d2); }
@@ -108,7 +107,7 @@
 .card-heading h2 { color: #3c2d1c; }
 .card-icon { border-radius: 13px; }
 .chart-empty {
-  background: radial-gradient(ellipse at 50% 0, #ddc69b1a, transparent 72%), linear-gradient(145deg, #fffefa, #f7f2e8);
+  background: var(--surface-inset);
   border-color: #dfd0b5;
   border-radius: 17px;
   box-shadow: inset 0 1px 0 #fff;
@@ -117,7 +116,7 @@
 .ranking-track,
 .channel-track {
   box-shadow: inset 0 1px 2px #4c351516, 0 1px 0 #fff;
-  background-color: #dccdb4;
+  background-color: #eee;
 }
 .comparison-fill { box-shadow: inset 0 1px 0 #ffffff35; }
 .chart-detail { background: var(--surface-inset); border: 1px solid var(--line); border-radius: 13px; padding: 12px; }
@@ -140,7 +139,7 @@
   background: #f7efdf;
   border: 1px solid #e9dcc4;
 }
-.attention-warning { background: linear-gradient(145deg, #fffdf6, #fbefdb); border-color: #d9bc82; }
+.attention-warning { background: #fff; border-color: #b89450; }
 .section-tile { position: relative; overflow: hidden; border-radius: 23px; animation-fill-mode: backwards; }
 .section-tile::before {
   content: '';
@@ -154,9 +153,9 @@
   border-radius: 0 0 3px 3px;
   pointer-events: none;
 }
-.section-icon { color: var(--tile-accent); background: linear-gradient(145deg, #fffefa, var(--tile-tint)); }
-.section-tile-arrow { background: #faf5eb; border: 1px solid #e9dfce; border-radius: 50%; width: 25px; height: 25px; padding: 5px; bottom: 14px; }
-.section-count { color:#624b2c; background: #ead9b9; border: 1px solid #bda174; }
+.section-icon { color: var(--tile-accent); background: #fff; }
+.section-tile-arrow { background: #fff; border: 1px solid #d5bb89; border-radius: 50%; width: 25px; height: 25px; padding: 5px; bottom: 14px; }
+.section-count { color:#624b2c; background: #fff; border: 1px solid #bda174; }
 .section-tile-description { padding-inline-end: 20px; color:var(--muted); }
 
 .period-picker,
@@ -171,7 +170,7 @@
   border-color: #8c6a38;
   box-shadow: inset 0 1px 0 #d6b06c40, 0 4px 8px -5px #3b2b1a66;
 }
-.workspace-nav { box-shadow: 0 -5px 20px #291c1833, inset 0 1px 0 #dbb87933; }
+.workspace-nav { box-shadow: 0 -4px 18px #39271712; }
 
 @keyframes metricArrival {
   from { opacity: 0; transform: translateY(9px); }
@@ -179,10 +178,10 @@
 }
 @media (hover:hover) and (pointer:fine) {
   .metric-card:hover,
-  .visual-card:hover { border-color: #b99a65; box-shadow: var(--surface-highlight), 0 15px 32px -17px #49331e48, 0 3px 8px -3px #49331e20; }
+  .visual-card:hover { border-color: #a77b35; box-shadow: var(--surface-highlight), 0 10px 24px -14px #49331e33, 0 2px 6px -3px #49331e18; }
   .metric-card.metric-gold:hover { border-color: #d5b374; box-shadow: inset 0 1px 0 #ffe2a040, 0 18px 30px -14px #3625178c; }
   .screen-stage .attention-card:hover:not(:disabled),
-  .screen-stage .section-tile:hover:not(:disabled) { transform: translateY(-4px); border-color: #b9975b; box-shadow: inset 0 1px 0 #fff, 0 17px 28px -16px #49331e55, 0 3px 7px -3px #49331e20; }
+  .screen-stage .section-tile:hover:not(:disabled) { transform: translateY(-4px); border-color: #a77b35; box-shadow: inset 0 1px 0 #fff, 0 10px 24px -14px #49331e33, 0 2px 6px -3px #49331e18; }
   .screen-stage .attention-card:active:not(:disabled),
   .screen-stage .section-tile:active:not(:disabled) { transform: translateY(1px) scale(.99); box-shadow: inset 0 2px 4px #49331e18, 0 2px 4px #49331e0a; }
 }
