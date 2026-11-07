@@ -200,7 +200,7 @@ export async function verifyDesign(){
     await page.emulateMedia({reducedMotion:'reduce'});await limit(page,'sections-card-reduced-motion');
     assert.equal(await hoveredCard.evaluate(e=>getComputedStyle(e).transform),'none','Reduced-motion cards must remain stable');
     evidence.cardHover=true;
-    await page.getByRole('button',{name:'الرئيسية',exact:true}).click();await page.getByText('ملخص الإحصائيات والأرباح المباشر',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'نظرة على المحل',exact:true}).click();await page.getByText('ملخص الإحصائيات والأرباح المباشر',{exact:true}).waitFor();
     await page.emulateMedia({reducedMotion:'no-preference'});
     for(const [selector,label] of [['.metric-card','metric'],['.visual-card','panel'],['.attention-card','attention']]){
       const card=await reviewCardHover(page,selector,label,`design-hover-${label}-mobile.png`);
