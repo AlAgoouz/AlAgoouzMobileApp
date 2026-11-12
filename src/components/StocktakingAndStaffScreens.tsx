@@ -235,7 +235,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       </div>
 
       <div className="p-3.5 space-y-4">
-        {auditError && (
+        {!reviewOpen && auditError && (
           <p role="alert" className="text-red-700 font-bold">
             {auditError}
           </p>

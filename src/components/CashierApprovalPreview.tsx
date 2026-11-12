@@ -36,6 +36,7 @@ export function CashierApprovalPreview({day, items, busy, error, onApprove, onCl
       {busy ? 'جارٍ الاعتماد…' : 'تأكيد الاعتماد وخصم الأصناف'}
     </button>}>
     {error && <p role="alert" className="text-red-700">{error}</p>}
+    {busy ? <p role="status">جارٍ تأكيد اعتماد اليوم…</p> : <>
     <dl className="record-facts">
       <div><dt>التقرير المالي</dt><dd>{day.financialReport?.fileName ?? 'ناقص'}</dd></div>
       <div><dt>تقرير الأصناف</dt><dd>{day.itemsReport?.fileName ?? 'ناقص'}</dd></div>
@@ -53,6 +54,7 @@ export function CashierApprovalPreview({day, items, busy, error, onApprove, onCl
           <p className={item.stock < 0 ? 'text-red-700 font-bold' : undefined}>الرصيد بعد الخصم {item.stock.toLocaleString('ar-EG', {maximumFractionDigits: 6})} {unitLabel(item.baseUnit)}</p>
         </li>)}
       </ul>
+    </>}
     </>}
   </Modal>;
 }

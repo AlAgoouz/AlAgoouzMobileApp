@@ -137,7 +137,6 @@ it("rejects a blank inventory count rather than applying the previous valid numb
   );
 });
 it("preserves grams as a base quantity across count unit changes and retains a rejected count", () => {
-  vi.spyOn(window, "confirm").mockReturnValue(true);
   const save = vi.fn(() => false);
   render(
     <StocktakingScreen
@@ -161,6 +160,9 @@ it("preserves grams as a base quantity across count unit changes and retains a r
   fireEvent.click(
     screen.getByRole("button", { name: /اعتماد الجرد وتحديث المخزن/ }),
   );
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByText(/المسجل.*الفعلي 9.5/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "تأكيد الجرد وتحديث المخزون" }));
   expect(save.mock.calls[0][0][0].actualStock).toBe(9.5);
   expect(screen.getByRole("alert").textContent).toContain("لم يُعتمد");
   expect(
@@ -198,7 +200,7 @@ it("does not attach a retail cash sale to the first wholesale customer", () => {
 });
 
 it('requires an explicit physical count for cashier deficits before stocktaking',()=>{
- const save=vi.fn();vi.spyOn(window,'confirm').mockReturnValue(true);
+ const save=vi.fn();
  render(<StocktakingScreen items={[{...bean,stock:-2}]} auditRecords={[]} employees={[]} currentPartnerName="Owner" onCommitStocktaking={save} onBack={()=>{}}/>);
  expect(screen.getByText('بانتظار العد الفعلي')).toBeTruthy();expect(screen.queryByText('✓ مطابق للميزان')).toBeNull();
  expect((screen.getByLabelText('الرصيد الفعلي: Test bean') as HTMLInputElement).value).toBe('');
@@ -206,5 +208,6 @@ it('requires an explicit physical count for cashier deficits before stocktaking'
  expect(save).not.toHaveBeenCalled();expect(screen.getByRole('alert').textContent).toContain('بالسالب');
  fireEvent.change(screen.getByLabelText('الرصيد الفعلي: Test bean'),{target:{value:'0'}});
  fireEvent.click(screen.getByRole('button',{name:/اعتماد الجرد وتحديث المخزن/}));
+ fireEvent.click(screen.getByRole("button",{name:"تأكيد الجرد وتحديث المخزون"}));
  expect(save).toHaveBeenCalledWith([expect.objectContaining({systemStock:-2,actualStock:0,difference:2})],expect.any(String),undefined);
 });
