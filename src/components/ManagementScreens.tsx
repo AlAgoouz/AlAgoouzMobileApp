@@ -6,6 +6,7 @@ import {FinancialPartnersScreen} from './FinancialPartnersScreen';
 import {CashierDayHistory} from './CashierDayHistory';
 import type {CashierDay} from '../types/erp';
 import {SupplierPurchasePanels} from './SupplierPurchasePanels';
+import {OperationalHealth} from './OperationalHealth';
 import {supplierPurchaseHistory} from '../lib/supplierPurchases';
 import {ContactEditModal} from './ContactEditModal';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
@@ -66,6 +67,7 @@ function allValidNumbers(values: string[]): boolean {
 // ============================================================================
 interface ProductsCatalogScreenProps {
   onOpenRecipe?:(targetId?:string)=>void;
+  onOpenMovement?: (id:string)=>void;
   onDefineRecipe?:(id:string,name:string,definition:RecipeProductDefinition,original?:CatalogNameDraft)=>Promise<void>;
   canManage?:boolean;
   nameDrafts?:CatalogNameDraft[];
@@ -82,7 +84,7 @@ interface ProductsCatalogScreenProps {
 }
 
 export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
-  onOpenRecipe,onDefineRecipe,
+  onOpenRecipe,onDefineRecipe,onOpenMovement,
   nameDrafts=[],onCompleteNameDraft,onChangeNameDraft,canManage=true,
   items,
   onAddNewItem,
@@ -222,7 +224,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
           </div>
           <CatalogListControls label="البحث في المنتجات الجاهزة" search={search} onSearch={value=>{catalogPage.setPage(0);setSearch(value);}} sort={catalogSort} onSort={value=>{catalogPage.setPage(0);setCatalogSort(value);}} pageSize={catalogPageSize} onPageSize={value=>{catalogPage.setPage(0);setCatalogPageSize(value);}}/>
           <CatalogListNavigation page={catalogPage} label="انتقل إلى صفحة المنتجات الجاهزة"/>
-          {filtered.length?<CatalogProductRows items={catalogPage.visible} canManage={canManage} onEdit={openEditItem} onDelete={item=>{setDeleting(item);setDeleteError('');}} onRecipe={item=>onOpenRecipe?.('item:'+item.id)}/>:<p role="status" className="catalog-empty">لا توجد منتجات جاهزة مطابقة لهذا العرض.</p>}
+          {filtered.length?<CatalogProductRows items={catalogPage.visible} canManage={canManage} onEdit={openEditItem} onDelete={item=>{setDeleting(item);setDeleteError('');}} onRecipe={item=>onOpenRecipe?.('item:'+item.id)} onMovement={onOpenMovement}/>:<p role="status" className="catalog-empty">لا توجد منتجات جاهزة مطابقة لهذا العرض.</p>}
         </section>
       </div>
 
@@ -360,6 +362,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 // 1. شاشة المخزن (InventoryScreen) - مع التحكم الكامل (إضافة / تعديل / حذف)
 // ============================================================================
 interface InventoryScreenProps {
+  onOpenMovement?: (id:string)=>void;
   items: InventoryItem[];
   onAddNewItem: (item: Omit<InventoryItem, "id">) => void;
   onUpdateItemPricesAndStock: (
@@ -383,6 +386,7 @@ interface InventoryScreenProps {
 }
 
 export const InventoryScreen: React.FC<InventoryScreenProps> = ({
+  onOpenMovement,
   items,
   onAddNewItem,
   onUpdateItemPricesAndStock,
@@ -561,6 +565,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1.5">
+                      {onOpenMovement&&<button type="button" className="record-action" onClick={()=>onOpenMovement(item.id)}>حركات الصنف</button>}
                       <button
                         onClick={() => openEditItem(item)}
                         className="text-xs font-extrabold text-[#9E7918] bg-[#FDF8EB] border border-[#E8D8A8] px-2.5 py-1 rounded-lg"
@@ -756,10 +761,11 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 // ============================================================================
 export const ShortagesScreen: React.FC<{
   items: InventoryItem[];
+  onOpenMovement?: (id:string)=>void;
   onNavigateToPurchase: () => void;
   onNavigateToProduction: () => void;
   onBack: () => void;
-}> = ({ items, onNavigateToPurchase, onNavigateToProduction, onBack }) => {
+}> = ({ items, onOpenMovement, onNavigateToPurchase, onNavigateToProduction, onBack }) => {
   const lowItems = items.filter(
     (i) => isStockItem(i) && i.stock <= i.minStock,
   );
@@ -802,6 +808,7 @@ export const ShortagesScreen: React.FC<{
                   {cheapest &&
                     ` • أرخص مورد: ${cheapest.supplierName} (${cheapest.price} ج.م)`}
                 </div>
+                {onOpenMovement&&<button type="button" className="record-action" onClick={()=>onOpenMovement(item.id)}>فتح حركة الصنف</button>}
                 <button
                   onClick={
                     item.category === "manufactured_blend"
@@ -1325,6 +1332,7 @@ interface MoreMenuProps {
   partners: Partner[];
   auditLogs: AuditLogEntry[];
   currentPartner: Partner;
+  onOpenCashier?:()=>void;
   initialSubPage?:
     | "menu"
     | "data_control"
@@ -1360,6 +1368,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   auditLogs,
   currentPartner,
   initialSubPage = "menu",
+  onOpenCashier,
   showDemoTools = false,
   accountPermissions=[],
   canManageData=true,canEditPartners=false,onSavePartners,
@@ -1404,7 +1413,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
         <OperationHeader title={<>النسخ الاحتياطي واسترجاع البيانات</>} description={<>تصدير بيانات المحل واسترجاع نسخة محفوظة.</>} icon={HeaderDatabaseBackup} onBack={onBack}></OperationHeader>
 
         <div className="p-4 space-y-3.5">
-          {/* قسم النسخ الاحتياطي الشامل والاسترجاع وتصدير الإكسيل */}
+          {onOpenCashier&&<OperationalHealth onCashier={onOpenCashier}/> }
           <div className="bg-gradient-to-br from-[#1E1612] via-[#2B201A] to-[#1A130F] text-white rounded-3xl p-4 border-2 border-[#C59B27] shadow-md space-y-3">
             <div className="flex items-center gap-2 text-sm font-black text-[#FBF5B7]">
               <Download className="w-5 h-5 text-[#D4AF37]" />

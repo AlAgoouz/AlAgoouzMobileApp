@@ -50,13 +50,13 @@ function MenuSharing({onClose}: {onClose: () => void}) {
 }
 
 export default function MenuEditor({onBack}: {onBack: () => void}) {
-  const [publication, setPublication] = useState<{revision: number; published: boolean; image?: string}>();
+  const [publication, setPublication] = useState<{revision: number; published: boolean; image?: string; canRestore: boolean}>();
   const [selectedImage, setSelectedImage] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
   const [processing, setProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [dialog, setDialog] = useState<'publish' | 'share'>();
+  const [dialog, setDialog] = useState<'publish' | 'share' | 'restore'>();
   const [notice, setNotice] = useState<{text: string; error?: boolean}>();
   const busy = processing || saving;
 
@@ -72,10 +72,15 @@ export default function MenuEditor({onBack}: {onBack: () => void}) {
       if (draft.error || published.error) throw Error('Menu service unavailable');
       if (controller.signal.aborted) return;
       const image = menuImageSchema.safeParse(published.data?.content);
+      const available = image.success
+        ? await client.rpc('agouz_menu_restore_available').abortSignal(controller.signal)
+        : null;
+      if (controller.signal.aborted) return;
       setPublication({
         revision: draft.data?.revision ?? 0,
         published: !!published.data,
         image: image.data?.image,
+        canRestore: available?.data === true,
       });
       setNotice(undefined);
     }
@@ -103,14 +108,16 @@ export default function MenuEditor({onBack}: {onBack: () => void}) {
     }
   }
 
-  async function publish() {
-    if (!publication || !selectedImage || busy) return;
+  async function publish(restore = false) {
+    if (!publication || busy || (restore ? !publication.canRestore : !selectedImage)) return;
     setSaving(true);
     setNotice(undefined);
     try {
       const client = getSupabaseClient();
       if (!client) throw Error('Menu service unavailable');
-      const {data, error} = await client.rpc('agouz_save_menu', {
+      const {data, error} = restore
+        ? await client.rpc('agouz_restore_menu_image', {p_expected_revision: publication.revision})
+        : await client.rpc('agouz_save_menu', {
         p_expected_revision: publication.revision,
         p_content: {image: selectedImage},
         p_publish: true,
@@ -120,12 +127,20 @@ export default function MenuEditor({onBack}: {onBack: () => void}) {
         setNotice({text: 'المنيو اتحدّث من نافذة تانية. حمّل الحالة الحالية وراجع صورتك قبل النشر.', error: true});
         return;
       }
-      if (error || typeof data !== 'number') throw Error('Menu save failed');
-      setPublication({revision: data, published: true, image: selectedImage});
+      if (error) throw Error('Menu save failed');
+      if (restore) {
+        const image = menuImageSchema.parse(data?.content).image;
+        if (typeof data?.revision !== 'number') throw Error('Invalid restore revision');
+        setPublication({revision: data.revision, published: true, image, canRestore: true});
+        setNotice({text: 'تم استرجاع الصورة السابقة على نفس الرابط.'});
+        return;
+      }
+      if (typeof data !== 'number') throw Error('Invalid publication revision');
+      setPublication({revision: data, published: true, image: selectedImage, canRestore: publication.canRestore || (!!publication.image && publication.image !== selectedImage)});
       setSelectedImage(undefined);
       setNotice({text: 'تم نشر الصورة. نفس الرابط وكود QR يفتحوا آخر نسخة للعملاء.'});
     } catch {
-      setNotice({text: 'تعذر تأكيد النشر. راجع الاتصال وحاول تاني.', error: true});
+      setNotice({text: restore ? 'تعذر تأكيد الاسترجاع. راجع الاتصال وحاول تاني.' : 'تعذر تأكيد النشر. راجع الاتصال وحاول تاني.', error: true});
     } finally {
       setSaving(false);
       setDialog(undefined);
@@ -152,6 +167,9 @@ export default function MenuEditor({onBack}: {onBack: () => void}) {
           </label>
           <p id="menu-file-hint">صورة JPG أو PNG أو WebP لحد ٨ ميجابايت.</p>
           {processing && <p role="status">جارٍ تجهيز الصورة…</p>}
+          {publication.canRestore && !selectedImage && <button className="menu-button" type="button" disabled={busy} onClick={() => setDialog('restore')}>
+            استرجاع الصورة السابقة
+          </button>}
           {selectedImage && <div className="menu-actions">
             <button className="menu-button menu-primary" type="button" disabled={busy} onClick={() => setDialog('publish')}>نشر الصورة</button>
             <button className="menu-button" type="button" disabled={busy} onClick={() => {setSelectedImage(undefined); setNotice(undefined);}}>إلغاء الاختيار</button>
@@ -172,8 +190,14 @@ export default function MenuEditor({onBack}: {onBack: () => void}) {
     </div>
 
     {dialog === 'publish' && <Modal title="نشر صورة المنيو" onClose={() => setDialog(undefined)} busy={saving}
-      footer={<button className="menu-button menu-primary" type="button" disabled={saving} onClick={publish}>{saving ? 'جارٍ النشر…' : 'تأكيد النشر'}</button>}>
+      footer={<button className="menu-button menu-primary" type="button" disabled={saving} onClick={() => void publish()}>{saving ? 'جارٍ النشر…' : 'تأكيد النشر'}</button>}>
       <p>الصورة هتظهر لأي حد يفتح رابط المنيو أو يمسح كود QR.</p>
+    </Modal>}
+    {dialog === 'restore' && <Modal title="استرجاع صورة المنيو السابقة" onClose={() => setDialog(undefined)} busy={saving}
+      footer={<button className="menu-button menu-primary" type="button" disabled={saving} onClick={() => void publish(true)}>
+        {saving ? 'جارٍ الاسترجاع…' : 'تأكيد الاسترجاع'}
+      </button>}>
+      <p>الصورة السابقة هترجع تظهر للعملاء على نفس الرابط وكود QR.</p>
     </Modal>}
     {dialog === 'share' && <MenuSharing onClose={() => setDialog(undefined)} />}
   </section>;

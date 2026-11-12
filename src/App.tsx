@@ -8,9 +8,12 @@ import {PagedSalesHistory} from './components/PagedSalesHistory';
 import {ScreenLoading} from './components/ScreenLoading';
 import {AppErrorBoundary} from './components/AppErrorBoundary';
 import {Modal} from './components/Modal';
-import {buildNavigationUrl,readNavigationFromWindow,type MoreSubTab} from './lib/screenNavigation';
+import {useWorkspaceNavigation} from './hooks/useWorkspaceNavigation';
 import {DashboardScreen} from './components/DashboardScreen';
 import {WorkspaceSidebar} from './components/WorkspaceSidebar';
+import {StockMovementModal} from './components/StockMovementModal';
+import {ExpenseRecordDetail} from './components/ExpenseRecordDetail';
+import {CashierDayDetail} from './components/CashierDayDetail';
 import {initialPeriod} from './lib/reporting';
 import {canView,canWrite,writePermissions} from './lib/userAccess';
 import {SectionsHub} from './components/SectionsHub';
@@ -197,29 +200,8 @@ const InvoiceReceiptModal = React.lazy(() =>
 );
 
 export default function App() {
-  const [activeScreen, setActiveScreen] = useState<string>(() => readNavigationFromWindow().screen);
-  const [moreInitialTab, setMoreInitialTab] = useState<MoreSubTab>(() => readNavigationFromWindow().tab);
-  useEffect(() => {
-    const onPopState = () => {
-      const next = readNavigationFromWindow();
-      setMoreInitialTab(next.tab);
-      setActiveScreen(next.screen);
-    };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  const {activeScreen,setActiveScreen,moreInitialTab,setMoreInitialTab}=useWorkspaceNavigation();
   const [hideProfits, setHideProfits] = useState<boolean>(false);
-  useEffect(() => {
-    const current = readNavigationFromWindow();
-    const nextUrl = buildNavigationUrl(activeScreen, moreInitialTab);
-    if (current.screen === activeScreen && current.tab === moreInitialTab) {
-      if (!window.history.state) {
-        window.history.replaceState({ screen: activeScreen, tab: moreInitialTab }, "", nextUrl);
-      }
-      return;
-    }
-    window.history.pushState({ screen: activeScreen, tab: moreInitialTab }, "", nextUrl);
-  }, [activeScreen, moreInitialTab]);
   const [reportPeriod,setReportPeriod]=useState(initialPeriod);
   const [toastNotification, setToastNotification] = useState<string | null>(
     null,
@@ -233,6 +215,9 @@ export default function App() {
   const dashboard=useDashboardRead(member?.userId,!!member&&canView(member)&&['home','sections','sales_invoices'].includes(activeScreen),reportPeriod);
   const [recipeTargetId,setRecipeTargetId]=useState<string>();
   const [purchaseTargetId,setPurchaseTargetId]=useState<string>();
+  const [movementId,setMovementId]=useState<string>();
+  const [expenseDetailId,setExpenseDetailId]=useState<string>();
+  const [cashierDetailId,setCashierDetailId]=useState<string>();
   const [customerTargetId,setCustomerTargetId]=useState<string>();
   const openPurchase=(id:string)=>{setPurchaseTargetId(id);setActiveScreen('purchase');};
   const openCustomer=(id:string)=>{setReceiptModalInvoice(null);setCustomerTargetId(id);setActiveScreen('customers');};
@@ -257,6 +242,9 @@ export default function App() {
     stocktakingRecords,
     accountPayments,
   } = cloud.state;
+  const expenseDetail=expenseDetailId?expenses.find(expense=>expense.id===expenseDetailId):undefined;
+  const cashierDetail=cashierDetailId?cashierDays.find(day=>day.id===cashierDetailId):undefined;
+  const movementItem=movementId?items.find(item=>item.id===movementId):undefined;
   const reportSales=useMemo(()=>salesForReports({salesInvoices,cashierDays}),[salesInvoices,cashierDays]);
   const linkedFinancialPartner=partners.find(p=>p.id===loggedPartnerId);
   const financialPartner=partners.find(p=>p.id===(selectedFinancialPartnerId||loggedPartnerId));
@@ -1125,7 +1113,7 @@ export default function App() {
         {activeScreen === 'cashier_sync' && <CashierDayScreen items={items} days={cashierDays} queued={queuedReports} onBack={()=>setActiveScreen('home')} onAttach={async(date,report)=>{engine.replace(attachCashierReport(engine.state,date,report),report.file.sourceQueueId);await confirmSave();if(report.file.sourceQueueId)setQueuedReports(rows=>rows.filter(r=>r.id!==report.file.sourceQueueId));}} onApprove={async(id)=>{engine.replace(approveCashierDay(engine.state,id,currentPartner.name));await confirmSave();}}/>}
 
         {activeScreen === "products" && (
-          <ProductsCatalogScreen
+          <ProductsCatalogScreen onOpenMovement={setMovementId}
             canManage={canWrite(member,'catalog')}
             onOpenRecipe={openRecipes}
             onDefineRecipe={canWrite(member,'catalog')?defineRecipe:undefined}
@@ -1205,7 +1193,7 @@ export default function App() {
         )}
 
         {activeScreen === "inventory" && (
-          <InventoryScreen
+          <InventoryScreen onOpenMovement={setMovementId}
             items={items}
             onAddNewItem={(newItem) => {
               return safeAction(() => {
@@ -1270,7 +1258,7 @@ export default function App() {
         )}
 
         {activeScreen === "shortages" && (
-          <ShortagesScreen
+          <ShortagesScreen onOpenMovement={setMovementId}
             items={items}
             onNavigateToPurchase={() => setActiveScreen("purchase")}
             onNavigateToProduction={() => setActiveScreen("production")}
@@ -1490,6 +1478,11 @@ export default function App() {
 
         {activeScreen === "reports" && (
           <ProfitReportsScreen
+            onOpenRecord={(kind,id)=>{
+              if(kind==='expense')setExpenseDetailId(id);
+              else if(cashierDays.some(day=>day.id===id))setCashierDetailId(id);
+              else setReceiptModalInvoice(salesInvoices.find(invoice=>invoice.id===id)??null);
+            }}
             financeState={cloud.state}
             onSaveOpening={member?.isOwner?(date,amount,reason)=>saveFinancialOpening(engine,date,amount,reason,{id:member.userId,name:currentPartner.name}):undefined}
             items={items}
@@ -1517,7 +1510,7 @@ export default function App() {
 
         {activeScreen === "staff_payroll" && (<>
           <label className="block m-4 text-xs font-bold">حساب الشريك المالي للحركة<select aria-label="حساب الشريك المالي للحركة" className="block w-full border rounded-xl p-3 mt-2" value={financialPartner?.id??''} onChange={e=>setSelectedFinancialPartnerId(e.target.value)}><option value="">اختر الحساب المالي</option>{partners.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-          <StaffAndPayrollScreen
+          <StaffAndPayrollScreen onOpenExpense={setExpenseDetailId}
             employees={employees}
             transactions={employeeTransactions}
             currentPartnerName={currentPartner.name}
@@ -1592,7 +1585,7 @@ export default function App() {
             onSavePartners={(next)=>safeAction(()=>{engine.field('partners',next);})}
             selectedFinancialPartnerId={financialPartner?.id??''}
             onSelectFinancialPartnerId={setSelectedFinancialPartnerId}
-            initialSubPage={moreInitialTab}
+            initialSubPage={moreInitialTab} onOpenCashier={()=>navigateScreen("cashier_sync")}
             showDemoTools={getSupabaseCredentials().url.startsWith("http://127.0.0.1:")}
             onAddExpense={(exp) =>
               safeAction(() => {
@@ -1696,7 +1689,9 @@ export default function App() {
           />
         )}
 
-        {/* نافذة الفاتورة والواتساب والطباعة بعد البيع مباشرة */}
+        {expenseDetail&&<ExpenseRecordDetail expense={expenseDetail} onClose={()=>setExpenseDetailId(undefined)}/>}
+        {cashierDetail&&<CashierDayDetail day={cashierDetail} names={Object.fromEntries(items.map(item=>[item.id,item.name]))} onClose={()=>setCashierDetailId(undefined)}/>}
+        {movementItem&&<StockMovementModal item={movementItem} documents={cloud.state} onClose={()=>setMovementId(undefined)}/> }
         {receiptModalInvoice && (
           <InvoiceReceiptModal
             invoice={receiptModalInvoice}

@@ -46,6 +46,7 @@ export function WholesaleInvoiceScreen({items, customers, currentPartnerName, on
       const customer = customers.find(value => value.id === customerId);
       if (!customer) throw Error('اختر عميلًا مسجلًا');
       checkCustomerDetails(customer);
+      if (!date) throw Error('حدد تاريخ الفاتورة');
       if (!lines.length) throw Error('أضف توليفة للفاتورة');
       const invoiceItems: SalesInvoiceItem[] = lines.map(line => {
         const item = blends.find(value => value.id === line.itemId);
@@ -82,7 +83,7 @@ export function WholesaleInvoiceScreen({items, customers, currentPartnerName, on
   const input = 'w-full min-w-0 border rounded-xl p-3 bg-white';
   return <main dir="rtl" className="operation-screen min-h-screen p-4 pb-28 space-y-4">
     <OperationHeader title="إنشاء فاتورة جملة" description="اختار العميل والتوليفات، وحدد السعر المتفق عليه." icon={Receipt} onBack={onBack} busy={busy} />
-    <form className="space-y-4" onSubmit={save}>
+    <form noValidate className="space-y-4" onSubmit={save}>
       <section className="operation-surface">
         <h2>العميل والدفع</h2>
         <div className="operation-fields">
@@ -131,7 +132,7 @@ export function WholesaleInvoiceScreen({items, customers, currentPartnerName, on
           <div><dt>المدفوع</dt><dd>{moneyOrDash(paidAmount)}</dd></div>
           <div><dt>المتبقي</dt><dd>{moneyOrDash(total - paidAmount)}</dd></div>
         </dl>
-        <button type="submit" disabled={busy || !lines.length || !customerId} className="operation-primary">
+        <button type="submit" disabled={busy} className="operation-primary">
           {busy ? 'جارٍ اعتماد الفاتورة…' : 'اعتماد الفاتورة وخصم المخزون'}
         </button>
       </footer>

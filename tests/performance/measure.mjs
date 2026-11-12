@@ -32,7 +32,7 @@ for(let run=0;run<3;run++){
   sample.homeReadyMs=performance.now()-start;console.log(label,'homeReadyMs',sample.homeReadyMs);
   if(run===0)await page.screenshot({path:label+'-mobile.png'});
   phase('opening-invoices');await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
-  const invoiceStart=performance.now();await page.getByRole('button',{name:/فواتير البيع/}).click();
+  const invoiceStart=performance.now();await page.getByRole('button',{name:/فواتير البيع|سجل البيع/}).click();
   await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).first().waitFor();
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   sample.invoiceReadyMs=performance.now()-invoiceStart;

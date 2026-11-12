@@ -2,10 +2,7 @@ import {OperationalHealth} from './OperationalHealth';
 import {ScreenLoading} from './ScreenLoading';
 import React,{useMemo,useState} from 'react';
 import {ArrowUpLeft,ArrowDownLeft,Wallet,Package,Receipt,Eye,EyeOff,AlertTriangle,FolderSync,Users,Clock3,ChevronLeft,CheckCircle2} from 'lucide-react';
-import type {StoreState} from '../lib/storeState';
-import type {SalesInvoice} from '../types/erp';
 import {businessDate} from '../lib/dates';
-import {isStockItem} from '../lib/itemPolicy';
 import {reportPoints,money,reportRange,type PeriodSelection} from '../lib/reporting';
 import type {DashboardModel} from '../lib/readModels';
 import {QuickItemSearch} from './QuickItemSearch';
@@ -19,7 +16,7 @@ export function DashboardScreen({model,error,onRetry,period,onPeriod,name,onNavi
  const report=useMemo(()=>model?({...model.report,points:reportPoints(model.report.entries,range,model.report.firstDate,model.report.lastDate)}):null,[model,range.from,range.to]);
  const intro=<>  <header className="dashboard-heading"><div><p className="eyebrow">بُن العجوز / مساحة العمل</p><h1>أهلًا {name}<span>، نظرة أوضح على محلك.</span></h1><p>المبيعات والنتائج وما يحتاج انتباهك في مكان واحد.</p></div><time dateTime={businessDate()}>{new Date(businessDate()+'T12:00:00').toLocaleDateString('ar-EG',{weekday:'long',day:'numeric',month:'long'})}</time></header>
 </>;
- if(!model||!report)return <main className="dashboard-screen" dir="rtl">{intro}  <div className="dashboard-tools"><PeriodSelector value={period} onChange={onPeriod}/><QuickItemSearch onNavigate={onNavigate}/></div>{error?<div role="alert" className="record-state"><p>{error}</p><button onClick={onRetry}>إعادة المحاولة</button></div>:<ScreenLoading label="جارٍ تحميل ملخص المحل…"/>}</main>;
+ if(!model||!report)return <main className="dashboard-screen" dir="rtl">{intro}  <div key="dashboard-tools" className="dashboard-tools"><PeriodSelector value={period} onChange={onPeriod}/><QuickItemSearch onNavigate={onNavigate}/></div>{error?<div role="alert" className="record-state"><p>{error}</p><button onClick={onRetry}>إعادة المحاولة</button></div>:<ScreenLoading label="جارٍ تحميل ملخص المحل…"/>}</main>;
  const {balances,pending,approved,channels,products,queued}=model;
  const display=(v:number|null,privateValue=false)=>hide&&privateValue?'••••':v===null?'غير مكتمل':money(v);
  const metrics=[{label:'المبيعات المسجلة',value:report.revenue,icon:Receipt,detail:`${report.count} مستند بيع · ${range.label}`,tone:'gold'},
@@ -34,7 +31,7 @@ export function DashboardScreen({model,error,onRetry,period,onPeriod,name,onNavi
    <button type="button" className={`attention-card ${balances.shortages?'attention-warning':''}`} onClick={()=>onNavigate('shortages')}><span className="attention-icon"><AlertTriangle size={21}/></span><span><b>مراجعة المخزون</b><small>عجز أو رصيد وصل للحد الأدنى</small></span><strong>{balances.shortages}</strong><ChevronLeft size={17}/></button>
    <button type="button" className="attention-card" onClick={()=>onNavigate('customers')}><span className="attention-icon"><Users size={21}/></span><span><b>مديونيات العملاء الحالية</b><small>رصيد الآن · فتح كشف الحساب والتحصيل</small></span><strong>{money(balances.debts)}<small> ج.م</small></strong><ChevronLeft size={17}/></button>
   </div></section>
-  <div className="dashboard-tools"><PeriodSelector value={period} onChange={onPeriod}/><QuickItemSearch onNavigate={onNavigate}/></div>
+  <div key="dashboard-tools" className="dashboard-tools"><PeriodSelector value={period} onChange={onPeriod}/><QuickItemSearch onNavigate={onNavigate}/></div>
   <div className="dashboard-section-heading"><div><h2>ملخص الإحصائيات والأرباح المباشر</h2><p>{range.label} · حسب المستندات المسجلة وحالة المرتجعات والإلغاءات الحالية</p></div><button type="button" className="quiet-button" onClick={()=>setHide(v=>!v)} aria-pressed={hide} aria-label={hide?'إظهار الأرباح':'إخفاء الأرباح'}>{hide?<Eye size={18}/>:<EyeOff size={18}/>}<span>{hide?'إظهار':'إخفاء'} الأرباح</span></button></div>
   <section className="metric-grid" aria-label="مؤشرات المحل">{metrics.map(m=><article className={`metric-card metric-${hide&&m.private?'neutral':m.tone}`} key={m.label}><span className="metric-icon"><m.icon size={21}/></span><p>{m.label}</p><strong className={m.value!==null&&m.value<0&&!(hide&&m.private)?'value-negative':''}>{display(m.value,m.private)}{m.value!==null&&<small>ج.م</small>}</strong><span className="metric-detail">{m.detail}</span><button className="quiet-button" onClick={()=>onNavigate(m.label==='قيمة المخزون الحالية'?'inventory':'reports')}>عرض التفاصيل</button></article>)}</section>
   <section className="visual-card" aria-label="رصيد أموال النشاط"><h2>رصيد أموال النشاط</h2>{model.cash?<><dl className="record-facts"><div><dt>رصيد بداية الفترة</dt><dd>{display(model.cash.opening)} ج.م</dd></div><div><dt>المتحصلات المسجلة</dt><dd>{display(model.cash.inflow)} ج.م</dd></div><div><dt>بداية الفترة + المتحصلات</dt><dd>{display(model.cash.resources)} ج.م</dd></div><div><dt>المدفوعات والمسحوبات</dt><dd>{display(model.cash.outflow)} ج.م</dd></div><div><dt>الرصيد الدفتري حتى {model.cash.to}</dt><dd>{display(model.cash.closing)} ج.م</dd></div></dl>{!!model.cash.issues.length&&<p role="alert">{model.cash.issues.join('، ')}</p>}</>:<p>حدّد رصيد بداية المدة من التقارير لعرض أموال النشاط.</p>}<p className="operation-note">رصيد البداية مستقل عن المبيعات والأرباح. يشمل الرصيد المتحصلات والمدفوعات المسجلة فقط، ولا يتطلب اكتمال تكلفة الأصناف.</p></section>

@@ -6,14 +6,14 @@ import type {Expense} from '../types/erp';
 import type {ReportSale} from '../lib/cashierDays';
 type Metric='sales'|'cost'|'expenses'|'net';
 const labels:Record<Metric,string>={sales:'المبيعات',cost:'تكلفة البضاعة',expenses:'المصروفات',net:'صافي الربح'};
-export function ReportEvidence({sales,expenses,range}:{sales:ReportSale[];expenses:Expense[];range:ReportRange}){
+export function ReportEvidence({sales,expenses,range,onOpenRecord}:{sales:ReportSale[];expenses:Expense[];range:ReportRange;onOpenRecord?:(kind:"sale"|"expense",id:string)=>void}){
  const [metric,setMetric]=useState<Metric|null>(null),[query,setQuery]=useState('');
  const current=useMemo(()=>buildReport(sales,expenses,range),[sales,expenses,range.from,range.to,range.valid]);
  const previousRange=previousReportRange(range),previous=useMemo(()=>previousRange?buildReport(sales,expenses,previousRange):null,[sales,expenses,previousRange?.from,previousRange?.to]);
  const records=useMemo(()=>{
-  const result:{id:string;date:string;name:string;amount:number|null}[]=[];
-  if(metric!=='expenses')for(const invoice of current.active)result.push({id:'sale-'+invoice.id,date:invoice.date,name:`${invoice.saleType==='cashier_sync'?'تقرير إيراد يوم الكاشير':'فاتورة'} ${invoice.invoiceNumber} — ${invoice.customerName}`,amount:metric==='cost'?invoice.totalCost:metric==='net'?invoice.netProfit:invoice.totalAmount});
-  if(metric==='expenses'||metric==='net')for(const expense of current.expenses)if(!expense.isCancelled&&expense.category!=='مسحوبات شركاء')result.push({id:'expense-'+expense.id,date:expense.date,name:`مصروف: ${expense.title} — ${expense.category}`,amount:(metric==='net'?-1:1)*expense.amount});
+  const result:{id:string;date:string;name:string;amount:number|null;kind:"sale"|"expense";sourceId:string}[]=[];
+  if(metric!=='expenses')for(const invoice of current.active)result.push({id:'sale-'+invoice.id,kind:'sale',sourceId:invoice.id,date:invoice.date,name:`${invoice.saleType==='cashier_sync'?'تقرير إيراد يوم الكاشير':'فاتورة'} ${invoice.invoiceNumber} — ${invoice.customerName}`,amount:metric==='cost'?invoice.totalCost:metric==='net'?invoice.netProfit:invoice.totalAmount});
+  if(metric==='expenses'||metric==='net')for(const expense of current.expenses)if(!expense.isCancelled&&expense.category!=='مسحوبات شركاء')result.push({id:'expense-'+expense.id,kind:'expense',sourceId:expense.id,date:expense.date,name:`مصروف: ${expense.title} — ${expense.category}`,amount:(metric==='net'?-1:1)*expense.amount});
   return result.filter(row=>`${row.name} ${row.date}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
  },[current,metric,query]);
  const page=useRecordPage(records,metric+'|'+query+'|'+range.from+'|'+range.to),value=metric==='sales'?current.revenue:metric==='cost'?current.cost:metric==='expenses'?current.spent:current.net;
@@ -24,7 +24,7 @@ export function ReportEvidence({sales,expenses,range}:{sales:ReportSale[];expens
   {metric&&<Modal wide title={`مصادر ${labels[metric]}`} description={`${range.label} · إجمالي الرقم ${money(value)} ج.م`} onClose={()=>setMetric(null)}>
    <label className="record-search">بحث في المستندات<input value={query} onChange={e=>setQuery(e.target.value)}/></label><RecordPagination {...page}/><p>{query?'مجموع النتائج المطابقة':'مجموع المستندات'}: {records.some(r=>r.amount===null)?'غير مكتمل؛ توجد أصناف لم تعتمد تكلفتها':money(records.reduce((sum,row)=>sum+row.amount!,0))+' ج.م'}</p>
    {!records.length&&<p className="record-state">لا توجد مستندات مطابقة.</p>}
-   <div className="record-grid">{page.visible.map(row=><article key={row.id} className="record-card"><time>{row.date}</time><h3>{row.name}</h3><strong>{money(row.amount)} ج.م</strong></article>)}</div>
+   <div className="record-grid">{page.visible.map(row=><article key={row.id} className="record-card"><time>{row.date}</time><h3>{row.name}</h3><strong>{money(row.amount)} ج.م</strong>{onOpenRecord&&<button type="button" className="record-action" onClick={()=>{setMetric(null);onOpenRecord(row.kind,row.sourceId);}}>فتح المستند</button>}</article>)}</div>
   </Modal>}
  </section>;
 }

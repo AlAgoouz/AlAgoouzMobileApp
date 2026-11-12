@@ -2,6 +2,7 @@ import {unitLabel as displayUnit} from '../lib/units';
 import {Scale as HeaderScale,Users as HeaderUsers} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
 import {Modal} from './Modal';
+import {RecordPagination,useRecordPage} from './RecordPagination';
 import {isStockItem} from '../lib/itemPolicy';
 import React, { useState, useMemo } from "react";
 import { payrollBalance, currentPayrollPeriod } from '../lib/payroll';
@@ -48,6 +49,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
   const [chargeEmployeeId, setChargeEmployeeId] = useState<string>("");
   const [savedBanner, setSavedBanner] = useState<string>("");
   const [auditError, setAuditError] = useState("");
+  const [reviewOpen,setReviewOpen]=useState(false);
 
   // الأصناف القابلة للجرد الفعلي (كل الأصناف ما عدا وصفات المشروبات اللحظية)
   const auditableItems = useMemo(
@@ -101,6 +103,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
     [allVariances],
   );
 
+  const reviewPage=useRecordPage(changedVariances,reviewOpen,20);
   const summary = useMemo(() => {
     let totalShortage = 0;
     let totalSurplus = 0;
@@ -163,13 +166,10 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       );
       return;
     }
-    if (
-      changedVariances.length > 0 &&
-      !window.confirm(
-        `عدد الفروقات: ${changedVariances.length} صنف — عجز ${summary.totalShortage} ج.م وزيادة ${summary.totalSurplus} ج.م.\nسيتم اعتماد محضر الجرد وتعديل أرصدة المخزن نهائيًا. متابعة؟`,
-      )
-    )
+    if (!reviewOpen) {
+      setReviewOpen(true);
       return;
+    }
     const accepted = onCommitStocktaking(
       allVariances,
       auditNotes || "جرد فعلي للمخزن والفرع على الميزان",
@@ -179,6 +179,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       setAuditError("لم يُعتمد الجرد؛ راجع التنبيه وأعد المحاولة.");
       return;
     }
+    setReviewOpen(false);
     setSavedBanner(
       `✓ تم اعتماد محضر الجرد وتحديث الأرصدة الفعلية في المخزن بنجاح (بواسطة: ${currentPartnerName})`,
     );
@@ -192,6 +193,20 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-36">
       {/* الهيدر */}
       <OperationHeader title={<>الجرد الفعلي على الميزان وكشف العجز</>} description={<>مقارنة أرصدة السيستم بالوزن الفعلي بالجرام والكيلو والعدد</>} icon={HeaderScale} onBack={onBack}></OperationHeader>
+      {reviewOpen&&<Modal wide title="مراجعة واعتماد الجرد" onClose={()=>{setReviewOpen(false);setAuditError('');}}
+        footer={<button type="button" className="operation-primary" onClick={handleSaveAudit}>تأكيد الجرد وتحديث المخزون</button>}>
+        {auditError&&<p role="alert" className="text-red-700">{auditError}</p>}
+        <p>العجز {summary.totalShortage.toLocaleString('ar-EG')} ج.م · الزيادة {summary.totalSurplus.toLocaleString('ar-EG')} ج.م</p>
+        <RecordPagination {...reviewPage}/>
+        {reviewPage.visible.length ? <ul className="record-grid">
+          {reviewPage.visible.map(line=><li key={line.itemId} className="record-card">
+            <h3>{line.itemName}</h3>
+            <p>المسجل {line.systemStock} · الفعلي {line.actualStock} {displayUnit(line.baseUnit)}</p>
+            <p className={line.difference<0?'text-red-700':undefined}>الفرق {line.difference>0?'+':''}{line.difference} {displayUnit(line.baseUnit)}</p>
+          </li>)}
+        </ul> : <p>الأرصدة الفعلية مطابقة للمسجل.</p>}
+      </Modal>}
+
 
       {/* تبويبات الجرد */}
       <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 section-tabs sticky top-0 z-20">
@@ -566,6 +581,7 @@ interface StaffAndPayrollScreenProps {
   onClosePayrollPeriod?: (employeeId:string)=>boolean;
   onAddNewEmployee: (emp: Omit<Employee, "id">) => void | boolean;
   onDeleteEmployee: (empId: string) => void;
+  onOpenExpense?: (id:string)=>void;
   onBack: () => void;
 }
 
@@ -578,6 +594,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
   onAddNewEmployee,
   onDeleteEmployee,
   onBack,
+  onOpenExpense,
 }) => {
   const [activeTab, setActiveTab] = useState<"staff" | "ledger">("staff");
   const [actionModal, setActionModal] = useState<{
@@ -958,6 +975,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                     بواسطة: {tr.partnerName} • {tr.date}
                   </div>
                   <p className="text-xs">{tr.payrollPeriod ?? 'سجل سابق'} {tr.paidFrom ? `• ${tr.paidFrom}` : ''} {tr.expenseId ? '• مرتبط بمصروف' : ''} {tr.reversedAt ? '• معكوسة' : ''}</p>
+                  {tr.expenseId&&onOpenExpense&&<button type="button" className="record-action" onClick={()=>onOpenExpense(tr.expenseId!)}>فتح قيد المصروف</button>}
                   {tr.closingSummary && <p className="text-xs">مرحل للشهر التالي: {tr.closingSummary.carryForward} ج.م</p>}
                   {onReverseEmployeeAction && tr.accountingVersion===1 && tr.type!=='إقفال شهر' && !tr.reversedAt && employees.find((e)=>e.id===tr.employeeId)?.payrollPeriod===tr.payrollPeriod && <button className="text-xs text-red-700 border rounded-xl p-2" onClick={()=>{
                     if(window.confirm('عكس حركة العامل ومصروفها مع الاحتفاظ بالأصل؟')) {

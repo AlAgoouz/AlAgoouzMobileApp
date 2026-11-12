@@ -8,12 +8,12 @@ const normalize = (value: string) => value.normalize('NFKC').replace(/[أإآ]/g
 interface Props {
   onNavigate: (id: string) => void;
   counts: Record<string, number>;
-  isOwner: boolean;
-  canManageCashier: boolean;
-  canCreateSale: boolean;
+  isOwner?: boolean;
+  canManageCashier?: boolean;
+  canCreateSale?: boolean;
 }
 
-export function SectionsHub({onNavigate, counts, isOwner, canManageCashier, canCreateSale}: Props) {
+export function SectionsHub({onNavigate, counts, isOwner = false, canManageCashier = false, canCreateSale = false}: Props) {
   const id = useId();
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<string[]>([]);

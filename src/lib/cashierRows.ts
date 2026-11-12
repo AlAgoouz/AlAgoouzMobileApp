@@ -11,6 +11,7 @@ export interface ParsedCashierRow {
   error?: string;
   sourceFormat?: 'uws-items-v1';
   saleCount?: number;
+  sourceRow?: number;
 }
 
 export function parseLocalizedNumber(value: unknown): number | undefined {
@@ -216,7 +217,7 @@ export function mapRawCashierRows(
         unitPrice,
         matchedItem,
         error,
-        ...(row.sourceFormat==='uws-items-v1'?{sourceFormat:'uws-items-v1' as const,saleCount:Number(row.saleCount)}:{}),
+        ...(row.sourceFormat==='uws-items-v1'?{sourceFormat:'uws-items-v1' as const,saleCount:Number(row.saleCount),sourceRow:Number(row.sourceRow)}:{}),
       };
     });
 }

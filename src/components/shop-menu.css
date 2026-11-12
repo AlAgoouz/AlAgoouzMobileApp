@@ -229,7 +229,8 @@
   justify-content: space-between; margin-block-end: .65rem;
 }
 .shop-menu-image-page h1 { margin: 0; font-size: clamp(1.15rem, 3vw, 1.8rem); font-weight: 850; }
-.shop-menu-image-page a {
+.shop-menu-image-actions { display:flex; flex-wrap:wrap; gap:.35rem; }
+.shop-menu-image-actions :is(a,button) {
   display: inline-flex; align-items: center; min-height: 44px; padding-inline: .75rem;
   border: 1px solid #c9ab88; border-radius: .65rem; background: #fff; color: #4b2c1b;
   font-size: .9rem; font-weight: 750;
@@ -238,3 +239,7 @@
   display: block; width: auto; max-width: 100%; height: auto; margin-inline: auto;
   border: 1px solid #e7d9c7; border-radius: .65rem; background: #fff;
 }
+
+.shop-menu-image-actions button[aria-pressed=true] { background:#eddbb8; }
+.shop-menu-image-viewport { overflow:auto; }
+.shop-menu-image-viewport[data-zoomed=true] img { width:max(150%,46rem); max-width:none; }
