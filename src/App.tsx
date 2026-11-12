@@ -232,6 +232,10 @@ export default function App() {
   const { engine, member } = cloud;
   const dashboard=useDashboardRead(member?.userId,!!member&&canView(member)&&['home','sections','sales_invoices'].includes(activeScreen),reportPeriod);
   const [recipeTargetId,setRecipeTargetId]=useState<string>();
+  const [purchaseTargetId,setPurchaseTargetId]=useState<string>();
+  const [customerTargetId,setCustomerTargetId]=useState<string>();
+  const openPurchase=(id:string)=>{setPurchaseTargetId(id);setActiveScreen('purchase');};
+  const openCustomer=(id:string)=>{setReceiptModalInvoice(null);setCustomerTargetId(id);setActiveScreen('customers');};
   const openRecipes=(targetId?:string)=>{setRecipeTargetId(targetId);setActiveScreen('recipes');};
   useEffect(()=>{if(activeScreen!=='sales_invoices')setHistoryEditing(false);},[activeScreen]);
   useEffect(()=>setSelectedFinancialPartnerId(''),[member?.userId,member?.partnerId]);
@@ -901,6 +905,9 @@ export default function App() {
   );
 
   const navigateScreen=(screen:string)=>{
+    setPurchaseTargetId(undefined);
+    setCustomerTargetId(undefined);
+    setRecipeTargetId(undefined);
     if(screen==='expenses'||screen==='data_control'||screen==='partners'){setMoreInitialTab(screen);setActiveScreen('more');}
     else {if(screen==='more')setMoreInitialTab('menu');setActiveScreen(screen);}
   };
@@ -1028,6 +1035,8 @@ export default function App() {
         {/* ================= 2. قسم الأقسام (بالتصميم الاحترافي الأول الفخم بالإسبريسو والذهبي) ================= */}
         {activeScreen === "sections" && <SectionsHub
           counts={dashboard.data?.counts??{}}
+          canManageCashier={canWrite(member,'cashier')}
+          canCreateSale={canWrite(member,'sales')}
           onNavigate={navigateScreen}
           isOwner={member.isOwner}
         />}
@@ -1037,7 +1046,7 @@ export default function App() {
         {activeScreen==='shop_menu'&&member.isOwner&&<MenuEditor onBack={()=>setActiveScreen('sections')}/>}
         {/* ================= الشاشات الفرعية ================= */}
         {activeScreen === "purchase" && (
-          <PurchaseScreen
+          <PurchaseScreen initialInvoiceId={purchaseTargetId}
             items={items}
             suppliers={suppliers}
             purchaseInvoices={purchaseInvoices}
@@ -1271,7 +1280,7 @@ export default function App() {
 
         {activeScreen === "suppliers" && (
           <SuppliersAndCustomersScreen onUpdateContact={(mode,id,details)=>safeAction(()=>{if(mode==='customers'){checkCustomerDetails(details);setCustomers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}else{checkSupplierDetails(details);setSuppliers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}addAuditLog("تعديل وصفة/صنف","تحديث بيانات التواصل");})}
-            mode="suppliers"
+            mode="suppliers" onOpenPurchase={openPurchase}
             suppliers={suppliers}
             customers={customers}
             purchaseInvoices={purchaseInvoices}
@@ -1362,7 +1371,8 @@ export default function App() {
 
         {activeScreen === "customers" && (
           <SuppliersAndCustomersScreen onUpdateContact={(mode,id,details)=>safeAction(()=>{if(mode==='customers'){checkCustomerDetails(details);setCustomers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}else{checkSupplierDetails(details);setSuppliers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}addAuditLog("تعديل وصفة/صنف","تحديث بيانات التواصل");})}
-            mode="customers"
+            mode="customers" initialStatementId={customerTargetId}
+            onOpenSale={id=>setReceiptModalInvoice(salesInvoices.find(invoice=>invoice.id===id)??null)}
             suppliers={suppliers}
             customers={customers}
             purchaseInvoices={purchaseInvoices}
@@ -1442,7 +1452,7 @@ export default function App() {
           />
         )}
 
-        {activeScreen === "sales_invoices" && (!historyEditing?<PagedSalesHistory onBack={()=>setActiveScreen('home')} onManage={canWrite(member,'sales')?()=>setHistoryEditing(true):undefined}/>:(
+        {activeScreen === "sales_invoices" && (!historyEditing?<PagedSalesHistory onOpenCustomer={openCustomer} onBack={()=>setActiveScreen('home')} onManage={canWrite(member,'sales')?()=>setHistoryEditing(true):undefined}/>:(
           <SalesInvoicesAndReturnsScreen
             cashierDays={cashierDays}
             salesInvoices={salesInvoices}
@@ -1690,6 +1700,7 @@ export default function App() {
         {receiptModalInvoice && (
           <InvoiceReceiptModal
             invoice={receiptModalInvoice}
+            onOpenCustomer={openCustomer}
             customerPhone={
               customers.find(
                 (c) =>

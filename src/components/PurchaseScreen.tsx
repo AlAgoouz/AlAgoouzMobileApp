@@ -3,6 +3,8 @@ import {ShoppingBag as HeaderShoppingBag} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
 import {Modal} from './Modal';
 import {RecordPagination,useRecordPage} from './RecordPagination';
+import {ResponsiveRegister} from './ResponsiveRegister';
+import {money} from '../lib/reporting';
 import {latestSupplierPrices} from '../lib/supplierPurchases';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
 import React, { useState, useMemo } from "react";
@@ -23,6 +25,7 @@ interface PurchaseScreenProps {
   items: InventoryItem[];
   suppliers: Supplier[];
   purchaseInvoices: PurchaseInvoice[];
+  initialInvoiceId?: string;
   currentPartnerName: string;
   onSavePurchase: (
     invoice: Omit<PurchaseInvoice, "id" | "invoiceNumber">,
@@ -37,6 +40,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   items,
   suppliers,
   purchaseInvoices,
+  initialInvoiceId,
   currentPartnerName,
   onSavePurchase,
   onDeletePurchaseInvoice,
@@ -53,7 +57,8 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
     "all" | "نقدي" | "آجل_أو_جزئي"
   >("all");
   const [selectedInvoiceDetails, setSelectedInvoiceDetails] =
-    useState<PurchaseInvoice | null>(null);
+    useState<PurchaseInvoice | null>(() => purchaseInvoices.find(invoice => invoice.id === initialInvoiceId) ?? null);
+  const [invoiceToCancel, setInvoiceToCancel] = useState<PurchaseInvoice>();
 
   // بيانات إنشاء فاتورة مشتريات جديدة
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>(
@@ -328,7 +333,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
           }}>{viewMode === "list" ? (
           <button
             onClick={handleStartNewInvoice}
-            className="bg-gradient-to-r from-[#C59B27] to-[#E5C158] text-[#1E1612] px-3 py-1.5 rounded-xl text-xs font-black shadow flex items-center gap-1"
+            className="operation-primary"
           >
             <Plus className="w-4 h-4" />
             <span>فاتورة جديدة</span>
@@ -346,238 +351,42 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
           {invoiceError}
         </p>
       )}
-      {viewMode==='list'&&<RecordPagination {...invoicePage}/>}
-      {/* هيدر قسم المشتريات */}
+      {viewMode === "list" && <div className="record-workspace">
+        <dl className="record-facts operation-surface">
+          <div><dt>إجمالي المشتريات</dt><dd>{money(purchaseStats.totalPurchases)} ج.م</dd></div>
+          <div><dt>المدفوع للموردين</dt><dd>{money(purchaseStats.totalPaid)} ج.م</dd></div>
+          <div><dt>المتبقي من فواتير قديمة</dt><dd>{money(purchaseStats.totalRemaining)} ج.م</dd></div>
+        </dl>
+        <label className="record-search">البحث في الفواتير
+          <input type="search" value={invoiceSearch} onChange={event=>setInvoiceSearch(event.target.value)}
+            placeholder="رقم الفاتورة أو المورد أو الصنف" />
+        </label>
+        <nav className="record-tabs" aria-label="حالة دفع فواتير المشتريات">
+          {([{id:'all',label:'كل الفواتير'},{id:'نقدي',label:'مدفوعة بالكامل'},{id:'آجل_أو_جزئي',label:'عليها متبقي'}] as const).map(tab=>
+            <button type="button" key={tab.id} aria-pressed={invoiceFilter===tab.id} onClick={()=>setInvoiceFilter(tab.id)}>{tab.label}</button>)}
+        </nav>
+        <RecordPagination {...invoicePage}/>
+        {invoicePage.visible.length ? <ResponsiveRegister label="سجل فواتير المشتريات" rows={invoicePage.visible} columns={[
+          {title:'الفاتورة',render:inv=><strong dir="ltr">{inv.invoiceNumber}</strong>},
+          {title:'المورد',render:inv=>inv.supplierName},
+          {title:'التاريخ',render:inv=><time dateTime={inv.date}>{inv.date}</time>},
+          {title:'الإجمالي',render:inv=><b>{money(inv.totalAmount)} ج.م</b>},
+          {title:'الحالة',render:inv=>inv.isCancelled?<>ملغاة · استرداد {money(inv.refundDue??0)} ج.م</>:inv.remainingAmount>0?<>متبقي {money(inv.remainingAmount)} ج.م</>:'مدفوعة بالكامل'},
+          {title:'الإجراءات',render:inv=><div className="register-actions">
+            <button type="button" className="record-action" onClick={()=>setSelectedInvoiceDetails(inv)}>عرض تفاصيل الفاتورة</button>
+            {onDeletePurchaseInvoice&&!inv.isCancelled&&<button type="button" className="record-action text-red-700" onClick={()=>setInvoiceToCancel(inv)}>إلغاء</button>}
+          </div>},
+        ]}/> : <p className="record-state">{purchaseInvoices.length?'لا توجد فواتير مطابقة.':'لا توجد فواتير مشتريات مسجلة.'}</p>}
+      </div>}
 
-
-      {/* ================= الوضع الأول: شاشة قسم المشتريات الرئيسية (سجل الفواتير + زر إنشاء فاتورة) ================= */}
-      {viewMode === "list" && (
-        <div className="p-3.5 space-y-4 flex-1">
-          {/* كارت الملخص المالي للمشتريات + زر إنشاء فاتورة مشتريات جديدة */}
-          <div className="bg-gradient-to-br from-[#1E1612] via-[#2A1F1A] to-[#17110E] rounded-3xl p-4 text-[#FAF8F4] border border-[#C59B27]/60 shadow-xl space-y-3.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-[#C59B27]/20 border border-[#C59B27]/50 flex items-center justify-center text-[#FBF5B7]">
-                  <ShoppingBag className="w-5 h-5 text-[#D4AF37]" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-black text-[#FBF5B7]">
-                    إدارة فواتير المشتريات
-                  </h2>
-                  <p className="text-[10px] text-[#D4AF37]">
-                    تحديث تلقائي لرصيد المخزن ومتوسط التكلفة (WAC)
-                  </p>
-                </div>
-              </div>
-              <span className="text-xs font-black bg-white/10 border border-[#C59B27]/40 text-[#FBF5B7] px-2.5 py-1 rounded-xl">
-                {purchaseStats.count} فاتورة
-              </span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-2.5">
-                <div className="text-[10px] text-[#D8CBB8]">
-                  إجمالي المشتريات
-                </div>
-                <div className="text-sm font-black text-white mt-0.5">
-                  {purchaseStats.totalPurchases.toLocaleString("ar-EG")}{" "}
-                  <span className="text-[9px] text-[#D4AF37]">ج.م</span>
-                </div>
-              </div>
-              <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-2.5">
-                <div className="text-[10px] text-[#D8CBB8]">المدفوع نقداً</div>
-                <div className="text-sm font-black text-emerald-400 mt-0.5">
-                  {purchaseStats.totalPaid.toLocaleString("ar-EG")}{" "}
-                  <span className="text-[9px]">ج.م</span>
-                </div>
-              </div>
-              <div className="bg-white/5 border border-[#C59B27]/30 rounded-2xl p-2.5">
-                <div className="text-[10px] text-[#D8CBB8]">متبقي للموردين</div>
-                <div className="text-sm font-black text-amber-400 mt-0.5">
-                  {purchaseStats.totalRemaining.toLocaleString("ar-EG")}{" "}
-                  <span className="text-[9px]">ج.م</span>
-                </div>
-              </div>
-            </div>
-
-            {/* الزر الرئيسي الواضح لإنشاء فاتورة مشتريات جديدة */}
-            <button
-              onClick={handleStartNewInvoice}
-              className="w-full bg-gradient-to-l from-[#C59B27] via-[#D4AF37] to-[#B38728] hover:opacity-95 text-[#1E1612] font-black text-sm py-3.5 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition active:scale-[0.99]"
-            >
-              <Plus className="w-5 h-5 stroke-[2.5]" />
-              <span>إنشاء فاتورة مشتريات جديدة</span>
-            </button>
-          </div>
-
-          {/* البحث والفلترة في فواتير المشتريات */}
-          <div className="space-y-2.5">
-            <div className="bg-white rounded-2xl border border-[#E6DEC8] px-3.5 py-2.5 flex items-center gap-2 shadow-sm">
-              <Search className="w-4 h-4 text-[#9E7918] shrink-0" />
-              <input
-                type="text"
-                value={invoiceSearch}
-                onChange={(e) => setInvoiceSearch(e.target.value)}
-                placeholder="ابحث برقم الفاتورة، اسم المورد، أو اسم الصنف..."
-                className="w-full text-xs font-bold bg-transparent focus:outline-none text-[#1E1612]"
-              />
-              {invoiceSearch && (
-                <button
-                  onClick={() => setInvoiceSearch("")}
-                  className="text-[#8C7A6B]"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                {
-                  id: "all",
-                  label: `كل الفواتير (${purchaseInvoices.length})`,
-                },
-                { id: "نقدي", label: "فواتير نقدية" },
-                { id: "آجل_أو_جزئي", label: "عليها متبقي آجل" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() =>
-                    setInvoiceFilter(tab.id as "all" | "نقدي" | "آجل_أو_جزئي")
-                  }
-                  className={`py-2 rounded-xl text-xs font-extrabold border transition ${
-                    invoiceFilter === tab.id
-                      ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27] shadow-sm"
-                      : "bg-white text-[#6E5D4F] border-[#E6DEC8]"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* قائمة فواتير المشتريات */}
-          <div className="space-y-3">
-            {filteredInvoices.length === 0 ? (
-              <div className="bg-white rounded-3xl p-8 text-center border border-[#E6DEC8] space-y-3">
-                <div className="w-14 h-14 rounded-2xl bg-[#FDF8EB] text-[#9E7918] border border-[#E8D8A8] flex items-center justify-center mx-auto">
-                  <FileText className="w-7 h-7" />
-                </div>
-                <div className="text-sm font-black text-[#1E1612]">
-                  لا توجد فواتير مشتريات مسجلة
-                </div>
-                <p className="text-xs text-[#8C7A6B]">
-                  اضغط على زر &quot;إنشاء فاتورة مشتريات جديدة&quot; لإضافة
-                  توريد جديد للمخزن
-                </p>
-              </div>
-            ) : (
-              invoicePage.visible.map((inv) => (
-                <div
-                  key={inv.id}
-                  className="bg-white rounded-2xl p-4 border border-[#E6DEC8] hover:border-[#C59B27] shadow-sm space-y-3 transition"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-xl bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] flex items-center justify-center shrink-0">
-                        <FileText className="w-5 h-5 text-[#D4AF37]" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-[#1E1612]">
-                            #{inv.invoiceNumber}
-                            {inv.isCancelled ? " — ملغاة" : ""}
-                            {inv.isCancelled && (
-                              <span className="block text-amber-800">
-                                مبلغ الاسترداد من المورد: {inv.refundDue ?? 0}{" "}
-                                ج.م
-                              </span>
-                            )}
-                          </span>
-                          <span
-                            className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                              inv.remainingAmount > 0
-                                ? "bg-amber-100 text-amber-800 border border-amber-300"
-                                : "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                            }`}
-                          >
-                            {inv.remainingAmount > 0
-                              ? `${inv.paymentMethod} (متبقي ${inv.remainingAmount} ج.م)`
-                              : "مدفوعة بالكامل"}
-                          </span>
-                        </div>
-                        <div className="text-xs font-extrabold text-[#6E5D4F] mt-0.5">
-                          المورد: {inv.supplierName}
-                        </div>
-                        <div className="text-[10px] text-[#8C7A6B]">
-                          التاريخ: {inv.date} • بواسطة: {inv.partnerName}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-left">
-                      <div className="text-sm font-black text-[#1E1612]">
-                        {inv.totalAmount.toLocaleString("ar-EG")} ج.م
-                      </div>
-                      <div className="text-[10px] text-[#8C7A6B] font-bold">
-                        {inv.items.length} أصناف
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ملخص سريع للأصناف داخل الفاتورة */}
-                  <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[#F2ECE1]">
-                    {inv.items.map((line, i) => (
-                      <span
-                        key={i}
-                        className="text-[10px] font-bold bg-[#FAF8F4] text-[#1E1612] border border-[#E6DEC8] px-2 py-1 rounded-lg"
-                      >
-                        {line.itemName} ({line.quantity} {line.unit} ×{" "}
-                        {line.purchasePrice} ج.م)
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* أزرار عرض تفاصيل الفاتورة أو حذفها */}
-                  <div className="flex items-center justify-between pt-1">
-                    <button
-                      onClick={() => setSelectedInvoiceDetails(inv)}
-                      className="text-xs font-extrabold text-[#9E7918] bg-[#FDF8EB] border border-[#E8D8A8] px-3 py-1.5 rounded-xl flex items-center gap-1.5 hover:bg-[#F5EBD0] transition"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>عرض تفاصيل الفاتورة</span>
-                    </button>
-
-                    {onDeletePurchaseInvoice && (
-                      <button
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `هل تريد إلغاء فاتورة المشتريات وعكس المخزون والمديونية #${inv.invoiceNumber}${inv.isCancelled ? " — ملغاة" : ""}؟`,
-                            )
-                          ) {
-                            onDeletePurchaseInvoice(inv.id);
-                          }
-                        }}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition"
-                        disabled={inv.isCancelled}
-                        title={
-                          inv.isCancelled
-                            ? "فاتورة ملغاة"
-                            : "إلغاء الفاتورة وعكس أثرها"
-                        }
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+      {invoiceToCancel && <Modal title="إلغاء فاتورة المشتريات"
+        description={invoiceToCancel.invoiceNumber} onClose={()=>setInvoiceToCancel(undefined)}
+        footer={<button type="button" className="operation-primary" onClick={()=>{
+          onDeletePurchaseInvoice?.(invoiceToCancel.id);
+          setInvoiceToCancel(undefined);
+        }}>تأكيد الإلغاء</button>}>
+        <p>هيتم عكس أثر الفاتورة على المخزون وحساب المورد حسب حالة الشراء.</p>
+      </Modal>}
 
       {/* ================= الوضع الثاني: إنشاء فاتورة مشتريات جديدة واختيار الأصناف ================= */}
       {viewMode === "create" && (
@@ -1002,7 +811,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
             )}
           </div>
 
-          <section className="bg-white rounded-2xl p-4 border space-y-3">
+          <section className="operation-surface space-y-3">
             <p>قيمة الأصناف قبل الضريبة: {netInvoiceAmount.toLocaleString('ar-EG')} ج.م</p>
             <label className="block">الضريبة (مبلغ منفصل)
               <input aria-label="ضريبة فاتورة الشراء" type="number" min="0" step="0.01" value={taxInput} onChange={e=>setTaxInput(e.target.value)} className="border rounded-xl p-2 w-full" />

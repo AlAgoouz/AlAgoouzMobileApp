@@ -1,57 +1,140 @@
-import React,{useState} from 'react';
-import {Receipt} from 'lucide-react';
+import React, {useState} from 'react';
+import {Plus, Receipt, Trash2} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
-import type {InventoryItem,Customer,SalesInvoice,SalesInvoiceItem} from '../types/erp';
+import type {Customer, InventoryItem, SalesInvoice, SalesInvoiceItem} from '../types/erp';
 import {businessDate} from '../lib/dates';
 import {checkCustomerDetails} from '../lib/contactDetails';
-export function WholesaleInvoiceScreen({items,customers,currentPartnerName,onSaveSale,onBack}: {
- items:InventoryItem[];customers:Customer[];currentPartnerName:string;
- onSaveSale:(invoice:Omit<SalesInvoice,'id'|'invoiceNumber'>)=>Promise<boolean>;
- onBack:()=>void;
-}){
- const [customerId,setCustomerId]=useState(''),[date,setDate]=useState(businessDate());
- const [method,setMethod]=useState<SalesInvoice['paymentMethod']>('نقدي');
- const [paid,setPaid]=useState('0'),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- const [lines,setLines]=useState<{itemId:string;quantity:string;price:string}[]>([]);
- const blends=items.filter(i=>i.category==='manufactured_blend');
- const total=Number(lines.reduce((s,l)=>s+Number((Number(l.quantity)*Number(l.price)).toFixed(2)),0).toFixed(2));
- const input='w-full min-w-0 border rounded-xl p-3 bg-white';
- const save=async()=>{
-  if(busy)return;setError('');
-  try{
-   const customer=customers.find(c=>c.id===customerId);if(!customer)throw Error('اختر عميلًا مسجلًا');
-   checkCustomerDetails(customer);
-   if(!lines.length)throw Error('أضف توليفة للفاتورة');
-   const invoiceItems:SalesInvoiceItem[]=lines.map(l=>{
-    const item=blends.find(i=>i.id===l.itemId);const quantity=Number(l.quantity),price=Number(l.price);
-    if(!item||!l.quantity.trim()||!l.price.trim()||!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(price)||price<0)throw Error('حدد التوليفة والكمية وسعر البيع لكل سطر');
-    const amount=Number((quantity*price).toFixed(2));const cost=Number((quantity*item.costPrice).toFixed(2));
-    return {itemId:item.id,itemName:item.name,category:item.category,quantity,unitLabel:'كجم',normalizedQtyInBaseUnit:quantity,unitPrice:price,unitCost:item.costPrice,totalPrice:amount,totalCost:cost,profit:amount-cost};
-   });
-   const paidAmount=method==='آجل'?Number(paid):total;
-   if(!Number.isFinite(paidAmount)||paidAmount<0||paidAmount>total||(method==='آجل'&&!paid.trim()))throw Error('المدفوع يجب أن يكون بين صفر وإجمالي الفاتورة');
-   setBusy(true);
-   const accepted=await onSaveSale({date,saleType:'wholesale',customerId,customerName:customer.name,items:invoiceItems,subtotal:total,discount:0,totalAmount:total,totalCost:0,netProfit:0,paidAmount,remainingAmount:Number((total-paidAmount).toFixed(2)),paymentMethod:method,partnerName:currentPartnerName});
-   if(!accepted)throw Error('لم تعتمد الفاتورة؛ راجع الرصيد وحالة الحفظ');
-  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
- };
- return <main dir="rtl" className="operation-screen min-h-screen bg-[#FAF8F4] p-4 pb-28 space-y-4">
-  <OperationHeader title="إنشاء فاتورة جملة" description="اختار عميلك، وحدّد الكمية والسعر المتفق عليه." icon={Receipt} onBack={onBack} busy={busy}/>
-  <label className="block">العميل<select disabled={busy} className={input} value={customerId} onChange={e=>setCustomerId(e.target.value)}><option value="">اختر العميل</option>{customers.map(c=><option key={c.id} value={c.id}>{c.name} — {c.area||'المنطقة غير مسجلة'}</option>)}</select></label>
-  {!customers.length&&<p>أضف بيانات العميل ورقمه ومنطقته من قسم العملاء أولًا.</p>}
-  <label className="block">تاريخ الفاتورة<input disabled={busy} className={input} type="date" value={date} onChange={e=>setDate(e.target.value)}/></label>
-  <label className="block">طريقة الدفع<select disabled={busy} className={input} value={method} onChange={e=>setMethod(e.target.value as SalesInvoice['paymentMethod'])}><option>نقدي</option><option>محفظة/انستا باي</option><option>آجل</option></select></label>
-  {method==='آجل'&&<label className="block">المدفوع الآن (صفر للآجل الكامل)<input disabled={busy} className={input} type="number" min="0" value={paid} onChange={e=>setPaid(e.target.value)}/></label>}
-  <h2 className="font-bold">محتويات الفاتورة — التوليفات فقط</h2>
-  {lines.map((l,index)=><fieldset key={index} className="border rounded-xl p-3 space-y-2"><legend>الصنف {index+1}</legend>
-   <label className="block">التوليفة<select disabled={busy} className={input} value={l.itemId} onChange={e=>setLines(lines.map((row,i)=>i===index?{...row,itemId:e.target.value}:row))}><option value="">اختر توليفة</option>{blends.map(i=><option key={i.id} value={i.id}>{i.name} (المتاح {i.stock} كجم)</option>)}</select></label>
-   <label className="block">الكمية بالكيلو<input disabled={busy} className={input} type="number" step="any" value={l.quantity} onChange={e=>setLines(lines.map((row,i)=>i===index?{...row,quantity:e.target.value}:row))}/></label>
-   <label className="block">سعر الكيلو المتفق عليه<input disabled={busy} className={input} type="number" step="0.01" value={l.price} onChange={e=>setLines(lines.map((row,i)=>i===index?{...row,price:e.target.value}:row))}/></label>
-   <button disabled={busy} onClick={()=>setLines(lines.filter((_,i)=>i!==index))}>حذف السطر</button>
-  </fieldset>)}
-  <button disabled={busy} onClick={()=>setLines([...lines,{itemId:'',quantity:'',price:''}])} className="border rounded-xl p-3">إضافة توليفة</button>
-  <p className="font-black">الإجمالي: {Number.isFinite(total)?total.toLocaleString('ar-EG'):'—'} ج.م</p>
-  {error&&<p role="alert" className="text-red-700">{error}</p>}
-  <button disabled={busy} onClick={()=>void save()} className="w-full bg-[#1E1612] text-white p-3 rounded-xl disabled:opacity-50">{busy?'جارٍ اعتماد الفاتورة…':'اعتماد الفاتورة وخصم المخزون'}</button>
- </main>;
+import {money} from '../lib/reporting';
+
+interface InvoiceLine {
+  id: string;
+  itemId: string;
+  quantity: string;
+  price: string;
+}
+
+const amount = (line: InvoiceLine) => Number((Number(line.quantity) * Number(line.price)).toFixed(2));
+
+export function WholesaleInvoiceScreen({items, customers, currentPartnerName, onSaveSale, onBack}: {
+  items: InventoryItem[];
+  customers: Customer[];
+  currentPartnerName: string;
+  onSaveSale: (invoice: Omit<SalesInvoice, 'id' | 'invoiceNumber'>) => Promise<boolean>;
+  onBack: () => void;
+}) {
+  const [customerId, setCustomerId] = useState('');
+  const [date, setDate] = useState(businessDate());
+  const [method, setMethod] = useState<SalesInvoice['paymentMethod']>('نقدي');
+  const [paid, setPaid] = useState('0');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [lines, setLines] = useState<InvoiceLine[]>([]);
+  const blends = items.filter(item => item.category === 'manufactured_blend');
+  const total = Number(lines.reduce((sum, line) => sum + amount(line), 0).toFixed(2));
+  const paidAmount = method === 'آجل' ? Number(paid) : total;
+  const moneyOrDash = (value: number) => Number.isFinite(value) ? `${money(value)} ج.م` : '—';
+
+  function updateLine(id: string, change: Partial<Omit<InvoiceLine, 'id'>>) {
+    setLines(current => current.map(line => line.id === id ? {...line, ...change} : line));
+  }
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setError('');
+    try {
+      const customer = customers.find(value => value.id === customerId);
+      if (!customer) throw Error('اختر عميلًا مسجلًا');
+      checkCustomerDetails(customer);
+      if (!lines.length) throw Error('أضف توليفة للفاتورة');
+      const invoiceItems: SalesInvoiceItem[] = lines.map(line => {
+        const item = blends.find(value => value.id === line.itemId);
+        const quantity = Number(line.quantity);
+        const price = Number(line.price);
+        if (!item || !line.quantity.trim() || !line.price.trim() || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(price) || price < 0) {
+          throw Error('حدد التوليفة والكمية وسعر البيع لكل سطر');
+        }
+        const totalPrice = amount(line);
+        const totalCost = Number((quantity * item.costPrice).toFixed(2));
+        return {
+          itemId: item.id, itemName: item.name, category: item.category, quantity,
+          unitLabel: 'كجم', normalizedQtyInBaseUnit: quantity, unitPrice: price, unitCost: item.costPrice,
+          totalPrice, totalCost, profit: totalPrice - totalCost,
+        };
+      });
+      if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > total || (method === 'آجل' && !paid.trim())) {
+        throw Error('المدفوع يجب أن يكون بين صفر وإجمالي الفاتورة');
+      }
+      setBusy(true);
+      const accepted = await onSaveSale({
+        date, saleType: 'wholesale', customerId, customerName: customer.name, items: invoiceItems, subtotal: total,
+        discount: 0, totalAmount: total, totalCost: 0, netProfit: 0, paidAmount,
+        remainingAmount: Number((total - paidAmount).toFixed(2)), paymentMethod: method, partnerName: currentPartnerName,
+      });
+      if (!accepted) throw Error('لم تعتمد الفاتورة؛ راجع الرصيد وحالة الحفظ');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'تعذر اعتماد الفاتورة');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const input = 'w-full min-w-0 border rounded-xl p-3 bg-white';
+  return <main dir="rtl" className="operation-screen min-h-screen p-4 pb-28 space-y-4">
+    <OperationHeader title="إنشاء فاتورة جملة" description="اختار العميل والتوليفات، وحدد السعر المتفق عليه." icon={Receipt} onBack={onBack} busy={busy} />
+    <form className="space-y-4" onSubmit={save}>
+      <section className="operation-surface">
+        <h2>العميل والدفع</h2>
+        <div className="operation-fields">
+          <label>العميل<select required disabled={busy} className={input} value={customerId} onChange={event => setCustomerId(event.target.value)}>
+            <option value="">اختر العميل</option>
+            {customers.map(customer => <option key={customer.id} value={customer.id}>{customer.name} — {customer.area || 'المنطقة غير مسجلة'}</option>)}
+          </select></label>
+          <label>تاريخ الفاتورة<input required disabled={busy} className={input} type="date" value={date} onChange={event => setDate(event.target.value)} /></label>
+          <label>طريقة الدفع<select disabled={busy} className={input} value={method} onChange={event => setMethod(event.target.value as SalesInvoice['paymentMethod'])}>
+            <option>نقدي</option><option>محفظة/انستا باي</option><option>آجل</option>
+          </select></label>
+          {method === 'آجل' && <label>المدفوع الآن<input required disabled={busy} className={input} type="number" min="0" step="0.01" value={paid} onChange={event => setPaid(event.target.value)} /></label>}
+        </div>
+        {!customers.length && <p className="operation-note">أضف بيانات العميل ورقمه ومنطقته من قسم العملاء أولًا.</p>}
+      </section>
+
+      <section className="operation-surface space-y-3">
+        <h2>التوليفات في الفاتورة</h2>
+        {lines.map((line, index) => <fieldset key={line.id} className="record-card space-y-2">
+          <legend>توليفة {index + 1}</legend>
+          <div className="operation-fields">
+            <label>التوليفة<select required disabled={busy} className={input} value={line.itemId} onChange={event => updateLine(line.id, {itemId: event.target.value})}>
+              <option value="">اختر توليفة</option>
+              {blends.map(item => <option key={item.id} value={item.id}>{item.name} (المتاح {item.stock} كجم)</option>)}
+            </select></label>
+            <label>الكمية بالكيلو<input required disabled={busy} className={input} type="number" min="0" step="any" value={line.quantity} onChange={event => updateLine(line.id, {quantity: event.target.value})} /></label>
+            <label>سعر الكيلو المتفق عليه<input required disabled={busy} className={input} type="number" min="0" step="any" value={line.price} onChange={event => updateLine(line.id, {price: event.target.value})} /></label>
+          </div>
+          <div className="operation-form-footer">
+            <p>قيمة السطر {moneyOrDash(amount(line))}</p>
+            <button type="button" className="record-action text-red-700" disabled={busy} onClick={() => setLines(current => current.filter(value => value.id !== line.id))}>
+              <Trash2 size={15} aria-hidden="true" />حذف السطر
+            </button>
+          </div>
+        </fieldset>)}
+        <button type="button" disabled={busy || !blends.length} onClick={() => setLines(current => [...current, {id: crypto.randomUUID(), itemId: '', quantity: '', price: ''}])} className="record-action">
+          <Plus size={16} aria-hidden="true" />إضافة توليفة
+        </button>
+        {!blends.length && <p className="operation-note">أضف توليفة جاهزة في قسم المنتجات أولًا.</p>}
+      </section>
+
+      {error && <p role="alert" className="text-red-700">{error}</p>}
+      <footer className="operation-surface operation-form-footer">
+        <dl>
+          <div><dt>الإجمالي</dt><dd>{moneyOrDash(total)}</dd></div>
+          <div><dt>المدفوع</dt><dd>{moneyOrDash(paidAmount)}</dd></div>
+          <div><dt>المتبقي</dt><dd>{moneyOrDash(total - paidAmount)}</dd></div>
+        </dl>
+        <button type="submit" disabled={busy || !lines.length || !customerId} className="operation-primary">
+          {busy ? 'جارٍ اعتماد الفاتورة…' : 'اعتماد الفاتورة وخصم المخزون'}
+        </button>
+      </footer>
+    </form>
+  </main>;
 }

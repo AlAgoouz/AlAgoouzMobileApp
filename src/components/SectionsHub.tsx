@@ -1,52 +1,68 @@
-import React, { useState } from 'react';
-import { AlertTriangle, BarChart3, BookOpen, Calculator, ChevronLeft, FileText, Flame, FolderSync, Package, RotateCcw, Scale, Search, ShoppingBag, Tag, Truck, UserCheck, Users, UtensilsCrossed, Wallet } from 'lucide-react';
+import React, {useId, useState} from 'react';
+import {ChevronDown, ChevronLeft, FolderSync, Receipt, Search} from 'lucide-react';
+import {sectionLinks, workspaceGroups} from './workspaceSections';
+import './workspace-directory.css';
 
-interface SectionLink { id: string; title: string; description: string; icon: typeof Package; group: string; tone: string; ownerOnly?: boolean; }
-export const sectionLinks: SectionLink[] = [
-  {id:'products',title:'المنتجات والتسعير',description:'الأصناف والوصفات وأسعار البيع',icon:Tag,group:'التشغيل اليومي',tone:'gold'},
-  {id:'sales_pos',title:'فواتير الجملة',description:'فاتورة جديدة لعميلك بسعر متفق عليه',icon:Calculator,group:'التشغيل اليومي',tone:'green'},
-  {id:'cashier_sync',title:'تقارير يوم الكاشير',description:'التقرير المالي والأصناف المباعة',icon:FolderSync,group:'التشغيل اليومي',tone:'blue'},
-  {id:'recipes',title:'الوصفات',description:'مقادير وتكلفة المشروبات والتحويجات والتوليفات',icon:BookOpen,group:'التشغيل اليومي',tone:'gold'},
-  {id:'production',title:'إنتاج التوليفات',description:'أوامر إنتاج التوليفات وسجل تشغيلاتها فقط',icon:Flame,group:'التشغيل اليومي',tone:'rose'},
-  {id:'shop_menu',title:'صورة المنيو',description:'رفع صورة المنيو ومشاركتها بكود QR',icon:UtensilsCrossed,group:'التشغيل اليومي',tone:'gold',ownerOnly:true},
-  {id:'inventory',title:'مخزن البن',description:'رصيد وقيمة كل صنف في المخزون',icon:Package,group:'المخزون والمشتريات',tone:'gold'},
-  {id:'purchase',title:'المشتريات',description:'شراء الخامات وسجل الفواتير',icon:ShoppingBag,group:'المخزون والمشتريات',tone:'green'},
-  {id:'stocktaking',title:'جرد الميزان',description:'مطابقة الكميات الفعلية مع الرصيد',icon:Scale,group:'المخزون والمشتريات',tone:'blue'},
-  {id:'shortages',title:'النواقص',description:'العجز والأصناف التي تحتاج توريدًا',icon:AlertTriangle,group:'المخزون والمشتريات',tone:'rose'},
-  {id:'customers',title:'عملاء الجملة',description:'بيانات العملاء والمديونيات والتحصيل',icon:Users,group:'الحسابات والإدارة',tone:'blue'},
-  {id:'suppliers',title:'الموردين',description:'المشتريات ومقارنة أسعار الموردين',icon:Truck,group:'الحسابات والإدارة',tone:'green'},
-  {id:'staff_payroll',title:'العمال والرواتب',description:'المستحقات والسلف وحركات العاملين',icon:UserCheck,group:'الحسابات والإدارة',tone:'gold'},
-  {id:'users',title:'المستخدمين',description:'حساب المالك وحسابات الدخول والصلاحيات',icon:UserCheck,group:'الحسابات والإدارة',tone:'blue'},
-  {id:'partners',title:'الشركاء والحصص',description:'نسب الملكية والمساهمات والمسحوبات',icon:Users,group:'الحسابات والإدارة',tone:'gold'},
-  {id:'sales_invoices',title:'فواتير البيع',description:'سجل الجملة وأيام الكاشير',icon:FileText,group:'الحسابات والإدارة',tone:'blue'},
-  {id:'expenses',title:'المصاريف',description:'المصروفات اليومية والشهرية الثابتة',icon:Wallet,group:'الحسابات والإدارة',tone:'rose'},
-  {id:'reports',title:'التقارير والأرباح',description:'النتائج المالية ونصيب الشركاء',icon:BarChart3,group:'الحسابات والإدارة',tone:'green'},
-  {id:'data_control',title:'إدارة البيانات',description:'النسخ الاحتياطي والاسترجاع',icon:RotateCcw,group:'الحسابات والإدارة',tone:'gold'},
-];
-const groups = ['التشغيل اليومي', 'المخزون والمشتريات', 'الحسابات والإدارة'];
-const normalize = (value: string) => value.normalize('NFKC').replace(/[أإآ]/g,'ا').replace(/[\u064B-\u065F\u0640]/g,'').trim().toLowerCase();
-export function SectionsHub({onNavigate, counts, isOwner = false}: {onNavigate:(id:string)=>void; counts:Record<string,number>; isOwner?:boolean}) {
+const normalize = (value: string) => value.normalize('NFKC').replace(/[أإآ]/g, 'ا').replace(/[\u064B-\u065F\u0640]/g, '').trim().toLowerCase();
+
+interface Props {
+  onNavigate: (id: string) => void;
+  counts: Record<string, number>;
+  isOwner: boolean;
+  canManageCashier: boolean;
+  canCreateSale: boolean;
+}
+
+export function SectionsHub({onNavigate, counts, isOwner, canManageCashier, canCreateSale}: Props) {
+  const id = useId();
   const [query, setQuery] = useState('');
-  const filtered = sectionLinks.filter(link => (!link.ownerOnly || isOwner) && normalize(`${link.title} ${link.description} ${link.group}`).includes(normalize(query)));
+  const [collapsed, setCollapsed] = useState<string[]>([]);
+  const search = normalize(query);
+  const filtered = sectionLinks.filter(link => (!link.ownerOnly || isOwner) &&
+    normalize(`${link.title} ${link.description} ${link.group}`).includes(search));
+
   return <section className="sections-hub" aria-labelledby="sections-title">
-    <header className="sections-hero">
-      <div className="sections-hero-mark" aria-hidden="true"><img src="/logo.png" alt="" width="88" height="88" /></div>
-      <p className="sections-eyebrow">مساحة العمل</p><h1 id="sections-title">كل شغلك، بخطوة واحدة</h1>
-      <p>من أول حبة بن، لآخر حساب في اليوم.</p>
+    <header className="directory-heading">
+      <h1 id="sections-title">الأقسام</h1>
+      {(canManageCashier || canCreateSale) && <div className="directory-quick-actions" aria-label="إجراءات سريعة">
+        {canManageCashier && <button type="button" onClick={() => onNavigate('cashier_sync')}><FolderSync size={18} aria-hidden="true" />رفع تقارير الكاشير</button>}
+        {canCreateSale && <button type="button" onClick={() => onNavigate('sales_pos')}><Receipt size={18} aria-hidden="true" />فاتورة جملة جديدة</button>}
+      </div>}
     </header>
-    <div className="sections-search"><Search size={20} aria-hidden="true" /><input aria-label="ابحث في الأقسام" placeholder="عايز تروح فين؟ ابحث عن قسم…" value={query} onChange={e => setQuery(e.target.value)} />{query && <button type="button" onClick={() => setQuery('')}>مسح</button>}</div>
-    {groups.map(group => {
+    <div className="sections-search">
+      <Search size={20} aria-hidden="true" />
+      <input aria-label="ابحث في الأقسام" placeholder="اسم القسم أو نوع العملية" type="search" value={query} onChange={event => setQuery(event.target.value)} />
+      {query && <button type="button" onClick={() => setQuery('')}>مسح</button>}
+    </div>
+    {workspaceGroups.map((group, index) => {
       const visible = filtered.filter(link => link.group === group);
       if (!visible.length) return null;
+      const open = !!search || !collapsed.includes(group);
+      const panelId = `${id}-group-${index}`;
       return <section key={group} className="section-group" aria-label={group}>
-        <h2><span />{group}<small>{visible.length} أقسام</small></h2>
-        <div className="section-grid">{visible.map((link, index) => <button type="button" key={link.id} className={`section-tile tone-${link.tone}`} style={{animationDelay:`${Math.min(index,5)*35}ms`}} onClick={() => onNavigate(link.id)}>
-          <span className="section-tile-top"><span className="section-icon"><link.icon size={23} aria-hidden="true" /></span>{counts[link.id] !== undefined && <span className={`section-count ${link.id === 'shortages' && counts[link.id] > 0 ? 'has-shortage' : ''}`} aria-label={`العدد: ${counts[link.id]}`}>{counts[link.id].toLocaleString('ar-EG')}</span>}</span>
-          <span className="section-tile-title">{link.title}</span><span className="section-tile-description">{link.description}</span>
-          <ChevronLeft className="section-tile-arrow" size={16} aria-hidden="true" />
-        </button>)}</div>
+        <h2>
+          <button type="button" className="directory-group-toggle" aria-expanded={open} aria-controls={panelId} disabled={!!search} onClick={() => {
+            setCollapsed(current => open ? [...current, group] : current.filter(value => value !== group));
+          }}>
+            {group}<ChevronDown size={17} aria-hidden="true" />
+          </button>
+        </h2>
+        <div className="section-grid" id={panelId} hidden={!open}>{visible.map(link =>
+          <button type="button" key={link.id} className="section-tile" onClick={() => onNavigate(link.id)}>
+            <span className="section-icon"><link.icon size={20} aria-hidden="true" /></span>
+            <span className="directory-link-copy">
+              <span className="section-tile-title">{link.title}</span>
+              <span className="section-tile-description">{link.description}</span>
+            </span>
+            {counts[link.id] > 0 && <span className={`section-count${link.id === 'shortages' ? ' has-shortage' : ''}`}>{counts[link.id].toLocaleString('ar-EG')}</span>}
+            <ChevronLeft className="section-tile-arrow" size={16} aria-hidden="true" />
+          </button>
+        )}</div>
       </section>;
     })}
-    {!filtered.length && <div className="section-empty" role="status"><Search size={28} aria-hidden="true" /><p>مفيش قسم بالاسم ده</p><button type="button" onClick={() => setQuery('')}>عرض كل الأقسام</button></div>}
+    {!filtered.length && <div className="section-empty" role="status">
+      <Search size={28} aria-hidden="true" /><p>مفيش قسم بالاسم ده</p>
+      <button type="button" onClick={() => setQuery('')}>عرض كل الأقسام</button>
+    </div>}
   </section>;
 }

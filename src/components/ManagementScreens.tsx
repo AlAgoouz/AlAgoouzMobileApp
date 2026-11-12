@@ -828,6 +828,9 @@ export const ShortagesScreen: React.FC<{
 // ============================================================================
 export const SuppliersAndCustomersScreen: React.FC<{
   mode: "suppliers" | "customers";
+  initialStatementId?: string;
+  onOpenPurchase?: (id:string)=>void;
+  onOpenSale?: (id:string)=>void;
   suppliers: Supplier[];
   customers: Customer[];
   purchaseInvoices: PurchaseInvoice[];
@@ -852,6 +855,9 @@ export const SuppliersAndCustomersScreen: React.FC<{
   onBack: () => void;
 }> = ({
   mode,
+  initialStatementId,
+  onOpenPurchase,
+  onOpenSale,
   suppliers,
   customers,
   purchaseInvoices,
@@ -873,9 +879,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
     name: string;
     balance: number;
   } | null>(null);
-  const [statementTargetId, setStatementTargetId] = useState<string | null>(
-    null,
-  );
+  const [statementTargetId, setStatementTargetId] = useState<string | null>(initialStatementId ?? null);
   const [amountInput, setAmountInput] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [newName, setNewName] = useState("");
@@ -962,7 +966,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
                 <h2 className="font-black">{sup.name}</h2><p>{sup.phone} — {sup.address||'العنوان غير مسجل'}</p><p>المندوب: {sup.representativeName||'غير مسجل'}</p>
                 <p>إجمالي الشراء: {purchases.total.toLocaleString('ar-EG')} ج.م — {purchases.purchases.length} فواتير</p>
                 <div className="flex gap-3">{onUpdateContact&&<button onClick={()=>setEditingContact(sup)} className="border rounded-xl p-2">تعديل البيانات</button>}<button onClick={()=>onDeleteSupplier(sup.id)} className="text-red-700 p-2">حذف المورد</button></div>
-                <SupplierPurchasePanels data={purchases}/>
+                <SupplierPurchasePanels data={purchases} onOpenInvoice={onOpenPurchase}/>
               </article>;
             })
           : customers.map((cust) => (
@@ -1037,6 +1041,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
         <AccountStatementModal
           mode={mode === "suppliers" ? "supplier" : "customer"}
           target={activeStatementEntity}
+          onOpenInvoice={mode==="customers"&&onOpenSale?(id)=>{setStatementTargetId(null);onOpenSale(id);}:onOpenPurchase}
           purchaseInvoices={purchaseInvoices}
           salesInvoices={salesInvoices}
           accountPayments={accountPayments}

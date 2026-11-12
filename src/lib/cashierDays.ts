@@ -20,14 +20,22 @@ export function attachCashierReport(state:StoreState,date:string,report:Report):
  const next:CashierDay=report.type==='financial'?{...current,financialReport:{...report.file,totalRevenue:round(report.totalRevenue)}}:{...current,itemsReport:{...report.file,lines:report.lines}};
  return {...state,cashierDays:[next,...state.cashierDays.filter(d=>d.id!==next.id)]};
 }
+export function cashierDayImpact(lines:NonNullable<CashierDay['itemsReport']>['lines'],catalog:StoreState['items'],date:string) {
+ const needs=inventoryDeductions(lines,catalog);
+ const items=deductInventory(lines,catalog,{allowNegative:true,date});
+ const byId=new Map(catalog.map(item=>[item.id,item]));
+ const consumption=[...needs].map(([itemId,quantity])=>{
+  const item=byId.get(itemId)!;
+  return {itemId,quantity,unitCost:item.costPrice,totalCost:round(quantity*item.costPrice)};
+ });
+ const shortages=items.filter(item=>needs.has(item.id)&&item.stock<0).map(item=>({itemId:item.id,shortage:-item.stock}));
+ return {items,consumption,shortages,totalCost:round(consumption.reduce((sum,line)=>sum+line.totalCost,0))};
+}
 export function approveCashierDay(state:StoreState,id:string,actor:string):StoreState{
  const day=state.cashierDays.find(d=>d.id===id);
  if(!day||day.status!=='pending'||!day.itemsReport||!day.financialReport)throw Error('يلزم التقرير المالي وتقرير الأصناف لنفس اليوم قبل الاعتماد');
- const needs=inventoryDeductions(day.itemsReport.lines,state.items);
- const consumption=[...needs].map(([itemId,quantity])=>{const raw=state.items.find(i=>i.id===itemId)!;return {itemId,quantity,unitCost:raw.costPrice,totalCost:round(quantity*raw.costPrice)};});
- const items=deductInventory(day.itemsReport.lines,state.items,{allowNegative:true,date:day.date});
- const shortages=items.filter(i=>needs.has(i.id)&&i.stock<0).map(i=>({itemId:i.id,shortage:Number((-i.stock).toFixed(6))}));
- const next:CashierDay={...day,status:'approved',approvedAt:new Date().toISOString(),partnerName:actor,consumption,shortages,totalCost:round(consumption.reduce((s,l)=>s+l.totalCost,0))};
+ const {items,consumption,shortages,totalCost}=cashierDayImpact(day.itemsReport.lines,state.items,day.date);
+ const next:CashierDay={...day,status:'approved',approvedAt:new Date().toISOString(),partnerName:actor,consumption,shortages,totalCost};
  return {...state,items,cashierDays:state.cashierDays.map(d=>d.id===id?next:d),auditLogs:[{id:crypto.randomUUID(),timestamp:next.approvedAt!,partnerName:actor,actionType:'مزامنة كاشير',description:`اعتماد يوم الكاشير ${day.date} بالتقريرين؛ ${shortages.length} أصناف بعجز`,amount:day.financialReport.totalRevenue},...state.auditLogs]};
 }
 // Derived reporting view only: no second sales document or invented item revenue is persisted.

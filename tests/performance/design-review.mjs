@@ -114,7 +114,7 @@ export async function verifyDesign(){
     await page.screenshot({path:'design-account-desktop-mobile.png',fullPage:true});
     await page.setViewportSize({width:360,height:800});await limit(page,'account-mobile');await page.screenshot({path:'design-account-mobile.png',fullPage:true});
     await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
-    await page.getByRole('heading',{name:'كل شغلك، بخطوة واحدة'}).waitFor();
+    await page.getByRole('heading',{name:'الأقسام',exact:true}).waitFor();
     await page.screenshot({path:'design-sections-mobile.png',fullPage:true});
     for(const width of [320,360,430,768,1024,1440]){
       await page.setViewportSize({width,height:800});await limit(page,`sections-${width}`);evidence.widths.push(width);
@@ -235,14 +235,14 @@ export async function verifyDesign(){
         }
         await page.setViewportSize({width:360,height:800});
       }
-      if(title==='فواتير البيع'){
+      if(title==='سجل البيع'){
         await page.getByRole('button',{name:'السجل السابق',exact:true}).click();
         await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).first().waitFor();
         await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).first().click();
         await page.getByRole('dialog').waitFor();await page.getByRole('button',{name:'إغلاق النافذة',exact:true}).click();
       }
-      const addDialogs={'المنتجات والتسعير':'منتج جديد','إنتاج التوليفات':'جديد','الوصفات':'تعريف منتج بوصفة','مخزن البن':'إضافة','عملاء الجملة':'إضافة','الموردين':'إضافة','المستخدمين':'إضافة مستخدم','العمال والرواتب':'عامل جديد'};
-      if(addDialogs[title])await reviewModal(page,page.getByRole('button',{name:addDialogs[title],exact:true}),String(evidence.sections.length+1),title==='المستخدمين');
+      const addDialogs={'المنتجات والتسعير':'منتج جديد','إنتاج التوليفات':'جديد','الوصفات':'تعريف منتج بوصفة','مخزن البن':'إضافة','عملاء الجملة':'إضافة','الموردين':'إضافة','المستخدمين والصلاحيات':'إضافة مستخدم','العمال والرواتب':'عامل جديد'};
+      if(addDialogs[title])await reviewModal(page,page.getByRole('button',{name:addDialogs[title],exact:true}),String(evidence.sections.length+1),title==='المستخدمين والصلاحيات');
       if(title==='المصاريف'){
         await page.getByRole('button',{name:'حسابي',exact:true}).click();
         await page.getByRole('heading',{name:'حسابي',exact:true}).waitFor();
@@ -268,7 +268,7 @@ export async function verifyDesign(){
       evidence.sections.push(title);
       await page.screenshot({path:`design-section-${evidence.sections.length}-mobile.png`,fullPage:true});
       await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
-      await page.getByRole('heading',{name:'كل شغلك، بخطوة واحدة'}).waitFor();
+      await page.getByRole('heading',{name:'الأقسام',exact:true}).waitFor();
     }
     await page.setViewportSize({width:1440,height:900});
     await page.emulateMedia({reducedMotion:'no-preference'});

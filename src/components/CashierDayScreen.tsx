@@ -4,6 +4,7 @@ import {FolderSync} from 'lucide-react';
 import type {ImportJob} from '../lib/importJobs';
 import {queuedRows} from '../lib/importJobs';
 import {CashierRowReview} from './CashierRowReview';
+import {CashierApprovalPreview} from './CashierApprovalPreview';
 import {ImportJobsPanel} from './ImportJobsPanel';
 import {OperationHeader} from './OperationHeader';
 import {RecordPagination,useRecordPage} from './RecordPagination';
@@ -25,6 +26,8 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
  const matchPage=useRecordPage(parsed,preview?.sha256);
  const choose=(row:number,change:Partial<CashierReview[number]>)=>{if(!preview)return;setReview({hash:preview.sha256,choices:{...choices,[row]:{itemId:choices[row]?.itemId??'',unit:choices[row]?.unit??'',...change}}});};
  const [historySearch,setHistorySearch]=useState('');
+ const [approvalId,setApprovalId]=useState<string>();
+ const approval=days.find(day=>day.id===approvalId);
  const history=useMemo(()=>[...days].filter(d=>d.date.includes(historySearch)).sort((a,b)=>b.date.localeCompare(a.date)),[days,historySearch]);
  const page=useRecordPage(history,historySearch);
  const revenue=preview?begunRevenue(preview.rows,date):undefined;
@@ -56,14 +59,16 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
     <p className="operation-note">مبيعات اليوم تُقرأ تلقائيًا من قيمة Begun في ملف المبيعات.</p>
     {revenue===undefined?<p role="alert">لم يتأكد وجود قيمة Begun واحدة صحيحة لنفس يوم العمل؛ أعد معالجة الملف.</p>:<p className="text-lg font-bold">مبيعات اليوم — Begun: {revenue.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2})} ج.م</p>}
    </>:<><p>{parsed.length} صف أصناف؛ {parsed.filter(r=>r.error).length} تحتاج تصحيحًا.</p><p className="operation-note">{printed?'الكود والكمية والوحدة مقروءة من التقرير. استكمل المنتجات وأكواد الكاشير والوصفات في الكتالوج؛ البنود الناقصة تحتاج تقريرًا تفصيليًا قبل الاعتماد.':'اقتراحات تشابه الاسم للمساعدة فقط. اختيار الصنف ووحدة الكمية يحتاج تأكيدك؛ الكميات والأسعار الأصلية تظل تحت التحقق.'}</p>{sourceDateError&&<p role="alert">{sourceDateError}</p>}<RecordPagination {...matchPage}/>{matchPage.visible.map((r,n)=>{const i=matchPage.page*matchPage.pageSize+n,suggestions=preview.suggestions?.find(s=>s.row===i)?.candidates??[];return <article key={i} className="record-card"><p>{r.rawName||r.rawCode}: {r.quantity} {displayUnit(r.unitHint)}</p>{r.sourceFormat&&<p className="text-xs">كود الكاشير: {r.rawCode} · عدد مرات البيع: {r.saleCount} · الكمية أعلاه هي المعتمدة للخصم.</p>}<p>{r.matchedItem?.name} {r.error}</p>{!r.sourceFormat&&(r.error||choices[i])&&<CashierRowReview index={i} choice={choices[i]} items={items} suggestions={suggestions} busy={busy} onChange={change=>choose(i,change)}/>}</article>;})}</>}
-   <button disabled={busy||(type==='financial'&&revenue===undefined)||!!sourceDateError||!!(printed&&parsed.some(row=>row.error||!row.matchedItem))} onClick={()=>void act(attach)} className="bg-[#1E1612] text-white rounded-xl p-3">حفظ التقرير لهذا اليوم</button>
+   <button disabled={busy||(type==='financial'&&revenue===undefined)||!!sourceDateError||!!(printed&&parsed.some(row=>row.error||!row.matchedItem))} onClick={()=>void act(attach)} className="operation-primary">حفظ التقرير لهذا اليوم</button>
   </section>}
-  {error&&<p role="alert" className="text-red-700">{error}</p>}
+  {!approval&&error&&<p role="alert" className="text-red-700">{error}</p>}
   <h2 className="font-bold">الأيام المسجلة</h2>
   <label className="block">بحث بتاريخ اليوم<input className={input} placeholder="YYYY-MM-DD" value={historySearch} onChange={e=>setHistorySearch(e.target.value)}/></label><RecordPagination {...page}/>
   {page.visible.map(d=><article key={d.id} className="border rounded-xl bg-white p-3 space-y-2"><h3 className="font-bold">{d.date} — {d.status==='approved'?'معتمد':'بانتظار الاعتماد'}</h3><p>المالي: {d.financialReport?'مرفوع':'ناقص'} — الأصناف: {d.itemsReport?'مرفوع':'ناقص'}</p><p>الإيراد: {d.financialReport?.totalRevenue.toLocaleString('ar-EG')??'لم يحدد'}؛ التكلفة: {d.status==='approved'?d.totalCost?.toLocaleString('ar-EG'):'تُحدد عند الاعتماد'}</p>
    {d.status==='pending'&&<button disabled={busy||!d.financialReport||!d.itemsReport} className="bg-[#1E1612] text-white rounded-xl p-2 disabled:opacity-40" onClick={()=>void act(()=>onApprove(d.id))}>اعتماد اليوم وخصم الأصناف</button>}
    {!!d.shortages?.length&&<div className="text-red-700"><p>عجز مخزون بعد الاعتماد:</p>{d.shortages.map(s=><p key={s.itemId}>{items.find(i=>i.id===s.itemId)?.name??s.itemId}: {s.shortage}</p>)}</div>}
   </article>)}
+  {approval&&<CashierApprovalPreview day={approval} items={items} busy={busy} error={error} onClose={()=>{setError('');setApprovalId(undefined);}}
+    onApprove={()=>void act(async()=>{await onApprove(approval.id);setApprovalId(undefined);})}/>}
  </main>;
 }

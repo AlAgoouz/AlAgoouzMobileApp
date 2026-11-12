@@ -1,5 +1,6 @@
 import {serverInvoicePdf,downloadExport} from '../lib/reportExports';
 import {Modal} from './Modal';
+import {RecordPagination,useRecordPage} from './RecordPagination';
 import React, { useState, useMemo } from 'react';
 import { escapePrintData } from '../lib/safeHtml';
 import { businessDate } from '../lib/dates';
@@ -27,12 +28,14 @@ export function formatEgyptWhatsAppPhone(rawPhone?: string): string {
 interface InvoiceReceiptModalProps {
   invoice: SalesInvoice;
   customerPhone?: string;
+  onOpenCustomer?: (id:string)=>void;
   onClose: () => void;
 }
 
 export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
   invoice,
   customerPhone = '',
+  onOpenCustomer,
   onClose,
 }) => {
   const [phoneInput, setPhoneInput] = useState(customerPhone);
@@ -101,7 +104,7 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
     const url = formattedPhone
       ? `https://wa.me/${formattedPhone}?text=${text}`
       : `https://wa.me/?text=${text}`;
-    window.open(url, '_blank');
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handlePrintReceipt = () => {
@@ -213,6 +216,7 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
               <div className="font-black text-[#1E1612]">
                 {invoice.customerName}
               </div>
+              {invoice.customerId && onOpenCustomer && <button type="button" className="record-action" onClick={()=>onOpenCustomer(invoice.customerId!)}>فتح كشف العميل</button>}
             </div>
             <div className="text-left">
               <div className="text-[10px] text-[#7A6855]">الدفع</div>
@@ -311,6 +315,7 @@ interface AccountStatementModalProps {
   salesInvoices: SalesInvoice[];
   accountPayments: AccountPaymentRecord[];
   onRecordPayment: (amount: number, notes: string) => boolean;
+  onOpenInvoice?: (id:string)=>void;
   onDeletePayment?: (paymentId: string) => void;
   onClose: () => void;
 }
@@ -322,6 +327,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
   salesInvoices,
   accountPayments,
   onRecordPayment,
+  onOpenInvoice,
   onDeletePayment,
   onClose,
 }) => {
@@ -344,6 +350,8 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
         (inv.customerId ? inv.customerId === target.id : inv.customerName === target.name),
     );
   }, [mode, target, purchaseInvoices, salesInvoices]);
+
+  const invoicePage=useRecordPage<PurchaseInvoice|SalesInvoice>(relatedInvoices,target.id,20);
 
   // تجميع الدفعات المسجلة لهذا المورد أو العميل
   const relatedPayments = useMemo(() => {
@@ -413,7 +421,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
     const url = phone
       ? `https://wa.me/${phone}?text=${text}`
       : `https://wa.me/?text=${text}`;
-    window.open(url, '_blank');
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handlePrintStatement = () => {
@@ -604,7 +612,8 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
               </div>
             ) : (
               <div className="space-y-2">
-                {relatedInvoices.map((inv) => (
+                <RecordPagination {...invoicePage}/>
+                {invoicePage.visible.map((inv) => (
                   <div
                     key={inv.id}
                     className="p-2.5 rounded-xl bg-[#FAF8F4] border border-[#EDE6D8] text-xs space-y-1"
@@ -636,6 +645,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
                         متبقي: {inv.remainingAmount.toLocaleString('ar-EG')} ج.م
                       </span>
                     </div>
+                    {onOpenInvoice&&<button type="button" className="record-action" onClick={()=>onOpenInvoice(inv.id)}>فتح الفاتورة</button>}
                   </div>
                 ))}
               </div>
