@@ -11,8 +11,16 @@ export function ImportJobsPanel({onReview}:{onReview?:(job:ImportJob)=>void}){
  const selection=useRef(0);
  const input=useRef<HTMLInputElement>(null),mounted=useRef(true),reading=useRef(false);
  const refresh=useCallback(async()=>{if(reading.current)return;reading.current=true;try{const rows=await listImports();if(mounted.current){setJobs(rows);setRefreshError('');}}catch{if(mounted.current)setRefreshError('تعذر تحديث حالة الملفات؛ أعد المحاولة.');}finally{reading.current=false;}},[]);
- useEffect(()=>{mounted.current=true;void refresh();const timer=setInterval(()=>{if(document.visibilityState!=='hidden')void refresh();},5000);window.addEventListener('online',refresh);return()=>{mounted.current=false;clearInterval(timer);window.removeEventListener('online',refresh);};},[refresh]);
- const act=async(fn:()=>Promise<void>)=>{if(busy)return;setBusy(true);setError('');setNotice('');try{await fn();await refresh();}catch(e){if(mounted.current)setError(e instanceof Error?e.message:'تعذرت العملية؛ أعد المحاولة.');}finally{if(mounted.current)setBusy(false);}};
+ const hasActiveJobs=jobs?.some(j=>['uploading','queued','processing'].includes(j.status))??false;
+ useEffect(()=>{mounted.current=true;void refresh();window.addEventListener('online',refresh);return()=>{mounted.current=false;window.removeEventListener('online',refresh);};},[refresh]);
+ useEffect(()=>{const delay=hasActiveJobs?5000:30000;const timer=setInterval(()=>{if(document.visibilityState!=='hidden'&&navigator.onLine!==false)void refresh();},delay);return()=>clearInterval(timer);},[hasActiveJobs,refresh]);
+ const act=async(fn:()=>Promise<void>)=>{
+  if(busy)return;
+  setBusy(true);setError('');setNotice('');
+  try{await fn();}
+  catch(e){if(mounted.current)setError(e instanceof Error?e.message:'تعذرت العملية؛ أعد المحاولة.');}
+  finally{if(mounted.current){await refresh();if(mounted.current)setBusy(false);}}
+ };
  const selectFile=async(next:File|null)=>{
   const token=++selection.current;setFile(null);setSourceDate(null);setSourceKind(null);setError('');setNotice('');setInspecting(!!next);
   if(!next)return;

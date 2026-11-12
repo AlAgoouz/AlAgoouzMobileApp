@@ -335,13 +335,13 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
       return purchaseInvoices.filter(
         (inv) =>
           !inv.isCancelled &&
-          (inv.supplierId === target.id || inv.supplierName === target.name),
+          (inv.supplierId ? inv.supplierId === target.id : inv.supplierName === target.name),
       );
     }
     return salesInvoices.filter(
       (inv) =>
         !inv.isReturned &&
-        (inv.customerId === target.id || inv.customerName === target.name),
+        (inv.customerId ? inv.customerId === target.id : inv.customerName === target.name),
     );
   }, [mode, target, purchaseInvoices, salesInvoices]);
 
@@ -351,7 +351,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
       (p) =>
         !p.reversedAt &&
         p.targetType === mode &&
-        (p.targetId === target.id || p.targetName === target.name),
+        (p.targetId ? p.targetId === target.id : p.targetName === target.name),
     );
   }, [mode, target, accountPayments]);
 

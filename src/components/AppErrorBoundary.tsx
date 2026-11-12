@@ -1,8 +1,9 @@
 import React from "react";
 import { createBackup } from "../lib/storeState";
+import { recoveryDraftKey } from "../lib/recoveryDraft";
 
 export class AppErrorBoundary extends React.Component<
-  { children: React.ReactNode },
+  { children: React.ReactNode; onReset?: () => void },
   { failed: boolean; updateAvailable: boolean; exportMessage: string }
 > {
   state = { failed: false, updateAvailable: false, exportMessage: "" };
@@ -18,7 +19,7 @@ export class AppErrorBoundary extends React.Component<
   }
   exportRecovery = () => {
     try {
-      const raw = localStorage.getItem("bon_elagouz_recovery_draft_v4");
+      const raw = localStorage.getItem(recoveryDraftKey);
       if (!raw) throw new Error("لا توجد نسخة استرداد محلية على هذا الجهاز.");
       const draft = JSON.parse(raw);
       const backup = createBackup(draft.state);
@@ -73,6 +74,21 @@ export class AppErrorBoundary extends React.Component<
           >
             حفظ نسخة الاسترداد المحلية
           </button>
+          {this.props.onReset && (
+            <button
+              className="w-full rounded-xl p-3 border border-[#C59B27]"
+              onClick={() => {
+                this.setState({
+                  failed: false,
+                  updateAvailable: false,
+                  exportMessage: "",
+                });
+                this.props.onReset?.();
+              }}
+            >
+              العودة للرئيسية
+            </button>
+          )}
           <button
             className="w-full rounded-xl p-3 bg-[#C59B27] text-[#1E1612] font-bold"
             onClick={() => window.location.reload()}

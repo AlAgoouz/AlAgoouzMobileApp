@@ -133,6 +133,7 @@ export default function MenuEditor({catalog, onBack}: {catalog: InventoryItem[];
       setMenu(draft.data ? menuSchema.parse(draft.data.content) : emptyMenu);
       setRevision(draft.data?.revision ?? 0);
       setPublished(!!publication.data);
+      setNotice(undefined);
       setReady(true);
     };
     load().catch(() => {

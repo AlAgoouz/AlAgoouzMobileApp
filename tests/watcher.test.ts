@@ -59,3 +59,28 @@ it('requires source business date instead of silently using upload day', () => {
   expect(() => exportDate('sales-2026-02-30.csv')).toThrow();
   expect(exportDate('sales.csv', '2026-11-01')).toBe('2026-11-01');
 });
+it('reauthenticates once and retries when the cashier session token expires', () =>
+  fixture(async (file, archive) => {
+    let calls = 0;
+    let reauthenticated = 0;
+    const client = {
+      rpc: async () => {
+        calls++;
+        if (calls === 1) {
+          return { data: null, error: { code: 'PGRST301', message: 'JWT expired' } };
+        }
+        return { data: 'queue-after-reauth', error: null };
+      },
+    };
+    const result = await processCashierFile(file, {
+      client,
+      archiveFolder: archive,
+      waitForStable: false,
+      reauthenticate: async () => {
+        reauthenticated++;
+      },
+    });
+    expect(reauthenticated).toBe(1);
+    expect(calls).toBe(2);
+    expect(result.queueId).toBe('queue-after-reauth');
+  }));

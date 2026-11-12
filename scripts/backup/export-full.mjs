@@ -7,7 +7,8 @@ import {encryptFile,decryptFile,sha256} from './archive.mjs';
 import {storageSnapshotSQL,vaultSnapshotSQL,storageReaderToken,downloadStorage,writeRecoveryConfig,assertStorageCoverage} from './resources.mjs';
 import {captureProviderSettings} from './provider-settings.mjs';
 
-const project='srinizbfqozvdqsuvvbc';
+const project=process.env.AGOUZ_SUPABASE_PROJECT_REF || 'srinizbfqozvdqsuvvbc';
+const expectedDriveFolderId=process.env.AGOUZ_DRIVE_ROOT_FOLDER_ID || '1Y0woq-P9w6C5zvPVlgmVTZDGEWOPhig4';
 const root=resolve(process.env.AGOUZ_BACKUP_ROOT || 'D:/AgouzPrivateBackups');
 const cli=process.env.AGOUZ_SUPABASE_CLI;
 const pg=process.env.AGOUZ_PG_BIN;
@@ -15,7 +16,8 @@ const drive=process.env.AGOUZ_RCLONE;
 const driveConfig=process.env.AGOUZ_RCLONE_CONFIG;
 if((!cli&&!process.env.AGOUZ_DATABASE_URL)||!pg||!drive||!driveConfig) throw new Error('BACKUP_TOOLS_NOT_CONFIGURED');
 const config=readFileSync(driveConfig,'utf8');
-if(!/^root_folder_id\s*=\s*1Y0woq-P9w6C5zvPVlgmVTZDGEWOPhig4\s*$/m.test(config)) throw new Error('BACKUP_DRIVE_FOLDER_MISMATCH');
+const escapedFolderId=expectedDriveFolderId.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+if(!new RegExp(`^root_folder_id\\s*=\\s*${escapedFolderId}\\s*$`,'m').test(config)) throw new Error('BACKUP_DRIVE_FOLDER_MISMATCH');
 const generation=new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomBytes(4).toString('hex');
 const work=join(root,'pending',generation);
 mkdirSync(work,{recursive:true,mode:0o700});
@@ -75,7 +77,7 @@ try{
   if(!listing.includes('TABLE DATA auth users')||!listing.includes('TABLE DATA public bon_elagouz_store')) throw new Error('BACKUP_REQUIRED_TABLES_MISSING');
   run('git',['archive','--format=tar','--output',join(work,'source.tar'),'HEAD']);
   const hashes={...storageHashes};for(const file of ['database.dump','roles.sql','source.tar','storage-index.json','vault-secrets.json','recovery-config.json']) hashes[file]=await sha256(join(work,file));
-  const manifest={format:'agouz-full-logical-backup',version:2,project,generation,createdAt:new Date().toISOString(),sourceCommit:run('git',['rev-parse','HEAD']).trim(),inventory,files:hashes,restoreVerified:false,coverage:['PostgreSQL schema and data including Supabase Auth','database roles without database-role passwords','committed application source','Storage object bytes, bucket metadata and file ownership','portable Vault secrets re-encrypted with the restore target key','recovery configuration and backup connection credentials without the archive encryption key'],limitations:['Provider settings require a configured settings export; secret values unavailable from a provider must have an escrow source.','Versioned or archived Storage objects and PostgreSQL large objects fail closed until supported.']};
+  const manifest={format:'agouz-full-logical-backup',version:2,project,generation,createdAt:new Date().toISOString(),sourceCommit:run('git',['rev-parse','HEAD']).trim(),inventory,files:hashes,restoreVerified:false,coverage:['PostgreSQL schema and data including Supabase Auth','database roles without database-role passwords','committed application source','Storage object bytes, bucket metadata and file ownership','portable Vault secrets re-encrypted with the restore target key','recovery configuration and Storage reader identity when configured'],limitations:['Supply the archive encryption key and backup connection credentials separately.','Provider settings require a configured settings export; secret values unavailable from a provider must have an escrow source.','Versioned or archived Storage objects and PostgreSQL large objects fail closed until supported.']};
   manifest.providerSettingsIncluded=!!providerSettings;
   if(providerSettings)manifest.coverage.push('Live Supabase service settings, Edge Function source bundles and digest-verified custom-secret escrow');
   writeFileSync(join(work,'manifest.json'),JSON.stringify(manifest,null,2),{mode:0o600});

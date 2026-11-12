@@ -69,6 +69,7 @@ export function vaultRecoverySQL(secrets){
 }
 export function writeRecoveryConfig(work,providerSettings=null){
   const supplied=process.env.AGOUZ_RECOVERY_CONFIG_JSON?JSON.parse(process.env.AGOUZ_RECOVERY_CONFIG_JSON):{};
-  const config={format:'agouz-recovery-config',version:1,project,application:{url:'https://agouz.vercel.app',supabaseURL:'https://'+project+'.supabase.co',publishableKey:publicKey},providerSettings:{supabase:providerSettings,external:supplied},backupConnections:{databaseURL:process.env.AGOUZ_DATABASE_URL||null,storageReader:process.env.AGOUZ_STORAGE_READER_JSON?JSON.parse(process.env.AGOUZ_STORAGE_READER_JSON):null,driveConfig:process.env.AGOUZ_RCLONE_CONFIG?readFileSync(process.env.AGOUZ_RCLONE_CONFIG,'utf8'):null,settingsReadToken:process.env.AGOUZ_SETTINGS_READ_TOKEN||null},encryptionKeyIncluded:false};
+  const reader=process.env.AGOUZ_STORAGE_READER_JSON?JSON.parse(process.env.AGOUZ_STORAGE_READER_JSON):null;
+  const config={format:'agouz-recovery-config',version:1,project,application:{url:'https://agouz.vercel.app',supabaseURL:'https://'+project+'.supabase.co',publishableKey:publicKey},providerSettings:{supabase:providerSettings,external:supplied},backupConnections:{credentialsIncluded:false,storageReader:reader?{project:reader.project,userId:reader.userId,email:reader.email}:null},encryptionKeyIncluded:false};
   writeFileSync(join(work,'recovery-config.json'),JSON.stringify(config),{mode:0o600});
 }

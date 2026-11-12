@@ -37,9 +37,13 @@ export class StoreEngine {
   private pending:
     | { state: StoreState; version: number; id: string; queueId?: string; restore?: boolean }
     | undefined;
+  private queued:
+    | { state: StoreState; id: string; queueId?: string }
+    | undefined;
   private epoch = 0;
   private hydrated = false;
   private batchState: StoreState | undefined;
+  private flushInFlight: Promise<void> | undefined;
   private refreshInFlight: Promise<void> | undefined;
   constructor(
     private transport: StoreTransport,
@@ -69,6 +73,7 @@ export class StoreEngine {
       if (epoch !== this.epoch) return;
       const state = validateStore(remote.state);
       this.pending = undefined;
+      this.queued = undefined;
       this.hydrated = true;
       this.publish({
         ...remote,
@@ -90,6 +95,7 @@ export class StoreEngine {
     this.hydrated = false;
     clearTimeout(this.timer);
     this.pending = undefined;
+    this.queued = undefined;
     this.publish({
       state: emptyStore,
       version: 0,
@@ -98,21 +104,42 @@ export class StoreEngine {
     });
   }
   replace(state: StoreState, queueId?: string) {
-    if (!['ready', 'dirty'].includes(this.snapshot.status))
+    if (!['ready', 'dirty', 'saving'].includes(this.snapshot.status))
+      throw new Error('انتظر الحفظ أو عالج مشكلة الاتصال أولًا');
+    if (this.pending?.restore)
       throw new Error('انتظر الحفظ أو عالج مشكلة الاتصال أولًا');
     if (this.batchState) {
       this.batchState = state;
       return;
     }
+    const saving = this.snapshot.status === 'saving';
+    const draft = saving ? this.queued : this.pending;
+    if (queueId && ((saving && queueId === this.pending?.queueId) ||
+      (draft?.queueId && queueId !== draft.queueId)))
+      throw new Error('انتظر تأكيد حفظ تقرير الكاشير الحالي قبل إرفاق تقرير آخر');
+
     this.authorize(this.snapshot.state,state);
     const validated = validateStore(state);
     this.preserve(validated); // Failing local recovery storage must be visible, not ignored.
+    if (saving) {
+      this.queued = {
+        state: validated,
+        id: this.queued?.id ?? crypto.randomUUID(),
+        queueId: queueId ?? draft?.queueId,
+      };
+      this.publish({
+        ...this.snapshot,
+        state: validated,
+        status: 'saving',
+        error: '',
+      });
+      return;
+    }
     this.pending = {
       state: validated,
       version: this.snapshot.version,
       id: crypto.randomUUID(),
-      queueId,
-      restore: this.pending?.restore,
+      queueId: queueId ?? draft?.queueId,
     };
     this.publish({
       ...this.snapshot,
@@ -131,7 +158,7 @@ export class StoreEngine {
   ) {
     const state = this.batchState ?? this.snapshot.state;
     const value = typeof next === 'function' ? next(state[key]) : next;
-    this.replace({ ...state, [key]: value }, this.pending?.queueId);
+    this.replace({ ...state, [key]: value });
   }
   restore(state: StoreState) {
     if (this.hasPending || this.batchState || this.snapshot.status !== 'ready')
@@ -160,8 +187,16 @@ export class StoreEngine {
       this.batchState = undefined;
     }
   }
-  async flush() {
+  flush(): Promise<void> {
     clearTimeout(this.timer);
+    if (this.flushInFlight) return this.flushInFlight;
+    const active = this.flushOnce().finally(() => {
+      if (this.flushInFlight === active) this.flushInFlight = undefined;
+    });
+    this.flushInFlight = active;
+    return active;
+  }
+  private async flushOnce(): Promise<void> {
     if (!this.pending || !['dirty', 'error'].includes(this.snapshot.status))
       return;
     const pending = this.pending,
@@ -178,6 +213,24 @@ export class StoreEngine {
         ? await this.transport.save(...args, true)
         : await this.transport.save(...args);
       if (epoch !== this.epoch) return;
+      if (this.queued) {
+        const nextQueued = this.queued;
+        this.queued = undefined;
+        this.pending = {
+          state: nextQueued.state,
+          version,
+          id: nextQueued.id,
+          queueId: nextQueued.queueId,
+        };
+        this.publish({
+          state: nextQueued.state,
+          version,
+          status: 'dirty',
+          error: '',
+        });
+        await this.flushOnce();
+        return;
+      }
       this.pending = undefined;
       this.publish({
         state: pending.state,
@@ -187,6 +240,8 @@ export class StoreEngine {
       });
     } catch (error) {
       if (epoch !== this.epoch) return;
+      // A lost acknowledgment may follow a successful commit. Retry the same
+      // payload and operation ID before advancing to the queued draft.
       const message =
         error instanceof Error ? error.message : 'تعذر حفظ البيانات';
       this.publish({
@@ -210,7 +265,8 @@ export class StoreEngine {
     if (
       this.snapshot.status === 'signed-out' ||
       this.snapshot.status === 'loading' ||
-      this.snapshot.status === 'saving'
+      this.snapshot.status === 'saving' ||
+      (this.snapshot.status === 'error' && this.pending)
     )
       return;
     const epoch = this.epoch;
@@ -231,7 +287,8 @@ export class StoreEngine {
       const remote = await this.transport.load();
       if (epoch !== this.epoch || remote.version <= this.snapshot.version)
         return;
-      if (this.getSnapshot().status === 'saving') return;
+      if (this.getSnapshot().status === 'saving' ||
+        (this.getSnapshot().status === 'error' && this.pending)) return;
       if (this.pending) {
         clearTimeout(this.timer);
         this.publish({
@@ -260,7 +317,7 @@ export class StoreEngine {
     }
   }
   get hasPending() {
-    return Boolean(this.pending);
+    return Boolean(this.pending || this.queued);
   }
   get hasLoaded() {
     return this.hydrated;

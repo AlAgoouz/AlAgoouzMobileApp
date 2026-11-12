@@ -5,7 +5,7 @@ import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import os from 'node:os';
 import {join,resolve,sep} from 'node:path';
 import {gzipSync} from 'node:zlib';
-import {storagePath,resourceFile,validateArchiveEntries,downloadStorage,vaultRecoverySQL,assertStorageCoverage} from '../../scripts/backup/resources.mjs';
+import {storagePath,resourceFile,validateArchiveEntries,downloadStorage,vaultRecoverySQL,assertStorageCoverage,writeRecoveryConfig} from '../../scripts/backup/resources.mjs';
 test('unexported advanced Storage data or incomplete multipart uploads refuse a complete-backup claim',()=>{
  assert.doesNotThrow(()=>assertStorageCoverage(query=>query.includes('information_schema')?['buckets','objects','migrations','buckets_vectors','s3_multipart_uploads']:0));
  assert.throws(()=>assertStorageCoverage(query=>query.includes('information_schema')?['buckets','objects','future_versions']:1),/ADVANCED_STORAGE_EXPORT_REQUIRED/);
@@ -30,4 +30,26 @@ test('Vault recovery preserves identifiers and safely quotes a secret while re-e
   const sql=vaultRecoverySQL([{id:'11111111-1111-4111-8111-111111111111',name:null,description:'test',created_at:'2026-01-01Z',updated_at:'2026-01-01Z',decrypted_secret:"value'; select 1; --\nعربي"}]);
   assert.match(sql,/value''; select 1;/);assert.match(sql,/vault\._crypto_aead_det_encrypt/);assert.match(sql,/additional:=convert_to\(s.id::text/);
   assert.throws(()=>vaultRecoverySQL([{id:'bad',decrypted_secret:'value'}]),/RECORD_INVALID/);
+});
+test('writeRecoveryConfig omits live connection secrets while preserving storage reader identity',async()=>{
+  const root=await mkdtemp(join(os.tmpdir(),'agouz-recovery-cfg-'));
+  const prevDb=process.env.AGOUZ_DATABASE_URL,prevReader=process.env.AGOUZ_STORAGE_READER_JSON,prevToken=process.env.AGOUZ_SETTINGS_READ_TOKEN;
+  process.env.AGOUZ_DATABASE_URL='postgres://user:super-secret-db-pass@localhost:5432/db';
+  process.env.AGOUZ_STORAGE_READER_JSON=JSON.stringify({project:'srinizbfqozvdqsuvvbc',userId:'u1',email:'reader@example.test',password:'super-secret-reader-pass'});
+  process.env.AGOUZ_SETTINGS_READ_TOKEN='sbp_fc_super_secret_token';
+  try{
+    writeRecoveryConfig(root,{testOnly:true});
+    const text=await readFile(join(root,'recovery-config.json'),'utf8');
+    assert(!text.includes('super-secret-db-pass'));
+    assert(!text.includes('super-secret-reader-pass'));
+    assert(!text.includes('sbp_fc_super_secret_token'));
+    const parsed=JSON.parse(text);
+    assert.equal(parsed.backupConnections.credentialsIncluded,false);
+    assert.deepEqual(parsed.backupConnections.storageReader,{project:'srinizbfqozvdqsuvvbc',userId:'u1',email:'reader@example.test'});
+  }finally{
+    if(prevDb===undefined)delete process.env.AGOUZ_DATABASE_URL;else process.env.AGOUZ_DATABASE_URL=prevDb;
+    if(prevReader===undefined)delete process.env.AGOUZ_STORAGE_READER_JSON;else process.env.AGOUZ_STORAGE_READER_JSON=prevReader;
+    if(prevToken===undefined)delete process.env.AGOUZ_SETTINGS_READ_TOKEN;else process.env.AGOUZ_SETTINGS_READ_TOKEN=prevToken;
+    await rm(root,{recursive:true,force:true});
+  }
 });

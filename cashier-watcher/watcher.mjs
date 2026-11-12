@@ -40,7 +40,7 @@ async function stableFile(filePath) {
 }
 export async function processCashierFile(
   filePath,
-  { client, archiveFolder, saleDate, waitForStable = true },
+  { client, archiveFolder, saleDate, waitForStable = true, reauthenticate },
 ) {
   if (!client) throw new Error('لا يوجد اتصال موثق؛ لم تتم أرشفة الملف');
   const name = path.basename(filePath);
@@ -65,12 +65,25 @@ export async function processCashierFile(
   const hash = createHash('sha256')
     .update(buffer)
     .digest('hex');
-  const { data, error } = await client.rpc('bon_erp_enqueue_export', {
+  const payload = {
     p_file_name: name,
     p_sale_date: date,
     p_raw_rows: rows,
     p_content_hash: hash,
-  });
+  };
+  let { data, error } = await client.rpc('bon_erp_enqueue_export', payload);
+  if (
+    error &&
+    reauthenticate &&
+    (error.code === 'PGRST301' ||
+      error.status === 401 ||
+      /jwt|expired|unauthorized|authentication|غير مخول|تسجيل الدخول/i.test(
+        error.message || '',
+      ))
+  ) {
+    await reauthenticate();
+    ({ data, error } = await client.rpc('bon_erp_enqueue_export', payload));
+  }
   if (error || !data)
     throw new Error(error?.message || 'لم يصل تأكيد رفع الملف');
   await fs.mkdir(archiveFolder, { recursive: true });
@@ -87,11 +100,14 @@ export async function startWatcher(env = process.env) {
       'اضبط اتصال Supabase وبريد وكلمة مرور حساب الكاشير. لن يتم نقل أي ملف قبل ذلك.',
     );
   const client = createClient(url, key, { auth: { persistSession: false } });
-  const { error } = await client.auth.signInWithPassword({
-    email: env.CASHIER_EMAIL,
-    password: env.CASHIER_PASSWORD,
-  });
-  if (error) throw new Error('فشل توثيق حساب الكاشير؛ تحقق من إعداداته');
+  const authenticate = async () => {
+    const { error } = await client.auth.signInWithPassword({
+      email: env.CASHIER_EMAIL,
+      password: env.CASHIER_PASSWORD,
+    });
+    if (error) throw new Error('فشل توثيق حساب الكاشير؛ تحقق من إعداداته');
+  };
+  await authenticate();
   const folder = path.resolve(env.CASHIER_WATCH_FOLDER || 'cashier-exports');
   const archiveFolder = path.join(folder, 'Archive');
   await fs.mkdir(folder, { recursive: true });
@@ -106,7 +122,12 @@ export async function startWatcher(env = process.env) {
         try {
           const result = await processCashierFile(
             path.join(folder, entry.name),
-            { client, archiveFolder, saleDate: env.CASHIER_SALE_DATE },
+            {
+              client,
+              archiveFolder,
+              saleDate: env.CASHIER_SALE_DATE,
+              reauthenticate: authenticate,
+            },
           );
           if (result) console.log('تم رفع وأرشفة:', entry.name);
         } catch (error) {

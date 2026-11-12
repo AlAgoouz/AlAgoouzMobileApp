@@ -56,3 +56,23 @@ it("keeps a general failure recoverable when local recovery data is malformed", 
     "{invalid",
   );
 });
+it("allows resetting a failed screen boundary back to the home screen without reloading", () => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  let shouldThrow = true;
+  const Screen = () => {
+    if (shouldThrow) throw new Error("screen crash");
+    return <div>Recovered Screen</div>;
+  };
+  const onReset = vi.fn(() => {
+    shouldThrow = false;
+  });
+  render(
+    <AppErrorBoundary onReset={onReset}>
+      <Screen />
+    </AppErrorBoundary>,
+  );
+  expect(screen.getByRole("alert")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "العودة للرئيسية" }));
+  expect(onReset).toHaveBeenCalledOnce();
+  expect(screen.getByText("Recovered Screen")).toBeTruthy();
+});

@@ -37,3 +37,15 @@ it('never overwrites an existing account or deletes it after a rejected duplicat
  expect((await s.handle(request(input))).status).toBe(400);expect(s.admin.auth.admin.deleteUser).not.toHaveBeenCalled();
  expect(s.user.rpc.mock.calls.some(([name])=>name==='bon_erp_set_user_access')).toBe(false);
 });
+it('accepts origins configured via AGOUZ_ALLOWED_ORIGINS environment variable',async()=>{
+ process.env.AGOUZ_ALLOWED_ORIGINS='https://staging.agouz.example';
+ try{
+  const s=setup();
+  const req=new Request('https://test.invalid/functions/v1/manage-users',{method:'OPTIONS',headers:{Origin:'https://staging.agouz.example'}});
+  const res=await s.handle(req);
+  expect(res.status).toBe(204);
+  expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://staging.agouz.example');
+ }finally{
+  delete process.env.AGOUZ_ALLOWED_ORIGINS;
+ }
+});
