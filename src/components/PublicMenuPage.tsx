@@ -1,9 +1,9 @@
 import React, {useEffect, useState} from 'react';
-import {fetchPublishedMenu, type ShopMenu} from '../lib/shopMenu';
+import {fetchPublishedMenu, type MenuPublication} from '../lib/shopMenu';
 import {menuLogo, ShopMenuView} from './ShopMenuView';
 
 export default function PublicMenuPage() {
-  const [menu, setMenu] = useState<ShopMenu | null>(null);
+  const [menu, setMenu] = useState<MenuPublication | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [attempt, setAttempt] = useState(0);
 
@@ -13,7 +13,7 @@ export default function PublicMenuPage() {
       if (controller.signal.aborted) return;
       setMenu(row?.content ?? null);
       setStatus('ready');
-      document.title = row ? `منيو ${row.content.name}` : 'منيو بُن العجوز';
+      document.title = row && 'name' in row.content ? `منيو ${row.content.name}` : 'منيو بُن العجوز';
     }).catch(() => {
       if (!controller.signal.aborted) setStatus('error');
     });
@@ -21,7 +21,13 @@ export default function PublicMenuPage() {
   }, [attempt]);
 
   return <main className="shop-menu-public" dir="rtl">
-    {menu ? <ShopMenuView menu={menu} /> : <section className="shop-menu-notice">
+    {menu && 'image' in menu ? <section className="shop-menu-image-page">
+      <header>
+        <h1>منيو بُن العجوز</h1>
+        <a href={menu.image} download="agouz-menu.jpg">تحميل الصورة</a>
+      </header>
+      <img src={menu.image} alt="صورة منيو بُن العجوز" />
+    </section> : menu ? <ShopMenuView menu={menu} /> : <section className="shop-menu-notice">
       <span className="shop-menu-brand-mark"><img src={menuLogo} alt="" width="96" height="96" /></span>
       <span className="shop-menu-kicker">أصل المزاج</span>
       <h1>منيو بُن العجوز</h1>

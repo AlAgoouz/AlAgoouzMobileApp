@@ -8,7 +8,7 @@ export const sectionLinks: SectionLink[] = [
   {id:'cashier_sync',title:'تقارير يوم الكاشير',description:'التقرير المالي والأصناف المباعة',icon:FolderSync,group:'التشغيل اليومي',tone:'blue'},
   {id:'recipes',title:'الوصفات',description:'مقادير وتكلفة المشروبات والتحويجات والتوليفات',icon:BookOpen,group:'التشغيل اليومي',tone:'gold'},
   {id:'production',title:'إنتاج التوليفات',description:'أوامر إنتاج التوليفات وسجل تشغيلاتها فقط',icon:Flame,group:'التشغيل اليومي',tone:'rose'},
-  {id:'shop_menu',title:'المنيو والدعاية',description:'تصميم المنيو العام ومشاركة رابط وكود QR',icon:UtensilsCrossed,group:'التشغيل اليومي',tone:'gold',ownerOnly:true},
+  {id:'shop_menu',title:'صورة المنيو',description:'رفع صورة المنيو ومشاركتها بكود QR',icon:UtensilsCrossed,group:'التشغيل اليومي',tone:'gold',ownerOnly:true},
   {id:'inventory',title:'مخزن البن',description:'رصيد وقيمة كل صنف في المخزون',icon:Package,group:'المخزون والمشتريات',tone:'gold'},
   {id:'purchase',title:'المشتريات',description:'شراء الخامات وسجل الفواتير',icon:ShoppingBag,group:'المخزون والمشتريات',tone:'green'},
   {id:'stocktaking',title:'جرد الميزان',description:'مطابقة الكميات الفعلية مع الرصيد',icon:Scale,group:'المخزون والمشتريات',tone:'blue'},
