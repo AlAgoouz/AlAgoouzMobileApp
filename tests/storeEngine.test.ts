@@ -229,3 +229,108 @@ it('never clears an uncertain save or its draft when a version check succeeds', 
   transport.getVersion=vi.fn(async()=>1); await engine.refresh();
   expect(engine.snapshot.status).toBe('error'); expect(engine.hasPending).toBe(true);
 });
+it('queues sequential edits during an active save and flushes them with the updated version', async () => {
+  vi.useFakeTimers();
+  const { engine, transport } = setup();
+  await engine.load();
+  let finishFirst!: (version: number) => void;
+  transport.save = vi
+    .fn()
+    .mockImplementationOnce(() => new Promise<number>((resolve) => { finishFirst = resolve; }))
+    .mockResolvedValueOnce(3);
+  engine.replace(structuredClone(emptyStore));
+  const flushing = engine.flush();
+  expect(engine.snapshot.status).toBe('saving');
+  const nextState = { ...structuredClone(emptyStore), shifts: [] };
+  engine.replace(nextState);
+  expect(engine.snapshot.state).toEqual(nextState);
+  expect(engine.hasPending).toBe(true);
+  finishFirst(2);
+  await flushing;
+  expect(transport.save).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(transport.save).mock.calls[1][1]).toBe(2);
+  expect(engine.snapshot.version).toBe(3);
+  expect(engine.snapshot.status).toBe('ready');
+  expect(engine.hasPending).toBe(false);
+});
+it('replays a committed save with a lost acknowledgment before saving the queued edit', async () => {
+  vi.useFakeTimers();
+  const { engine, transport } = setup();
+  await engine.load();
+  let commitFirst!: () => void;
+  let remoteVersion = 1;
+  const receipts = new Map<string, number>();
+  transport.getVersion = vi.fn(async () => remoteVersion);
+  transport.save = vi.fn(async (_state, version, operationId) => {
+    const receipt = receipts.get(operationId);
+    if (receipt !== undefined) return receipt;
+    if (version !== remoteVersion) throw new Error('STORE_CONFLICT');
+    if (version === 1) {
+      await new Promise<void>((resolve) => { commitFirst = resolve; });
+      receipts.set(operationId, ++remoteVersion);
+      throw new Error('network');
+    }
+    receipts.set(operationId, ++remoteVersion);
+    return remoteVersion;
+  });
+  engine.replace(structuredClone(emptyStore));
+  const flushing = engine.flush();
+  const queuedState = {
+    ...structuredClone(emptyStore),
+    auditLogs: [{ id: 'a1', timestamp: '2026-11-01T00:00:00Z', partnerName: 'Owner', actionType: 'شراء' as const, description: 'queued' }],
+  };
+  engine.replace(queuedState);
+  commitFirst();
+  await flushing;
+  expect(engine.snapshot.status).toBe('error');
+  expect(engine.snapshot.state).toEqual(queuedState);
+  await engine.refresh();
+  expect(engine.snapshot.status).toBe('error');
+  await engine.flush();
+  const [first, retry, queued] = vi.mocked(transport.save).mock.calls;
+  expect(retry).toEqual(first);
+  expect(queued[0]).toEqual(queuedState);
+  expect(queued[1]).toBe(2);
+  expect(queued[2]).not.toBe(first[2]);
+  expect(engine.snapshot.status).toBe('ready');
+  expect(engine.snapshot.version).toBe(3);
+  expect(engine.hasPending).toBe(false);
+});
+
+it('keeps cashier queue IDs with their own save when ordinary edits arrive in flight', async () => {
+  vi.useFakeTimers();
+  const { engine, transport } = setup();
+  await engine.load();
+  let finishFirst!: (version: number) => void;
+  transport.save = vi.fn()
+    .mockImplementationOnce(() => new Promise<number>((resolve) => { finishFirst = resolve; }))
+    .mockResolvedValueOnce(3);
+  engine.replace(structuredClone(emptyStore), 'cashier-first');
+  engine.field('shifts', []);
+  const flushing = engine.flush();
+  engine.field('shifts', []);
+  finishFirst(2);
+  await flushing;
+  const calls = vi.mocked(transport.save).mock.calls;
+  expect(calls.map((call) => call[3])).toEqual(['cashier-first', undefined]);
+  expect(engine.snapshot.status).toBe('ready');
+});
+
+it('preserves a waiting cashier report when another report is attached before it can be saved', async () => {
+  vi.useFakeTimers();
+  const { engine, transport } = setup();
+  await engine.load();
+  let finishFirst!: (version: number) => void;
+  transport.save = vi.fn()
+    .mockImplementationOnce(() => new Promise<number>((resolve) => { finishFirst = resolve; }))
+    .mockResolvedValueOnce(3);
+  engine.replace(structuredClone(emptyStore), 'cashier-first');
+  const flushing = engine.flush();
+  engine.replace(structuredClone(emptyStore), 'cashier-second');
+  expect(() => engine.replace(structuredClone(emptyStore), 'cashier-third')).toThrow('انتظر تأكيد حفظ تقرير الكاشير الحالي');
+  finishFirst(2);
+  await flushing;
+  expect(vi.mocked(transport.save).mock.calls.map((call) => call[3]))
+    .toEqual(['cashier-first', 'cashier-second']);
+  expect(engine.snapshot.status).toBe('ready');
+});

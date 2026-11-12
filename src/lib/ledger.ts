@@ -1,7 +1,10 @@
 import type { StoreState } from './storeState';
 import { businessDate } from './dates';
 import { receiveStock } from './costing';
+import { recalculateRecipeCosts } from './itemCosts';
 import type { StoreEngine } from './storeEngine';
+
+const money = (value: number) => Number(value.toFixed(2));
 
 export function assertPayment(balance: number, amount: number) {
   if (!Number.isFinite(amount) || amount <= 0)
@@ -134,7 +137,7 @@ export function returnSale(
         ? {
             ...c,
             balance: Number((c.balance - debtReversed).toFixed(2)),
-            totalSales: Math.max(0, c.totalSales - invoice.totalAmount),
+            totalSales: money(Math.max(0, c.totalSales - invoice.totalAmount)),
             invoicesCount: Math.max(0, c.invoicesCount - 1),
           }
         : c,
@@ -282,18 +285,20 @@ export function cancelPurchase(
   const supplier = state.suppliers.find((s) => s.id === invoice.supplierId);
   if (!supplier || supplier.balance + 0.001 < invoice.remainingAmount)
     throw new Error('رصيد المورد يحتاج مراجعة قبل الإلغاء');
+  const restoredItems = state.items.map(
+    (item) => invoice.inventoryBefore!.find((old) => old.id === item.id) ?? item,
+  );
   return {
     ...state,
-    items: state.items.map(
-      (item) =>
-        invoice.inventoryBefore!.find((old) => old.id === item.id) ?? item,
-    ),
+    items: recalculateRecipeCosts(restoredItems),
     suppliers: state.suppliers.map((s) =>
       s.id === invoice.supplierId
         ? {
             ...s,
             balance: Number((s.balance - invoice.remainingAmount).toFixed(2)),
-            totalPurchases: Math.max(0, s.totalPurchases - invoice.totalAmount),
+            totalPurchases: money(
+              Math.max(0, s.totalPurchases - invoice.totalAmount),
+            ),
             invoicesCount: Math.max(0, s.invoicesCount - 1),
           }
         : s,
@@ -333,12 +338,14 @@ export function recordExpense(
       p.id === partnerId
         ? {
             ...p,
-            totalWithdrawals:
+            totalWithdrawals: money(
               p.totalWithdrawals +
-              (input.category === 'مسحوبات شركاء' ? input.amount : 0),
-            totalPaidFromPocket:
+                (input.category === 'مسحوبات شركاء' ? input.amount : 0),
+            ),
+            totalPaidFromPocket: money(
               p.totalPaidFromPocket +
-              (input.paidFrom === 'من جيب الشريك' ? input.amount : 0),
+                (input.paidFrom === 'من جيب الشريك' ? input.amount : 0),
+            ),
           }
         : p,
     ),
@@ -391,19 +398,29 @@ export function cancelExpense(
       p.id === partner?.id
         ? {
             ...p,
-            totalWithdrawals:
-              p.totalWithdrawals -
-              (expense.category === 'مسحوبات شركاء' ? expense.amount : 0),
-            totalPaidFromPocket:
-              p.totalPaidFromPocket -
-              (expense.paidFrom === 'من جيب الشريك' ? expense.amount : 0),
+            totalWithdrawals: money(
+              Math.max(
+                0,
+                p.totalWithdrawals -
+                  (expense.category === 'مسحوبات شركاء' ? expense.amount : 0),
+              ),
+            ),
+            totalPaidFromPocket: money(
+              Math.max(
+                0,
+                p.totalPaidFromPocket -
+                  (expense.paidFrom === 'من جيب الشريك' ? expense.amount : 0),
+              ),
+            ),
           }
         : p,
     ),
   };
 }
 export function operatingExpenses(expenses: StoreState['expenses']) {
-  return expenses
-    .filter((e) => !e.isCancelled && e.category !== 'مسحوبات شركاء')
-    .reduce((sum, e) => sum + e.amount, 0);
+  return money(
+    expenses
+      .filter((e) => !e.isCancelled && e.category !== 'مسحوبات شركاء')
+      .reduce((sum, e) => money(sum + e.amount), 0),
+  );
 }

@@ -143,6 +143,97 @@ it('reverses an out-of-pocket expense contribution and excludes cancelled costs'
   const reversed = cancelExpense(next, next.expenses[0].id, 'Owner');
   expect(reversed.partners[0].totalPaidFromPocket).toBe(0);
   expect(operatingExpenses(reversed.expenses)).toBe(0);
+  const floatFirst = recordExpense(
+    { ...emptyStore, partners: [owner] },
+    {
+      date: '2026-11-01',
+      title: 'Part 1',
+      category: 'صيانة مطاحن وماكينات',
+      amount: 100.1,
+      partnerName: owner.name,
+      paidFrom: 'من جيب الشريك',
+    },
+    owner.id,
+  );
+  const floatSecond = recordExpense(
+    floatFirst,
+    {
+      date: '2026-11-01',
+      title: 'Part 2',
+      category: 'صيانة مطاحن وماكينات',
+      amount: 200.2,
+      partnerName: owner.name,
+      paidFrom: 'من جيب الشريك',
+    },
+    owner.id,
+  );
+  expect(floatSecond.partners[0].totalPaidFromPocket).toBe(300.3);
+  expect(operatingExpenses(floatSecond.expenses)).toBe(300.3);
+});
+it('refreshes dependent recipe costs after cancellation restores ingredient prices', () => {
+  const rawBefore = {
+    ...INITIAL_ITEMS[0],
+    stock: 10,
+    costPrice: 100,
+    lastPurchasePrice: 100,
+  };
+  const rawAfter = {
+    ...rawBefore,
+    stock: 12,
+    costPrice: 120,
+    lastPurchasePrice: 120,
+  };
+  const drink = {
+    ...INITIAL_ITEMS.find((item) => item.category === 'drink_recipe')!,
+    id: 'drink-test',
+    code: 'DR-TEST',
+    stock: 5,
+    costPrice: 120,
+    recipe: [
+      {
+        ingredientId: rawBefore.id,
+        ingredientName: rawBefore.name,
+        quantity: 1,
+        unit: 'kg' as const,
+      },
+    ],
+  };
+  const purchase = {
+    id: 'p',
+    invoiceNumber: 'P',
+    date: '2026-11-01',
+    supplierId: 's',
+    supplierName: 'Supplier',
+    items: [],
+    totalAmount: 100,
+    paidAmount: 20,
+    remainingAmount: 80,
+    paymentMethod: 'جزئي' as const,
+    partnerName: 'Owner',
+    inventoryBefore: [rawBefore],
+    inventoryAfter: [rawAfter],
+  };
+  const state = {
+    ...emptyStore,
+    items: [rawAfter, drink],
+    purchaseInvoices: [purchase],
+    suppliers: [
+      {
+        id: 's',
+        name: 'Supplier',
+        phone: '',
+        category: '',
+        balance: 80,
+        totalPurchases: 100,
+        invoicesCount: 1,
+      },
+    ],
+  };
+  const next = cancelPurchase(validateStore(state), 'p', 'Owner');
+  expect(next.items.find((item) => item.id === rawBefore.id)?.costPrice).toBe(
+    100,
+  );
+  expect(next.items.find((item) => item.id === drink.id)?.costPrice).toBe(100);
 });
 it('cancels a purchase only when its inventory evidence still matches', () => {
   const before = { ...INITIAL_ITEMS[0], stock: 10 },

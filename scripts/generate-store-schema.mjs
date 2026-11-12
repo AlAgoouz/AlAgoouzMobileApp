@@ -10,7 +10,7 @@ export function cloudSchema() {
 }
 const text=JSON.stringify(cloudSchema(),null,2)+'\n';
 if(process.argv.includes('--check')) {
-  if(fs.readFileSync('supabase/store.schema.json','utf8')!==text) throw new Error('Server schema is stale; run npm run schema:generate and create a migration.');
+  if(fs.readFileSync('supabase/store.schema.json','utf8').replace(/\r\n/g,'\n')!==text) throw new Error('Server schema is stale; run npm run schema:generate and create a migration.');
 } else {
   fs.writeFileSync('supabase/store.schema.json',text);
   if(process.argv.includes('--embed')) {

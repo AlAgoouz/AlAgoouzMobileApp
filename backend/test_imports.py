@@ -109,20 +109,42 @@ class PublisherTests(unittest.TestCase):
         self.assertEqual(self.client.get('/docs').status_code, 404)
         self.assertEqual(self.client.post(f'/api/imports/{JOB}/enqueue').status_code, 401)
         self.assertEqual(self.client.post(f'/api/imports/{JOB}/enqueue', content=b'x'*16385).status_code, 413)
+        self.assertEqual(self.client.post(f'/api/imports/{JOB}/enqueue', content=(b'x'*4096 for _ in range(5))).status_code, 413)
         self.assertEqual(self.client.get('/api/health', headers={'content-length':'bad'}).status_code, 400)
 
     def test_publish_requires_database_authorization_and_does_not_forward_jwt(self):
-        rpc_mock = AsyncMock(side_effect=[{'status':'uploading', 'object_path':f'{JOB}/{JOB}/report.csv'}, {'status':'queued','workerToken':KEY}])
+        rpc_mock = AsyncMock(side_effect=[{'status':'uploading', 'object_path':f'{JOB}/{JOB}/report.csv'}, {'status':'queued','workerToken':KEY}, {'status':'ready'}])
         with patch.object(main, 'rpc', rpc_mock), patch.object(main, 'signed_download_token', AsyncMock(return_value='download-fixture')), patch.object(main, 'process_import', AsyncMock(return_value='done')) as send:
             response = self.client.post(f'/api/imports/{JOB}/enqueue', headers={'Authorization':'Bearer caller-fixture'})
             self.assertEqual(response.status_code, 202)
+            self.assertEqual(response.json()['status'], 'ready')
             payload = send.await_args.args[0].model_dump_json()
             self.assertNotIn('caller-fixture', payload)
             self.assertNotIn('download-fixture', payload)
             self.assertEqual(rpc_mock.await_args_list[0].args[3], 'caller-fixture')
+            self.assertEqual(rpc_mock.await_args_list[2].args[3], 'caller-fixture')
         with patch.object(main, 'rpc', AsyncMock(side_effect=PermissionError())), patch.object(main, 'process_import', AsyncMock(return_value='done')) as send:
             self.assertEqual(self.client.post(f'/api/imports/{JOB}/enqueue',headers={'Authorization':'Bearer invalid'}).status_code,403)
             send.assert_not_awaited()
+
+    def test_enqueue_reports_worker_outcomes(self):
+        for result, current, status, expected in [
+            ('retry', None, 503, 'IMPORT_RETRY_PENDING'),
+            ('denied', None, 403, 'IMPORT_WORKER_DENIED'),
+            ('busy', None, 202, 'processing'),
+            ('done', {'status': 'failed'}, 202, 'failed'),
+        ]:
+            with self.subTest(result=result):
+                replies = [
+                    {'status': 'uploading', 'object_path': f'{JOB}/{JOB}/report.csv'},
+                    {'status': 'queued', 'workerToken': KEY},
+                ]
+                if current is not None:
+                    replies.append(current)
+                with patch.object(main, 'rpc', AsyncMock(side_effect=replies)), patch.object(main, 'signed_download_token', AsyncMock(return_value='download-fixture')), patch.object(main, 'process_import', AsyncMock(return_value=result)):
+                    response = self.client.post(f'/api/imports/{JOB}/enqueue', headers={'Authorization': 'Bearer caller-fixture'})
+                self.assertEqual(response.status_code, status)
+                self.assertEqual(response.json()['status' if status == 202 else 'detail'], expected)
 
     def test_external_path_is_rejected_and_ready_job_is_not_republished(self):
         with patch.object(main, 'rpc', AsyncMock(return_value={'status':'uploading','object_path':'https://evil.test/file'})), patch.object(main, 'process_import', AsyncMock(return_value='done')) as send:

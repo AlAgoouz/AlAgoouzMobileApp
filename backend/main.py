@@ -3,7 +3,7 @@ import re
 import asyncio
 from datetime import date
 from uuid import UUID
-from fastapi import FastAPI, Header, HTTPException, Response, BackgroundTasks
+from fastapi import FastAPI, Header, HTTPException, Response
 from clients import rpc, signed_download_token, http_client, BackendUnavailable
 from worker import process_import, ImportMessage
 
@@ -17,8 +17,16 @@ async def private_responses(request, call_next):
         size = int(request.headers.get("content-length", "0"))
     except ValueError:
         return Response(status_code=400)
+    if size < 0:
+        return Response(status_code=400)
     if size > 16384:
         return Response(status_code=413)
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > 16384:
+            return Response(status_code=413)
+    request._body = body
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -31,7 +39,7 @@ async def health():
 
 
 @app.post("/api/imports/{job_id}/enqueue", status_code=202)
-async def enqueue(job_id: UUID, background_tasks: BackgroundTasks, authorization: str = Header(default="")):
+async def enqueue(job_id: UUID, authorization: str = Header(default="")):
     if not authorization.startswith("Bearer ") or len(authorization) > 8192:
         raise HTTPException(status_code=401, detail="IMPORT_LOGIN_REQUIRED")
     bearer = authorization[7:]
@@ -49,8 +57,17 @@ async def enqueue(job_id: UUID, background_tasks: BackgroundTasks, authorization
             if "workerToken" not in prepared:
                 return {"id": str(job_id), "status": prepared["status"]}
             payload = ImportMessage(job_id=job_id, worker_token=prepared["workerToken"])
-            background_tasks.add_task(process_import,payload)
-            return {"id": str(job_id), "status": "queued"}
+            result = await process_import(payload)
+            if result == "denied":
+                raise HTTPException(status_code=403, detail="IMPORT_WORKER_DENIED")
+            if result == "retry":
+                raise HTTPException(status_code=503, detail="IMPORT_RETRY_PENDING")
+            if result == "busy":
+                return {"id": str(job_id), "status": "processing"}
+            current = await rpc(client, "bon_erp_read_import", {"p_id": str(job_id)}, bearer)
+            if not current:
+                raise HTTPException(status_code=404, detail="IMPORT_NOT_FOUND")
+            return {"id": str(job_id), "status": current["status"]}
     except PermissionError:
         raise HTTPException(status_code=403, detail="IMPORT_PERMISSION_DENIED") from None
     except HTTPException:

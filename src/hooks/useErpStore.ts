@@ -6,6 +6,7 @@ import { cloudStoreInput, toCloud } from '../lib/storeState';
 import { scrubLegacyPasswords } from '../lib/legacyCache';
 import { authErrorMessage } from '../lib/authErrors';
 import { storeWriteError } from '../lib/storeErrors';
+import { clearRecoveryDraft, saveRecoveryDraft } from '../lib/recoveryDraft';
 
 export function useErpStore(loadFull=true) {
   const fullRequested=useRef(loadFull);fullRequested.current=loadFull;
@@ -72,10 +73,7 @@ export function useErpStore(loadFull=true) {
       },
       (state) => {
         // Preserve a draft before network writes. Legacy cache remains untouched for recovery.
-        localStorage.setItem(
-          'bon_elagouz_recovery_draft_v4',
-          JSON.stringify({ savedAt: new Date().toISOString(), state }),
-        );
+        saveRecoveryDraft(localStorage, state);
       },
       (before,after)=>assertUserChanges(before,after,accessRef.current),
     );
@@ -246,6 +244,7 @@ export function useErpStore(loadFull=true) {
     const sb = getSupabaseClient();
     const result = await sb?.auth.signOut();
     if (result?.error) throw new Error('تعذر إنهاء الجلسة؛ حاول مرة أخرى');
+    clearRecoveryDraft(localStorage);
     setMember(null);
     engine.logout();
   }

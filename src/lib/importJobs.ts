@@ -14,6 +14,8 @@ export async function readImport(id:string){return jobSchema.parse(await rpc('bo
 export async function enqueueImport(id:string){
  const {data,error}=await client().auth.getSession();if(error||!data.session)throw Error('انتهت الجلسة؛ سجّل الدخول مجددًا.');
  const response=await fetch(`/api/imports/${encodeURIComponent(id)}/enqueue`,{method:'POST',headers:{Authorization:`Bearer ${data.session.access_token}`},cache:'no-store'});
+ if(response.status===401)throw Error('انتهت الجلسة؛ سجّل الدخول مجددًا.');
+ if(response.status===403)throw Error('الحساب الحالي غير مخوّل لمعالجة التقرير؛ راجع المالك.');
  if(!response.ok)throw Error('الملف محفوظ، لكن لم يتأكد بدء المعالجة. اضغط إعادة المحاولة.');
 }
 export async function cancelImport(id:string){await rpc('bon_erp_cancel_import',{p_id:id});}

@@ -6,7 +6,9 @@ import {saveRecipeDefinition,saveRecipe} from './lib/recipeCatalog';
 import type {CatalogNameDraft,RecipeProductDefinition} from './types/erp';
 import {PagedSalesHistory} from './components/PagedSalesHistory';
 import {ScreenLoading} from './components/ScreenLoading';
+import {AppErrorBoundary} from './components/AppErrorBoundary';
 import {Modal} from './components/Modal';
+import {buildNavigationUrl,readNavigationFromWindow,type MoreSubTab} from './lib/screenNavigation';
 import {DashboardScreen} from './components/DashboardScreen';
 import {WorkspaceSidebar} from './components/WorkspaceSidebar';
 import {initialPeriod} from './lib/reporting';
@@ -78,6 +80,10 @@ import {
   operatingExpenses,
 } from "./lib/ledger";
 import { businessDate } from "./lib/dates";
+import {
+  documentNumberPrefix,
+  nextSequentialNumber,
+} from "./lib/documentNumbers";
 import { recordEmployeeAction, reverseEmployeeAction, closePayrollPeriod, currentPayrollPeriod } from './lib/payroll';
 import { adjustCatalogItem, canDeleteCatalogItem } from './lib/catalogAdjustments';
 import {checkCustomerDetails,checkSupplierDetails} from './lib/contactDetails';
@@ -106,18 +112,6 @@ const unloadedPartner: Partner = {
 };
 
 // صافي مستحقات العامل (نفس معادلة شاشة شؤون العمال) لمحاربة تجاوز الصرف
-// ترقيم مسلسل فريد لا يتكرر حتى بعد حذف سجلات قديمة (خطأ تكرار PRD/AUD القديم)
-function nextSequentialNumber(
-  existing: string[],
-  prefix: string,
-  startFrom: number,
-): string {
-  const suffixes = existing
-    .map((value) => Number(value.match(/(\d+)$/)?.[1]))
-    .filter((n) => Number.isFinite(n));
-  const next = suffixes.reduce((max, value) => Math.max(max, value), startFrom) + 1;
-  return `${prefix}-${next}`;
-}
 // التحقق من الأرقام عند التعريف/التحديث: أرقام صالحة وغير سالبة
 function hasInvalidNumbers(values: (number | undefined)[]): boolean {
   return values.some((v) => v !== undefined && (!Number.isFinite(v) || v < 0));
@@ -203,11 +197,29 @@ const InvoiceReceiptModal = React.lazy(() =>
 );
 
 export default function App() {
-  const [activeScreen, setActiveScreen] = useState<string>("home");
-  const [moreInitialTab, setMoreInitialTab] = useState<
-    "menu" | "data_control" | "expenses" | "partners" | "cloud"
-  >("menu");
+  const [activeScreen, setActiveScreen] = useState<string>(() => readNavigationFromWindow().screen);
+  const [moreInitialTab, setMoreInitialTab] = useState<MoreSubTab>(() => readNavigationFromWindow().tab);
+  useEffect(() => {
+    const onPopState = () => {
+      const next = readNavigationFromWindow();
+      setMoreInitialTab(next.tab);
+      setActiveScreen(next.screen);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
   const [hideProfits, setHideProfits] = useState<boolean>(false);
+  useEffect(() => {
+    const current = readNavigationFromWindow();
+    const nextUrl = buildNavigationUrl(activeScreen, moreInitialTab);
+    if (current.screen === activeScreen && current.tab === moreInitialTab) {
+      if (!window.history.state) {
+        window.history.replaceState({ screen: activeScreen, tab: moreInitialTab }, "", nextUrl);
+      }
+      return;
+    }
+    window.history.pushState({ screen: activeScreen, tab: moreInitialTab }, "", nextUrl);
+  }, [activeScreen, moreInitialTab]);
   const [reportPeriod,setReportPeriod]=useState(initialPeriod);
   const [toastNotification, setToastNotification] = useState<string | null>(
     null,
@@ -354,7 +366,7 @@ export default function App() {
     if (!sb) return;
     let disposed = false;
     const processPending = async () => {
-      if (disposed || queueBusy.current || engine.snapshot.status !== "ready")
+      if (disposed || queueBusy.current || document.visibilityState === "hidden" || !navigator.onLine || engine.snapshot.status !== "ready")
         return;
       queueBusy.current = true;
       try {
@@ -387,7 +399,7 @@ export default function App() {
       .subscribe();
     const timer = setInterval(() => {
       void processPending();
-    }, 10000);
+    }, 15000);
     void processPending();
     window.addEventListener("online", processPending);
     return () => {
@@ -429,14 +441,15 @@ export default function App() {
     quantityKg: number,
     notes: string,
   ): { ok: boolean; message: string } => {
-    const blend = items.find((i) => i.id === blendId);
+    const date = businessDate();
+    const blend = engine.state.items.find((i) => i.id === blendId);
     if (!blend || !blend.recipe || blend.recipe.length === 0) {
       return { ok: false, message: "هذه التوليفة ليس لها وصفة محددة بعد." };
     }
 
     let needs: Map<string, number>;
     try {
-      needs = productionNeeds(blend, quantityKg, engine.snapshot.state.items);
+      needs = productionNeeds(blend, quantityKg, engine.state.items);
     } catch (error) {
       return { ok: false, message: (error as Error).message };
     }
@@ -444,12 +457,12 @@ export default function App() {
     const consumedDetails: ProductionBatch["ingredientsConsumed"] = [];
     let totalBatchCost = 0;
 
-    const updatedCatalog = items.map((item) => {
+    const updatedCatalog = engine.state.items.map((item) => {
       const needed = needs.get(item.id);
       if (needed !== undefined) {
         const usedInBase = Number(needed.toFixed(6));
         const ingCost = Number((usedInBase * item.costPrice).toFixed(2));
-        totalBatchCost += ingCost;
+        totalBatchCost = Number((totalBatchCost + ingCost).toFixed(2));
         consumedDetails.push({
           ingredientId: item.id,
           ingredientName: item.name,
@@ -473,7 +486,7 @@ export default function App() {
     const batchId = crypto.randomUUID();
     const finalCatalog = updatedCatalog.map((item) => {
       if (item.id === blendId) {
-        return receiveStock(item, quantityKg, unitCostPerKg, {id:batchId,date:businessDate(),type:'production'});
+        return receiveStock(item, quantityKg, unitCostPerKg, {id:batchId,date,type:'production'});
       }
       return item;
     });
@@ -481,11 +494,11 @@ export default function App() {
     const newBatch: ProductionBatch = {
       id: batchId,
       batchNumber: nextSequentialNumber(
-        productionBatches.map((b) => b.batchNumber),
-        "PRD-2026",
+        engine.state.productionBatches.map((b) => b.batchNumber),
+        documentNumberPrefix("production", date),
         15,
       ),
-      date: businessDate(),
+      date,
       blendId: blend.id,
       blendName: blend.name,
       quantityProducedKg: quantityKg,
@@ -523,7 +536,7 @@ export default function App() {
     if(!supplier)throw Error('اختر موردًا مسجلًا');
     checkSupplierDetails(supplier);
     invoiceData={...invoiceData,supplierName:supplier.name};
-    checkPurchase(invoiceData, engine.snapshot.state.items);
+    checkPurchase(invoiceData, engine.state.items);
     if (
       !invoiceData.items.length ||
       invoiceData.items.some(
@@ -543,7 +556,7 @@ export default function App() {
       invoiceData.paidAmount < 0 ||
       !Number.isFinite(invoiceData.remainingAmount) ||
       invoiceData.remainingAmount < 0 ||
-      !suppliers.some((s) => s.id === invoiceData.supplierId)
+      !engine.state.suppliers.some((s) => s.id === invoiceData.supplierId)
     )
       throw new Error(
         "راجع الأصناف والكميات والأسعار والمورد والمبالغ قبل حفظ الفاتورة",
@@ -554,12 +567,12 @@ export default function App() {
       id: crypto.randomUUID(),
       invoiceNumber: invNum,
       createdAt: new Date().toISOString(),
-      inventoryBefore: items
+      inventoryBefore: engine.state.items
         .filter((i) => invoiceData.items.some((l) => l.itemId === i.id))
         .map((i) => structuredClone(i)),
     };
 
-    const nextItems = items.map((item) => {
+    const nextItems = engine.state.items.map((item) => {
       const purchasedLine = invoiceData.items.find((l) => l.itemId === item.id);
       if (!purchasedLine) return item;
 
@@ -597,8 +610,8 @@ export default function App() {
         sup.id === invoiceData.supplierId
           ? {
               ...sup,
-              balance: sup.balance + invoiceData.remainingAmount,
-              totalPurchases: sup.totalPurchases + invoiceData.totalAmount,
+              balance: Number((sup.balance + invoiceData.remainingAmount).toFixed(2)),
+              totalPurchases: Number((sup.totalPurchases + invoiceData.totalAmount).toFixed(2)),
               invoicesCount: sup.invoicesCount + 1,
             }
           : sup,
@@ -626,14 +639,14 @@ export default function App() {
     let liveTotalCost = 0;
     try {
       if(saleData.saleType!=='wholesale'||saleData.items.some(line=>engine.state.items.find(i=>i.id===line.itemId)?.category!=='manufactured_blend'))throw Error('فواتير البيع الجديدة للتوليفات بالجملة فقط');
-      const liveItems = engine.snapshot.state.items;
+      const liveItems = engine.state.items;
       const customer=engine.state.customers.find(c=>c.id===saleData.customerId);
       if(!customer)throw Error('اختر عميلًا مسجلًا');
       checkCustomerDetails(customer);
       saleData={...saleData,customerName:customer.name};
       if (
         saleData.saleType === "wholesale" &&
-        !engine.snapshot.state.customers.some(
+        !engine.state.customers.some(
           (c) => c.id === saleData.customerId,
         )
       )
@@ -691,8 +704,8 @@ export default function App() {
           c.id === saleData.customerId
             ? {
                 ...c,
-                balance: c.balance + saleData.remainingAmount,
-                totalSales: c.totalSales + saleData.totalAmount,
+                balance: Number((c.balance + saleData.remainingAmount).toFixed(2)),
+                totalSales: Number((c.totalSales + saleData.totalAmount).toFixed(2)),
                 invoicesCount: c.invoicesCount + 1,
                 lastPurchaseDate: saleData.date,
               }
@@ -720,10 +733,11 @@ export default function App() {
     notes: string,
     chargeShortageToEmployeeId?: string,
   ) => {
-    variances = checkStocktaking(variances, engine.snapshot.state.items);
+    const date = businessDate();
+    variances = checkStocktaking(variances, engine.state.items);
     if (
       chargeShortageToEmployeeId &&
-      !employees.some((e) => e.id === chargeShortageToEmployeeId)
+      !engine.state.employees.some((e) => e.id === chargeShortageToEmployeeId)
     )
       throw new Error("العامل المختار لتحميل العجز غير موجود");
     const changed = variances.filter((v) => Math.abs(v.difference) > 0.0001);
@@ -746,11 +760,11 @@ export default function App() {
     const newRecord: StocktakingAuditRecord = {
       id: crypto.randomUUID(),
       auditNumber: nextSequentialNumber(
-        stocktakingRecords.map((r) => r.auditNumber),
-        "AUD-2026",
+        engine.state.stocktakingRecords.map((r) => r.auditNumber),
+        documentNumberPrefix("stocktaking", date),
         2,
       ),
-      date: businessDate(),
+      date,
       partnerName: currentPartner.name,
       notes,
       totalShortageValue: Number(totalShortage.toFixed(2)),
@@ -797,7 +811,9 @@ export default function App() {
       })),
     );
     setSalesInvoices([]);
-    engine.field("cashierDays",[]);
+    engine.field("cashierDays", []);
+    engine.field("shifts", []);
+    engine.field("financialOpenings", []);
     setPurchaseInvoices([]);
     setProductionBatches([]);
     setExpenses([]);
@@ -844,7 +860,10 @@ export default function App() {
   const handleClearAllDemoData = () => {
     setItems([]);
     setSalesInvoices([]);
-    engine.field("cashierDays",[]);
+    engine.field("cashierDays", []);
+    engine.field("shifts", []);
+    engine.field("financialOpenings", []);
+    engine.field("catalogNameDrafts", []);
     setPurchaseInvoices([]);
     setProductionBatches([]);
     setSuppliers([]);
@@ -904,7 +923,7 @@ export default function App() {
     );
   if(member.role==='cashier')return <CashierUploadScreen name={member.displayName} onLogout={handleLogout}/>;
   if(!canView(member))return <main dir="rtl" className="agouz-login"><section className="login-panel p-6 space-y-4"><h1 className="font-black">الحساب غير مخوّل لعرض بيانات المحل</h1><p>اطلب من المالك تحديد صلاحياتك ثم سجّل الدخول مجددًا.</p><button className="login-submit w-full" onClick={handleLogout}>تسجيل الخروج</button></section></main>;
-  const blocked = (needsFullStore||engine.hasPending)&&!["ready", "dirty"].includes(cloud.status);
+  const blocked = (needsFullStore||engine.hasPending)&&!["ready", "dirty", "saving"].includes(cloud.status);
   const statusText =
     cloud.status === "saving"
       ? "جارٍ الحفظ على السحابة…"
@@ -1002,6 +1021,7 @@ export default function App() {
       <WorkspaceSidebar name={currentPartner.name} screen={activeScreen==='more'&&moreInitialTab!=='menu'?moreInitialTab:activeScreen==='insights'?'reports':activeScreen} onNavigate={navigateScreen} isOwner={member.isOwner}/>
       <div className="app-workspace min-h-screen bg-[#FAF8F4] text-[#1E1612] relative pb-16">
         <div className="screen-stage" key={activeScreen+':'+moreInitialTab}>
+        <AppErrorBoundary key={activeScreen+':'+moreInitialTab} onReset={()=>setActiveScreen('home')}>
         {/* ================= 1. الشاشة الرئيسية: لوحة الإحصائيات والرسوم البيانية الاحترافية ================= */}
         {activeScreen === 'home'&&<DashboardScreen model={dashboard.data} error={dashboard.error} onRetry={dashboard.retry} period={reportPeriod} onPeriod={setReportPeriod} name={currentPartner.name} onNavigate={navigateScreen}/>}
 
@@ -1027,15 +1047,13 @@ export default function App() {
             }
             onDeletePurchaseInvoice={(invId) => {
               safeAction(() => {
-                const next = cancelPurchase(
-                  engine.snapshot.state,
-                  invId,
-                  currentPartner.name,
+                engine.replace(
+                  cancelPurchase(
+                    engine.state,
+                    invId,
+                    currentPartner.name,
+                  ),
                 );
-                engine.replace({
-                  ...next,
-                  items: recalculateAllRecipeCosts(next.items),
-                });
                 addAuditLog("مرتجع", `إلغاء فاتورة مشتريات ${invId}`);
                 showToast(
                   "تم إلغاء الفاتورة وعكس المخزون والمديونية مع حفظ الأصل ومبلغ الاسترداد.",
@@ -1263,7 +1281,7 @@ export default function App() {
               safeAction(() => {
                 engine.replace(
                   recordPayment(
-                    engine.snapshot.state,
+                    engine.state,
                     "supplier",
                     supId,
                     amount,
@@ -1281,7 +1299,7 @@ export default function App() {
               safeAction(() => {
                 engine.replace(
                   reversePayment(
-                    engine.snapshot.state,
+                    engine.state,
                     payId,
                     currentPartner.name,
                   ),
@@ -1363,7 +1381,7 @@ export default function App() {
               safeAction(() => {
                 engine.replace(
                   recordPayment(
-                    engine.snapshot.state,
+                    engine.state,
                     "customer",
                     custId,
                     amount,
@@ -1381,7 +1399,7 @@ export default function App() {
               safeAction(() => {
                 engine.replace(
                   reversePayment(
-                    engine.snapshot.state,
+                    engine.state,
                     payId,
                     currentPartner.name,
                   ),
@@ -1569,7 +1587,7 @@ export default function App() {
             onAddExpense={(exp) =>
               safeAction(() => {
                 engine.replace(
-                  recordExpense(engine.snapshot.state, {...exp,partnerName:requireFinancialPartner().name}, requireFinancialPartner().id),
+                  recordExpense(engine.state, {...exp,partnerName:requireFinancialPartner().name}, requireFinancialPartner().id),
                 );
                 addAuditLog("مصروف", exp.title, exp.amount);
                 showToast(
@@ -1581,7 +1599,7 @@ export default function App() {
               safeAction(() => {
                 engine.replace(
                   cancelExpense(
-                    engine.snapshot.state,
+                    engine.state,
                     expId,
                     currentPartner.name,
                   ),
@@ -1676,7 +1694,7 @@ export default function App() {
               customers.find(
                 (c) =>
                   c.id === receiptModalInvoice.customerId ||
-                  c.name === receiptModalInvoice.customerName,
+                  (!receiptModalInvoice.customerId && c.name === receiptModalInvoice.customerName),
               )?.phone || ""
             }
             onClose={() => setReceiptModalInvoice(null)}
@@ -1684,6 +1702,7 @@ export default function App() {
         )}
 
         </React.Fragment>}
+        </AppErrorBoundary>
         </div>
         {/* شريط القوائم السفلي المثبت دائماً في أسفل الشاشة مع قسم "الأقسام" بجانب "الرئيسية" */}
         <nav aria-label="التنقل الرئيسي" style={{paddingBottom:'max(6px, env(safe-area-inset-bottom))'}} className="workspace-nav fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#E6DEC8] py-1.5 px-2 grid grid-cols-4 z-40 mx-auto shadow-[0_-4px_20px_rgba(30,22,18,0.06)]">
