@@ -222,3 +222,19 @@
 .shop-menu-notice { max-width: 28rem; margin-block-start: clamp(2rem, 12vh, 7rem); background: radial-gradient(ellipse at top, #f9ecd7, #fff 80%); }
 .shop-menu-notice h1 { color: var(--menu-ink); font-size: 1.6rem; font-weight: 900; }
 .shop-menu-notice button { margin-block-start: .3rem; }
+
+.shop-menu-image-page { max-width: 70rem; margin: auto; }
+.shop-menu-image-page header {
+  display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center;
+  justify-content: space-between; margin-block-end: .65rem;
+}
+.shop-menu-image-page h1 { margin: 0; font-size: clamp(1.15rem, 3vw, 1.8rem); font-weight: 850; }
+.shop-menu-image-page a {
+  display: inline-flex; align-items: center; min-height: 44px; padding-inline: .75rem;
+  border: 1px solid #c9ab88; border-radius: .65rem; background: #fff; color: #4b2c1b;
+  font-size: .9rem; font-weight: 750;
+}
+.shop-menu-image-page img {
+  display: block; width: auto; max-width: 100%; height: auto; margin-inline: auto;
+  border: 1px solid #e7d9c7; border-radius: .65rem; background: #fff;
+}

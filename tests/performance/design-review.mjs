@@ -128,7 +128,7 @@ export async function verifyDesign(){
       const body=route.request().postDataJSON();
       assert.equal(body.p_expected_revision,menuDraft?.revision??0);
       menuDraft={revision:body.p_expected_revision+1,content:body.p_content};
-      if(body.p_publish)menuPublication={content:{...body.p_content,items:body.p_content.items.filter(item=>item.visible)},published_at:new Date().toISOString()};
+      if(body.p_publish)menuPublication={content:body.p_content,published_at:new Date().toISOString()};
       return route.fulfill({json:menuDraft.revision});
     };
     await context.route('**/rest/v1/**/agouz_save_menu',routeMenu);
@@ -142,43 +142,36 @@ export async function verifyDesign(){
       await limit(page,title);
       assert.equal(await page.locator('.operation-header').count(),1,'Every internal section must share one header');
       assert.equal(await page.locator('.operation-header h1').count(),1);
-      if(title==='المنيو والدعاية'){
-        for(const [template, label] of [['classic','هوية العجوز'],['compact','قائمة مختصرة'],['photos','كروت بالصور']]){
-          await page.getByRole('radio',{name:new RegExp(label)}).check();
-          await page.getByRole('button',{name:'معاينة نموذج',exact:true}).click();
-          const example=page.getByRole('dialog',{name:'نموذج التصميم'});
-          const design=example.locator(`.shop-menu--${template}`);
-          await design.getByText('توليفة العجوز',{exact:true}).waitFor();
-          assert.equal(await design.locator('.shop-menu-prices dd').count(),4);
-          assert.equal(await design.locator('.shop-menu-product-photo').count(),0,'Items without photos must not leave empty media blocks');
-          await limit(page,`menu-example-${template}`);
-          await page.screenshot({path:`design-menu-${template}-mobile.png`,fullPage:false});
-          await example.getByRole('button',{name:'المشروبات',exact:true}).click();
-          await example.getByRole('button',{name:'إغلاق النافذة'}).click();
-        }
-        await page.getByRole('button',{name:'صنف يدوي',exact:true}).click();
-        await page.getByLabel('اسم الصنف',{exact:true}).fill('قهوة الاختبار');
-        await page.getByLabel('السعر',{exact:true}).fill('37.35');
-        await page.getByLabel('صورة الصنف',{exact:true}).setInputFiles('public/menu-logo.webp');
-        await page.getByRole('button',{name:'حفظ المسودة',exact:true}).click();
-        await page.getByText('تم حفظ المسودة.',{exact:true}).waitFor();
-        assert.equal(menuPublication,null,'Saving a draft must not update the public menu');
-        await page.getByRole('radio',{name:/كروت بالصور/}).check();
-        await page.getByRole('button',{name:'معاينة',exact:true}).click();
-        const preview=page.getByRole('dialog');
-        await preview.locator('.shop-menu--photos').getByText('قهوة الاختبار',{exact:true}).waitFor();
-        await preview.getByRole('button',{name:'إغلاق النافذة'}).click();
-        await page.getByRole('button',{name:'نشر المنيو',exact:true}).click();
-        await page.getByRole('button',{name:'تأكيد النشر',exact:true}).click();
-        await page.getByText('تم نشر المنيو. نفس الرابط يعرض آخر نسخة للعملاء.',{exact:true}).waitFor();
+      if(title==='صورة المنيو'){
+        const upload=page.getByLabel('صورة المنيو',{exact:true});
+        const publish=async()=>{
+          await page.getByRole('button',{name:'نشر الصورة',exact:true}).click();
+          await page.getByRole('dialog',{name:'نشر صورة المنيو'}).getByRole('button',{name:'تأكيد النشر'}).click();
+          await page.getByText('تم نشر الصورة. نفس الرابط وكود QR يفتحوا آخر نسخة للعملاء.',{exact:true}).waitFor();
+        };
+        await upload.setInputFiles({name:'invalid.png',mimeType:'image/png',buffer:Buffer.from('not an image')});
+        await page.getByText('تعذر فتح الصورة. جرّب تختار ملف صورة سليم.').waitFor();
+        await upload.setInputFiles('public/menu-logo.webp');
+        const preview=page.getByRole('img',{name:'معاينة صورة المنيو'});
+        await preview.waitFor();
+        await preview.evaluate(img=>img.decode());
+        const initialImage=await preview.getAttribute('src');
+        assert.ok(initialImage?.startsWith('data:image/jpeg;base64,/9j/'));
+        assert.equal(menuDraft,null,'Preparing the image must not write a draft');
+        assert.equal(menuPublication,null,'The preview must remain private until confirmation');
+        assert.equal(await page.getByRole('button',{name:'مشاركة وQR',exact:true}).count(),0);
+        await limit(page,'menu-image-preview-360');
+        await publish();
+        assert.deepEqual(menuPublication.content,{image:initialImage});
         await page.getByRole('button',{name:'مشاركة وQR',exact:true}).click();
-        const sharing=page.getByRole('dialog');
+        const sharing=page.getByRole('dialog',{name:'مشاركة المنيو'});
         assert.equal(await sharing.getByLabel('رابط المنيو').inputValue(),'https://agouz.vercel.app/menu');
         const png=await sharing.getByRole('link',{name:'تنزيل PNG'}).getAttribute('href');
         const svg=await sharing.getByRole('link',{name:'تنزيل SVG'}).getAttribute('href');
         assert.ok(png?.startsWith('data:image/png;base64,iVBORw0KGgo'));
         assert.match(decodeURIComponent(svg??''),/<svg[\s\S]+<path/);
         await sharing.getByRole('button',{name:'إغلاق النافذة'}).click();
+
         const guest=await browser.newContext({viewport:{width:320,height:800}});
         try{
           await guest.route('**/rest/v1/agouz_menu_*?*',routeMenu);
@@ -187,22 +180,30 @@ export async function verifyDesign(){
             if(/\/(?:rest|auth)\/v1\//.test(request.url())&&!request.url().includes('/agouz_menu_publication?'))privateRequests.push(request.url());
           });
           await publicPage.goto(origin+'/menu');
-          await publicPage.locator('.shop-menu--photos').getByText('قهوة الاختبار',{exact:true}).waitFor();
-          const photo=publicPage.locator('.shop-menu-product-photo');
-          await photo.waitFor();
-          assert.ok((await photo.getAttribute('src'))?.startsWith('data:image/jpeg;base64,'));
-          assert.equal(await publicPage.locator('.agouz-login').count(),0);
+          const photo=publicPage.getByRole('img',{name:'صورة منيو بُن العجوز'});
+          await photo.evaluate(img=>img.decode());
+          assert.equal(await photo.getAttribute('src'),initialImage);
+          assert.equal(await publicPage.getByRole('link',{name:'تحميل الصورة'}).getAttribute('download'),'agouz-menu.jpg');
+          await upload.setInputFiles('public/logo.png');
+          await preview.waitFor();
+          const replacement=await preview.getAttribute('src');
+          assert.notEqual(replacement,initialImage);
+          assert.equal(menuPublication.content.image,initialImage);
+          await publish();
+          await publicPage.reload();
+          await photo.evaluate(img=>img.decode());
+          assert.equal(await photo.getAttribute('src'),replacement);
+          assert.equal(await publicPage.getByRole('heading',{name:'منيو بُن العجوز',exact:true}).count(),1);
           assert.deepEqual(privateRequests,[]);
           await limit(publicPage,'public-menu-320');
           await publicPage.screenshot({path:'design-public-menu-mobile.png',fullPage:true});
         }finally{await guest.close();}
         await page.setViewportSize({width:1440,height:900});
-        const livePreview=page.getByRole('complementary',{name:'معاينة مباشرة'});
-        await livePreview.getByText('قهوة الاختبار',{exact:true}).waitFor();
+        await page.getByRole('img',{name:'صورة المنيو المنشورة'}).waitFor();
         await limit(page,'menu-editor-desktop');
         await page.screenshot({path:'design-menu-editor-desktop-mobile.png',fullPage:false});
         await page.setViewportSize({width:360,height:800});
-        evidence.menu={draft:true,preview:true,publication:true,publicAccess:true,png:true,svg:true};
+        evidence.menu={preview:true,publication:true,replacement:true,publicAccess:true,png:true,svg:true};
         await limit(page,'menu-editor');
       }
       if(title==='تقارير يوم الكاشير'){

@@ -227,7 +227,7 @@ export default function App() {
 
   const [selectedFinancialPartnerId,setSelectedFinancialPartnerId]=useState('');
   const [historyEditing,setHistoryEditing]=useState(false);
-  const needsFullStore=!['home','sections','sales_invoices'].includes(activeScreen)||historyEditing;
+  const needsFullStore=!['home','sections','sales_invoices','shop_menu'].includes(activeScreen)||historyEditing;
   const cloud = useErpStore(needsFullStore);
   const { engine, member } = cloud;
   const dashboard=useDashboardRead(member?.userId,!!member&&canView(member)&&['home','sections','sales_invoices'].includes(activeScreen),reportPeriod);
@@ -1034,7 +1034,7 @@ export default function App() {
 
         {needsFullStore&&!cloud.fullReady?<ScreenLoading/>:<React.Fragment>
         {activeScreen==='users'&&<UsersScreen access={member} partners={partners} onBack={()=>setActiveScreen('sections')}/>}
-        {activeScreen==='shop_menu'&&member.isOwner&&<MenuEditor catalog={items} onBack={()=>setActiveScreen('sections')}/>}
+        {activeScreen==='shop_menu'&&member.isOwner&&<MenuEditor onBack={()=>setActiveScreen('sections')}/>}
         {/* ================= الشاشات الفرعية ================= */}
         {activeScreen === "purchase" && (
           <PurchaseScreen
