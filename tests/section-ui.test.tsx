@@ -43,7 +43,10 @@ it('reviews server-parsed paired reports, posts one day with a shortage, and rej
  fireEvent.change(screen.getByLabelText('نوع التقرير'),{target:{value:'items'}});
  await upload('items.csv');
  fireEvent.click(screen.getByRole('button',{name:'حفظ التقرير لهذا اليوم'}));await waitFor(()=>expect(attach).toHaveBeenCalledTimes(2));
- fireEvent.click(screen.getByRole('button',{name:'اعتماد اليوم وخصم الأصناف'}));await waitFor(()=>expect(approve).toHaveBeenCalledOnce());
+ fireEvent.click(screen.getByRole('button',{name:'مراجعة واعتماد اليوم'}));
+ expect(approve).not.toHaveBeenCalled();
+ expect(screen.getByText(/صنف رصيده هيبقى بالسالب/)).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'تأكيد الاعتماد وخصم الأصناف'}));await waitFor(()=>expect(approve).toHaveBeenCalledOnce());
  expect(live.items[0].stock).toBe(-1);expect(live.cashierDays[0].totalCost).toBe(200);
  expect(live.cashierDays[0].shortages).toEqual([{itemId:'raw',shortage:1}]);
  expect(salesForReports(live).reduce((sum,i)=>sum+i.totalAmount,0)).toBe(500);
@@ -84,7 +87,7 @@ it('requires a customer and offers only blends with a manual invoice selling pri
 it('shows a missing day report and blocks approval until the pair is complete',()=>{
  const state=attachCashierReport({...emptyStore,items:[raw]},'2026-11-03',{type:'financial',file:{fileName:'financial.xlsx',sha256:'a'.repeat(64),uploadedAt:'2026-11-03'},totalRevenue:100});
  render(<CashierDayScreen items={[raw]} days={state.cashierDays} onAttach={async()=>{}} onApprove={async()=>{}} onBack={()=>{}}/>);
- expect((screen.getByRole('button',{name:'اعتماد اليوم وخصم الأصناف'}) as HTMLButtonElement).disabled).toBe(true);
+ expect((screen.getByRole('button',{name:'مراجعة واعتماد اليوم'}) as HTMLButtonElement).disabled).toBe(true);
  expect(screen.getByText(/تُحدد عند الاعتماد/)).toBeTruthy();
 });
 it('creates a fully paid taxed purchase and exposes no new credit option',()=>{

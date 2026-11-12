@@ -26,6 +26,11 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(result['matches'], [{'itemId': 'raw', 'quantity': '2.5', 'requiresReview': False}])
         self.assertEqual(result['rowCount'], 1)
 
+    def test_ragged_rows_point_to_the_original_worksheet_row(self):
+        data = b"code,quantity\n\nR1,2,extra\n"
+        with self.assertRaisesRegex(InvalidReport, r"^ROW_COLUMNS_MISMATCH:3$"):
+            parse_report(data, "items.csv", "items")
+
     def test_real_xlsx_bytes_preserve_zero_and_do_not_execute_formulas(self):
         workbook = Workbook()
         sheet = workbook.active

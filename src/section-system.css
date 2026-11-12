@@ -76,3 +76,19 @@
 @media(max-width:359px) { .operation-toolbar > span { font-size:9px; }.operation-header { padding-inline:12px; }.modal-symbol { display:none; } }
 @media(prefers-reduced-motion:reduce) { .agouz-modal[open],.agouz-modal::backdrop { animation:none; }.agouz-modal button { transition:none; } }
 @media print { .operation-toolbar,.operation-actions,.modal-close { display:none; }.operation-header { background:#fff;color:#222;border-color:#ccc;box-shadow:none; }.operation-heading h1,.operation-header .operation-heading p { color:#222; }.agouz-modal { position:static;width:100%;max-height:none;box-shadow:none;border:0; }.modal-heading { background:#fff;color:#222;border-color:#bbb; }.modal-description,.modal-eyebrow { color:#444; }.modal-footer { background:#fff; }.modal-body { overflow:visible; }.agouz-modal::backdrop { background:transparent; } }
+
+.operation-surface { background: #fff; border: 1px solid #e2d8cb; border-radius: .9rem; padding: clamp(.75rem,2vw,1.15rem); min-width: 0; }
+.operation-surface h2 { margin-block-end: .5rem; font-size: 1rem; font-weight: 850; }
+.operation-fields { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,13rem),1fr)); align-items: start; gap: .65rem; }
+.operation-fields label { display: grid; gap: .25rem; color: #48362b; font-size: .8rem; font-weight: 750; }
+.operation-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 44px; padding: .5rem .85rem;
+  color: #312118; background: #e1be7b; border: 1px solid #ab8748; border-radius: .65rem; font-size: .82rem; font-weight: 850;
+}
+.operation-primary:disabled { opacity: .55; }
+.operation-primary:active:not(:disabled) { background: #d5ac63; }
+.operation-form-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .65rem; }
+.operation-form-footer dl { display: flex; flex-wrap: wrap; gap: .4rem 1rem; }
+.operation-form-footer dt { color: #655649; font-size: .73rem; }
+.operation-form-footer dd { color: #302116; font-size: .88rem; font-weight: 850; }
+@media (hover:hover) { .operation-primary:hover:not(:disabled) { background: #eaca90; } }

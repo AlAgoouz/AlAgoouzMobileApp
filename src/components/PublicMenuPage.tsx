@@ -6,6 +6,7 @@ export default function PublicMenuPage() {
   const [menu, setMenu] = useState<MenuPublication | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [attempt, setAttempt] = useState(0);
+  const [zoomed, setZoomed] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -24,9 +25,14 @@ export default function PublicMenuPage() {
     {menu && 'image' in menu ? <section className="shop-menu-image-page">
       <header>
         <h1>منيو بُن العجوز</h1>
-        <a href={menu.image} download="agouz-menu.jpg">تحميل الصورة</a>
+        <div className="shop-menu-image-actions">
+          <button type="button" aria-pressed={zoomed} onClick={() => setZoomed(value => !value)}>تكبير الصورة</button>
+          <a href={menu.image} download="agouz-menu.jpg">تحميل الصورة</a>
+        </div>
       </header>
-      <img src={menu.image} alt="صورة منيو بُن العجوز" />
+      <div className="shop-menu-image-viewport" data-zoomed={zoomed} tabIndex={zoomed ? 0 : undefined} role={zoomed ? 'region' : undefined} aria-label={zoomed ? 'صورة المنيو المكبرة' : undefined}>
+        <img src={menu.image} alt="صورة منيو بُن العجوز" />
+      </div>
     </section> : menu ? <ShopMenuView menu={menu} /> : <section className="shop-menu-notice">
       <span className="shop-menu-brand-mark"><img src={menuLogo} alt="" width="96" height="96" /></span>
       <span className="shop-menu-kicker">أصل المزاج</span>

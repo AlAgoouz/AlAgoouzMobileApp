@@ -21,3 +21,23 @@
 .record-state{padding:22px;border:1px dashed #b79b70;border-radius:18px;background:var(--surface-inset);font-size:13px;line-height:1.9;color:#624c30}.record-state button{min-height:44px;padding:8px 14px;border:1px solid #c9ac78;border-radius:12px;margin-top:10px}
 @media(min-width:768px){.record-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.record-workspace{padding-inline:22px}}
 @media print{.record-tabs,.record-search,.record-action{display:none}.record-card{break-inside:avoid;box-shadow:none}}
+
+.responsive-register { width: 100%; border-collapse: separate; border-spacing: 0 .28rem; color: #33271d; }
+.responsive-register th { font-size: .75rem; font-weight: 850; padding: .6rem .65rem; text-align: start; }
+.responsive-register td { background: #fff; border-block: 1px solid #e2d8cb; padding: .55rem .65rem; font-size: .79rem; overflow-wrap: anywhere; }
+.responsive-register td:first-child { border-inline-start: 1px solid #e2d8cb; border-start-start-radius: .65rem; border-end-start-radius: .65rem; }
+.responsive-register td:last-child { border-inline-end: 1px solid #e2d8cb; border-start-end-radius: .65rem; border-end-end-radius: .65rem; }
+.register-mobile-label { display: none; }
+.register-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
+@media (max-width: 767px) {
+  .responsive-register, .responsive-register tbody { display: block; }
+  .responsive-register thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .responsive-register tbody { display: grid; gap: .55rem; }
+  .responsive-register tbody tr {
+    display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .55rem .8rem;
+    background: #fff; border: 1px solid #e2d8cb; border-radius: .75rem; padding: .65rem;
+  }
+  .responsive-register tbody tr td { display: block; border: 0; padding: 0; }
+  .responsive-register td:first-child, .responsive-register td:last-child { grid-column: 1/-1; }
+  .register-mobile-label { display: block; color: #635447; font-size: .68rem; font-weight: 750; margin-block-end: .2rem; }
+}

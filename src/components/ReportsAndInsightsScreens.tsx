@@ -306,6 +306,7 @@ interface ProfitReportsProps {
   onSaveOpening?:(date:string,amount:number,reason:string)=>Promise<void>;
   period?:PeriodSelection;onPeriod?:(next:PeriodSelection)=>void;
   onInsights?:()=>void;
+  onOpenRecord?:(kind:"sale"|"expense",id:string)=>void;
   items: InventoryItem[];
   salesInvoices: ReportSale[];
   expenses: Expense[];
@@ -317,6 +318,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
   financeState,onSaveOpening,
   period,onPeriod,
   onInsights,
+  onOpenRecord,
   items,
   salesInvoices,
   expenses,
@@ -482,7 +484,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
 
             {/* كارت الرسم البياني اليومي */}
             {financeState&&<FinancialOpeningPanel state={financeState} range={range} onSave={onSaveOpening}/>}
-            <ReportExportButtons range={range}/><TrendChart points={periodReport.points}/><ReportEvidence sales={salesInvoices} expenses={expenses} range={range}/>
+            <ReportExportButtons range={range}/><TrendChart points={periodReport.points}/><ReportEvidence onOpenRecord={onOpenRecord} sales={salesInvoices} expenses={expenses} range={range}/>
 
           </>
         )}

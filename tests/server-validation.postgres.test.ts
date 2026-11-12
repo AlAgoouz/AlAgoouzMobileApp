@@ -106,6 +106,15 @@ it.skipIf(!active)('publishes only the approved menu snapshot without granting a
  expect(JSON.parse(anon(publication))).toEqual(draft);
  expect(ownerSave(3,updated,true)).toBe('4');
  expect(JSON.parse(anon(publication))).toEqual(updated);
+ const canRestore='select public.agouz_menu_restore_available()';
+ const restore=(revision:number)=>'select public.agouz_restore_menu_image('+revision+')';
+ expect(asUser(owner,canRestore).split('\n').at(-1)).toBe('t');
+ expect(asUser(employee,canRestore).split('\n').at(-1)).toBe('f');
+ expect(()=>anon(restore(4))).toThrow('permission denied');
+ expect(()=>asUser(employee,restore(4))).toThrow('OWNER_REQUIRED');
+ expect(()=>asUser(owner,restore(3))).toThrow('MENU_REVISION_CONFLICT');
+ expect(JSON.parse(sql("begin;set local request.jwt.claim.sub='"+owner+"';set local role authenticated;"+restore(4)+";commit;"))).toEqual({revision:5,content:draft});
+ expect(JSON.parse(anon(publication))).toEqual(draft);
 });
 it.skipIf(!active)('exports only the requested period with matching authoritative totals and no write effects',()=>{
  const today=businessDate(),invoices=[{...sale(),id:'in-range',date:today},{...sale(),id:'outside',date:'2020-01-01'}];

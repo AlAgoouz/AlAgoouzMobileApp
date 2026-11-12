@@ -114,25 +114,44 @@ export async function verifyDesign(){
     await page.screenshot({path:'design-account-desktop-mobile.png',fullPage:true});
     await page.setViewportSize({width:360,height:800});await limit(page,'account-mobile');await page.screenshot({path:'design-account-mobile.png',fullPage:true});
     await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
-    await page.getByRole('heading',{name:'كل شغلك، بخطوة واحدة'}).waitFor();
+    await page.getByRole('heading',{name:'الأقسام',exact:true}).waitFor();
     await page.screenshot({path:'design-sections-mobile.png',fullPage:true});
     for(const width of [320,360,430,768,1024,1440]){
       await page.setViewportSize({width,height:800});await limit(page,`sections-${width}`);evidence.widths.push(width);
     }
     await page.setViewportSize({width:360,height:800});
-    let menuDraft=null,menuPublication=null;
+    let menuDraft=null,menuPublication=null,previousMenu=null;
     const routeMenu=async route=>{
       const path=new URL(route.request().url()).pathname;
       if(path.endsWith('/agouz_menu_draft'))return route.fulfill({json:menuDraft?[menuDraft]:[]});
       if(path.endsWith('/agouz_menu_publication'))return route.fulfill({json:menuPublication?[menuPublication]:[]});
+      if(path.endsWith('/agouz_menu_restore_available'))return route.fulfill({json:!!previousMenu});
       const body=route.request().postDataJSON();
       assert.equal(body.p_expected_revision,menuDraft?.revision??0);
+      if(path.endsWith('/agouz_restore_menu_image')){
+        assert.ok(previousMenu);
+        const content=previousMenu;
+        previousMenu=menuPublication.content;
+        menuDraft={revision:body.p_expected_revision+1,content};
+        menuPublication={content,published_at:new Date().toISOString()};
+        return route.fulfill({json:menuDraft});
+      }
       menuDraft={revision:body.p_expected_revision+1,content:body.p_content};
-      if(body.p_publish)menuPublication={content:body.p_content,published_at:new Date().toISOString()};
+      if(body.p_publish){
+        previousMenu=menuPublication?.content??null;
+        menuPublication={content:body.p_content,published_at:new Date().toISOString()};
+      }
       return route.fulfill({json:menuDraft.revision});
     };
     await context.route('**/rest/v1/**/agouz_save_menu',routeMenu);
+    await context.route('**/rest/v1/**/agouz_menu_restore_available',routeMenu);
+    await context.route('**/rest/v1/**/agouz_restore_menu_image',routeMenu);
     await context.route('**/rest/v1/agouz_menu_*?*',routeMenu);
+    const group=page.getByRole('button',{name:'المبيعات والعملاء',exact:true});
+    await group.click();
+    assert.equal(await group.getAttribute('aria-expanded'),'false');
+    assert.equal(await page.locator('.section-tile').filter({has:page.locator('.section-tile-title',{hasText:'سجل البيع'})}).isVisible(),false);
+    await group.click();
     const titles=await page.locator('.section-tile-title').allTextContents();assert.equal(titles.length,19);
     for(const title of titles){
       await page.locator('.section-tile').filter({has:page.locator('.section-tile-title',{hasText:title})}).click();
@@ -193,6 +212,16 @@ export async function verifyDesign(){
           await publicPage.reload();
           await photo.evaluate(img=>img.decode());
           assert.equal(await photo.getAttribute('src'),replacement);
+          const zoom=publicPage.getByRole('button',{name:'تكبير الصورة',exact:true});
+          await zoom.click();
+          assert.equal(await zoom.getAttribute('aria-pressed'),'true');
+          assert.ok(await publicPage.getByRole('region',{name:'صورة المنيو المكبرة'}).evaluate(region=>region.scrollWidth>region.clientWidth));
+          await zoom.click();
+          await page.getByRole('button',{name:'استرجاع الصورة السابقة',exact:true}).click();
+          await page.getByRole('button',{name:'تأكيد الاسترجاع',exact:true}).click();
+          await page.getByText('تم استرجاع الصورة السابقة على نفس الرابط.',{exact:true}).waitFor();
+          await publicPage.reload();
+          assert.equal(await photo.getAttribute('src'),initialImage);
           assert.equal(await publicPage.getByRole('heading',{name:'منيو بُن العجوز',exact:true}).count(),1);
           assert.deepEqual(privateRequests,[]);
           await limit(publicPage,'public-menu-320');
@@ -203,7 +232,7 @@ export async function verifyDesign(){
         await limit(page,'menu-editor-desktop');
         await page.screenshot({path:'design-menu-editor-desktop-mobile.png',fullPage:false});
         await page.setViewportSize({width:360,height:800});
-        evidence.menu={preview:true,publication:true,replacement:true,publicAccess:true,png:true,svg:true};
+        evidence.menu={preview:true,publication:true,replacement:true,rollback:true,zoom:true,publicAccess:true,png:true,svg:true};
         await limit(page,'menu-editor');
       }
       if(title==='تقارير يوم الكاشير'){
@@ -235,14 +264,14 @@ export async function verifyDesign(){
         }
         await page.setViewportSize({width:360,height:800});
       }
-      if(title==='فواتير البيع'){
+      if(title==='سجل البيع'){
         await page.getByRole('button',{name:'السجل السابق',exact:true}).click();
         await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).first().waitFor();
         await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).first().click();
         await page.getByRole('dialog').waitFor();await page.getByRole('button',{name:'إغلاق النافذة',exact:true}).click();
       }
-      const addDialogs={'المنتجات والتسعير':'منتج جديد','إنتاج التوليفات':'جديد','الوصفات':'تعريف منتج بوصفة','مخزن البن':'إضافة','عملاء الجملة':'إضافة','الموردين':'إضافة','المستخدمين':'إضافة مستخدم','العمال والرواتب':'عامل جديد'};
-      if(addDialogs[title])await reviewModal(page,page.getByRole('button',{name:addDialogs[title],exact:true}),String(evidence.sections.length+1),title==='المستخدمين');
+      const addDialogs={'المنتجات والتسعير':'منتج جديد','إنتاج التوليفات':'جديد','الوصفات':'تعريف منتج بوصفة','مخزن البن':'إضافة','عملاء الجملة':'إضافة','الموردين':'إضافة','المستخدمين والصلاحيات':'إضافة مستخدم','العمال والرواتب':'عامل جديد'};
+      if(addDialogs[title])await reviewModal(page,page.getByRole('button',{name:addDialogs[title],exact:true}),String(evidence.sections.length+1),title==='المستخدمين والصلاحيات');
       if(title==='المصاريف'){
         await page.getByRole('button',{name:'حسابي',exact:true}).click();
         await page.getByRole('heading',{name:'حسابي',exact:true}).waitFor();
@@ -268,7 +297,7 @@ export async function verifyDesign(){
       evidence.sections.push(title);
       await page.screenshot({path:`design-section-${evidence.sections.length}-mobile.png`,fullPage:true});
       await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
-      await page.getByRole('heading',{name:'كل شغلك، بخطوة واحدة'}).waitFor();
+      await page.getByRole('heading',{name:'الأقسام',exact:true}).waitFor();
     }
     await page.setViewportSize({width:1440,height:900});
     await page.emulateMedia({reducedMotion:'no-preference'});

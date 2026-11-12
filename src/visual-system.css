@@ -92,3 +92,14 @@
 .trend-loss{stroke:var(--red)}
 .eyebrow{color:#80632c!important}
 @media(max-width:767px){.dashboard-heading{position:relative;margin-bottom:18px}.dashboard-heading time{position:absolute;inset-inline-end:0;top:0;background:transparent;border:0;padding:0;font-size:11px}.dashboard-heading>div>p:last-child:not(.eyebrow){display:none}.dashboard-heading h1{font-size:22px}.dashboard-heading h1 span{font-size:14px}.period-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.period-options button{white-space:normal;min-height:42px}.period-options button:last-child{grid-column:span 2}}
+
+.dashboard-attention h2 { font-size: .95rem; font-weight: 850; margin-block-end: .55rem; }
+.dashboard-attention .attention-grid { margin-block: 0 1.2rem; }
+.dashboard-attention .attention-card { min-height: 62px; }
+.dashboard-main-panels { display: grid; gap: 1rem; margin-block: 1rem; align-items: start; }
+.dashboard-extra { border-block-start: 1px solid var(--line); margin-block-start: 1.1rem; }
+.dashboard-extra summary { color: var(--espresso); font-size: .88rem; font-weight: 800; cursor: pointer; padding-block: .7rem; min-height: 44px; }
+.dashboard-extra .dashboard-panels { margin-block-start: .45rem; }
+@media (min-width: 950px) and (max-width: 1099px), (min-width: 1200px) {
+  .dashboard-main-panels { grid-template-columns: minmax(0,1.55fr) minmax(0,1fr); }
+}

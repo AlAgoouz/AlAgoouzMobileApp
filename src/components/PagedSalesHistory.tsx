@@ -3,6 +3,7 @@ import {FileText,Printer} from 'lucide-react';
 import {z} from 'zod';
 import {OperationHeader} from './OperationHeader';
 import {RecordPagination} from './RecordPagination';
+import {ResponsiveRegister} from './ResponsiveRegister';
 import {readRpc,salesPageSchema,type HistoryKind} from '../lib/readModels';
 import {CashierDayDetail} from './CashierDayDetail';
 import {invoiceDetail,cashierDayDetail} from '../lib/storeState';
@@ -12,7 +13,7 @@ const InvoiceReceiptModal=React.lazy(()=>import('./ReceiptAndStatementModals').t
 const number=z.number().finite();
 const summary=z.object({id:z.string(),invoiceNumber:z.string(),date:z.string(),customerName:z.string(),totalAmount:number,paidAmount:number,remainingAmount:number,netProfit:number,paymentMethod:z.string(),isReturned:z.boolean().optional(),itemsCount:number});
 const daySummary=z.object({id:z.string(),date:z.string(),status:z.enum(['pending','approved']),totalCost:number.optional(),financialReport:z.object({totalRevenue:number}).optional(),itemsCount:number});
-export function PagedSalesHistory({onBack,onManage}:{onBack:()=>void;onManage?:()=>void}){
+export function PagedSalesHistory({onBack,onManage,onOpenCustomer}:{onBack:()=>void;onManage?:()=>void;onOpenCustomer?:(id:string)=>void}){
  const [kind,setKind]=useState<HistoryKind|null>(null),[query,setQuery]=useState(''),[offset,setOffset]=useState(0),[revision,setRevision]=useState(0);
  const key=JSON.stringify([kind,query,offset,revision]);
  const [result,setResult]=useState<{key:string;data:z.infer<typeof salesPageSchema>|null;error:string}>({key:'',data:null,error:''});
@@ -32,9 +33,23 @@ export function PagedSalesHistory({onBack,onManage}:{onBack:()=>void;onManage?:(
   {error&&<div role="alert" className="record-state"><p>{error}</p><button onClick={()=>setRevision(n=>n+1)}>إعادة المحاولة</button></div>}
   {detailError&&<p role="alert" className="record-state">{detailError}</p>}
   {data&&<><RecordPagination page={offset/50} pages={Math.max(1,Math.ceil(data.total/50))} total={data.total} pageSize={50} setPage={page=>setOffset(page*50)}/>{!data.rows.length&&<p className="record-state">لا توجد سجلات مطابقة.</p>}
-  <div className="record-grid">{data.rows.map(value=>{if(data.kind==='cashier'){const day=daySummary.parse(value);return <article className="record-card" key={day.id}><div className="record-heading"><h2>{day.date}</h2><span className="record-badge">{day.status==='approved'?'معتمد':'بانتظار الاعتماد'}</span></div><p>الإيراد: {day.financialReport?money(day.financialReport.totalRevenue)+' ج.م':'التقرير المالي لم يصل'}</p><p>التكلفة: {day.status==='approved'&&day.totalCost!==undefined?money(day.totalCost)+' ج.م':'تُحدد عند الاعتماد'}</p><p>{day.itemsCount} سطر أصناف</p><button className="record-action" disabled={detailBusy} onClick={()=>void open(day.id,'cashier')}>تفاصيل اليوم والتكلفة</button></article>;}
-   const invoice=summary.parse(value);return <article className="record-card" key={invoice.id}><div className="record-heading"><div><p>#{invoice.invoiceNumber} · {invoice.date}</p><h2>{invoice.customerName}</h2></div><span className="record-badge">{invoice.isReturned?'مرتجعة':invoice.paymentMethod}</span></div><dl className="record-facts"><div><dt>الإجمالي</dt><dd>{money(invoice.totalAmount)} ج.م</dd></div><div><dt>المدفوع</dt><dd>{money(invoice.paidAmount)} ج.م</dd></div><div><dt>المتبقي</dt><dd>{money(invoice.remainingAmount)} ج.م</dd></div><div><dt>الأصناف</dt><dd>{invoice.itemsCount}</dd></div></dl><button className="record-action" disabled={detailBusy} onClick={()=>void open(invoice.id)}>طباعة / واتساب</button></article>;
-  })}</div></>}
-  </div>{dayDetail&&<CashierDayDetail day={dayDetail.day} names={dayDetail.names} onClose={()=>setDayDetail(null)}/>} {receipt&&<React.Suspense fallback={<p role="status">جارٍ فتح الفاتورة…</p>}><InvoiceReceiptModal invoice={receipt.invoice} customerPhone={receipt.phone} onClose={()=>setReceipt(null)}/></React.Suspense>}
+  {data.rows.length>0&&(data.kind==='cashier'
+    ? <ResponsiveRegister label="أيام الكاشير" rows={data.rows.map(row=>daySummary.parse(row))} columns={[
+      {title:'اليوم',render:day=><time dateTime={day.date}>{day.date}</time>},
+      {title:'الإيراد',render:day=>day.financialReport?money(day.financialReport.totalRevenue)+' ج.م':'التقرير المالي لم يصل'},
+      {title:'التكلفة',render:day=>day.status==='approved'&&day.totalCost!==undefined?money(day.totalCost)+' ج.م':'تُحدد عند الاعتماد'},
+      {title:'الحالة',render:day=><span className="record-badge">{day.status==='approved'?'معتمد':'بانتظار الاعتماد'}</span>},
+      {title:'التفاصيل',render:day=><button type="button" className="record-action" disabled={detailBusy} onClick={()=>void open(day.id,'cashier')}>تفاصيل اليوم والتكلفة</button>},
+    ]}/>
+    : <ResponsiveRegister label="فواتير البيع" rows={data.rows.map(row=>summary.parse(row))} columns={[
+      {title:'الفاتورة',render:invoice=><><b>{invoice.customerName}</b><p dir="ltr">#{invoice.invoiceNumber}</p></>},
+      {title:'التاريخ',render:invoice=><time dateTime={invoice.date}>{invoice.date}</time>},
+      {title:'الإجمالي',render:invoice=><b>{money(invoice.totalAmount)} ج.م</b>},
+      {title:'المدفوع',render:invoice=>money(invoice.paidAmount)+' ج.م'},
+      {title:'المتبقي',render:invoice=>money(invoice.remainingAmount)+' ج.م'},
+      {title:'الحالة',render:invoice=><span className="record-badge">{invoice.isReturned?'مرتجعة':invoice.paymentMethod}</span>},
+      {title:'التفاصيل',render:invoice=><button type="button" className="record-action" disabled={detailBusy} onClick={()=>void open(invoice.id)}>طباعة / واتساب</button>},
+    ]}/>)}</>}
+  </div>{dayDetail&&<CashierDayDetail day={dayDetail.day} names={dayDetail.names} onClose={()=>setDayDetail(null)}/>} {receipt&&<React.Suspense fallback={<p role="status">جارٍ فتح الفاتورة…</p>}><InvoiceReceiptModal invoice={receipt.invoice} customerPhone={receipt.phone} onOpenCustomer={onOpenCustomer} onClose={()=>setReceipt(null)}/></React.Suspense>}
  </main>;
 }

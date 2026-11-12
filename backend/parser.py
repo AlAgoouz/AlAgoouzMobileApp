@@ -163,9 +163,9 @@ def parse_report(data: bytes, filename: str, kind: str, catalog=None, expected_d
         if any(len(c) > 120 for c in columns) or len({normalize(c) for c in columns}) != len(columns):
             raise InvalidReport("AMBIGUOUS_COLUMNS")
         rows = []
-        for values in matrix[header_index + 1:]:
+        for offset, values in enumerate(matrix[header_index + 1:], start=header_index + 1):
             if len(values) > len(columns):
-                raise InvalidReport("ROW_COLUMNS_MISMATCH")
+                raise InvalidReport(f"ROW_COLUMNS_MISMATCH:{row_numbers[offset]}")
             rows.append({key: values[index] if index < len(values) else "" for index, key in enumerate(columns)})
     if not rows or len(rows) > MAX_ROWS:
         raise InvalidReport("REPORT_SIZE_LIMIT")
