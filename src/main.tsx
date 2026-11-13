@@ -6,6 +6,7 @@ import "./visual-system.css";
 import "./card-surfaces.css";
 import "./section-system.css";
 import "./record-system.css";
+import "./interaction-design.css";
 import {ScreenLoading} from './components/ScreenLoading';
 
 const Screen = window.location.pathname.replace(/\/$/, '') === '/menu'

@@ -13,8 +13,12 @@ const InvoiceReceiptModal=React.lazy(()=>import('./ReceiptAndStatementModals').t
 const number=z.number().finite();
 const summary=z.object({id:z.string(),invoiceNumber:z.string(),date:z.string(),customerName:z.string(),totalAmount:number,paidAmount:number,remainingAmount:number,netProfit:number,paymentMethod:z.string(),isReturned:z.boolean().optional(),itemsCount:number});
 const daySummary=z.object({id:z.string(),date:z.string(),status:z.enum(['pending','approved']),totalCost:number.optional(),financialReport:z.object({totalRevenue:number}).optional(),itemsCount:number});
-export function PagedSalesHistory({onBack,onManage,onOpenCustomer}:{onBack:()=>void;onManage?:()=>void;onOpenCustomer?:(id:string)=>void}){
- const [kind,setKind]=useState<HistoryKind|null>(null),[query,setQuery]=useState(''),[offset,setOffset]=useState(0),[revision,setRevision]=useState(0);
+export type SalesHistoryView = {kind:HistoryKind|null;query:string;offset:number};
+export const initialSalesHistoryView:SalesHistoryView={kind:null,query:'',offset:0};
+export function PagedSalesHistory({onBack,onManage,onOpenCustomer,view=initialSalesHistoryView,onViewChange}:{onBack:()=>void;onManage?:()=>void;onOpenCustomer?:(id:string)=>void;view?:SalesHistoryView;onViewChange?:(view:SalesHistoryView)=>void}){
+ const [localView,setLocalView]=useState(view),[revision,setRevision]=useState(0);
+ const {kind,query,offset}=onViewChange?view:localView;
+ const change=(patch:Partial<SalesHistoryView>)=>(onViewChange??setLocalView)({kind,query,offset,...patch});
  const key=JSON.stringify([kind,query,offset,revision]);
  const [result,setResult]=useState<{key:string;data:z.infer<typeof salesPageSchema>|null;error:string}>({key:'',data:null,error:''});
  const [dayDetail,setDayDetail]=useState<{day:CashierDay;names:Record<string,string>}|null>(null);
@@ -27,12 +31,12 @@ export function PagedSalesHistory({onBack,onManage,onOpenCustomer}:{onBack:()=>v
  const open=async(id:string,kind:'invoice'|'cashier'='invoice')=>{if(detailBusy)return;setDetailBusy(true);setDetailError('');try{const value=await readRpc('bon_erp_sale_detail',{p_id:id,p_kind:kind});if(!value)throw Error();if(kind==='cashier')setDayDetail({day:cashierDayDetail(value),names:z.record(z.string(),z.string()).parse((value as Record<string,unknown>).itemNames??{})});else setReceipt({invoice:invoiceDetail(value),phone:z.object({customerPhone:z.string().optional()}).parse(value).customerPhone??''});}catch{setDetailError('تعذر تحميل تفاصيل الفاتورة. أعد المحاولة.');}finally{setDetailBusy(false);}};
  return <main dir="rtl" className="section-records pb-24">
   <OperationHeader title="سجل المبيعات" description="بحث في السجل كاملًا، مع تحميل الصفحة المطلوبة وتفاصيل الفاتورة عند فتحها." icon={FileText} onBack={onBack}><button onClick={()=>window.print()} aria-label="طباعة الصفحة الحالية"><Printer size={18}/></button>{onManage&&<button onClick={onManage}>إدارة المرتجعات</button>}</OperationHeader>
-  <div className="record-workspace"><nav className="record-tabs" aria-label="نوع سجل المبيعات">{([{id:'wholesale',label:'فواتير الجملة'},{id:'cashier',label:'مبيعات أيام الكاشير'},{id:'legacy',label:'السجل السابق'}] as const).map(tab=><button type="button" key={tab.id} aria-pressed={selected===tab.id} onClick={()=>{setKind(tab.id);setOffset(0);}}>{tab.label}</button>)}</nav>
-  <label className="record-search">البحث في السجل<input aria-label="بحث في كل الفواتير" maxLength={150} placeholder="رقم الفاتورة أو العميل أو التاريخ أو الصنف" value={query} onChange={e=>{setQuery(e.target.value);setOffset(0);}}/></label>
+  <div className="record-workspace"><nav className="record-tabs" aria-label="نوع سجل المبيعات">{([{id:'wholesale',label:'فواتير الجملة'},{id:'cashier',label:'مبيعات أيام الكاشير'},{id:'legacy',label:'السجل السابق'}] as const).map(tab=><button type="button" key={tab.id} aria-pressed={selected===tab.id} onClick={()=>{change({kind:tab.id,offset:0});}}>{tab.label}</button>)}</nav>
+  <label className="record-search">البحث في السجل<input aria-label="بحث في كل الفواتير" maxLength={150} placeholder="رقم الفاتورة أو العميل أو التاريخ أو الصنف" value={query} onChange={e=>{change({query:e.target.value,offset:0});}}/></label>
   {!data&&!error&&<p role="status" className="record-state">جارٍ تحميل صفحة السجل…</p>}
   {error&&<div role="alert" className="record-state"><p>{error}</p><button onClick={()=>setRevision(n=>n+1)}>إعادة المحاولة</button></div>}
   {detailError&&<p role="alert" className="record-state">{detailError}</p>}
-  {data&&<><RecordPagination page={offset/50} pages={Math.max(1,Math.ceil(data.total/50))} total={data.total} pageSize={50} setPage={page=>setOffset(page*50)}/>{!data.rows.length&&<p className="record-state">لا توجد سجلات مطابقة.</p>}
+  {data&&<><RecordPagination page={offset/50} pages={Math.max(1,Math.ceil(data.total/50))} total={data.total} pageSize={50} setPage={page=>change({offset:page*50})}/>{!data.rows.length&&<p className="record-state">لا توجد سجلات مطابقة.</p>}
   {data.rows.length>0&&(data.kind==='cashier'
     ? <ResponsiveRegister label="أيام الكاشير" rows={data.rows.map(row=>daySummary.parse(row))} columns={[
       {title:'اليوم',render:day=><time dateTime={day.date}>{day.date}</time>},

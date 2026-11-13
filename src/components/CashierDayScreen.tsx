@@ -1,5 +1,5 @@
 import {unitLabel as displayUnit} from '../lib/units';
-import React,{useState,useMemo} from 'react';
+import React,{useState,useMemo,useRef} from 'react';
 import {FolderSync} from 'lucide-react';
 import type {ImportJob} from '../lib/importJobs';
 import {queuedRows} from '../lib/importJobs';
@@ -26,6 +26,12 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
  const matchPage=useRecordPage(parsed,preview?.sha256);
  const choose=(row:number,change:Partial<CashierReview[number]>)=>{if(!preview)return;setReview({hash:preview.sha256,choices:{...choices,[row]:{itemId:choices[row]?.itemId??'',unit:choices[row]?.unit??'',...change}}});};
  const [historySearch,setHistorySearch]=useState('');
+ const [uploadTarget,setUploadTarget]=useState<{date:string;kind:'financial'|'items';key:number}>();
+ const uploadSection=useRef<HTMLDivElement>(null);
+ function openUpload(day:string,kind:'financial'|'items'){
+  setUploadTarget(current=>({date:day,kind,key:(current?.key??0)+1}));
+  uploadSection.current?.scrollIntoView?.({block:'start'});
+ }
  const [approvalId,setApprovalId]=useState<string>();
  const approval=days.find(day=>day.id===approvalId);
  const history=useMemo(()=>[...days].filter(d=>d.date.includes(historySearch)).sort((a,b)=>b.date.localeCompare(a.date)),[days,historySearch]);
@@ -52,7 +58,7 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
   <OperationHeader title="تقارير يوم الكاشير" description="تقرير مالي + تقرير أصناف، لحساب يومك بدقة." icon={FolderSync} onBack={onBack} busy={busy}/>
   <p className="operation-note">تقرير المبيعات يسجل الإيراد والرصيد المالي فور حفظه. تقرير الأصناف لنفس اليوم يكمل التكلفة والربح ويخصم المخزون عند الاعتماد؛ لا يكرر الإيراد.</p>
   {!!queued.length&&<section className="border rounded-xl p-3"><h2 className="font-bold">ملفات وصلت من جهاز الكاشير وتنتظر المراجعة</h2><p>افتح الملف لمراجعته.</p>{queued.some(q=>!q.report_kind)&&<label>نوع الملف القديم<select value={type} onChange={e=>{setType(e.target.value as typeof type);setPreview(null);}}><option value="financial">تقرير مالي</option><option value="items">تقرير أصناف</option></select></label>}{queued.map(q=><button key={q.id} disabled={busy} className="block p-2 underline" onClick={()=>void act(async()=>{const rows=q.raw_rows??await queuedRows(q.id);setDate(q.sale_date);if(q.report_kind)setType(q.report_kind);setPreview({name:q.file_name,sha256:q.content_hash,rows,sourceQueueId:q.id});})}>{q.sale_date} — {q.file_name}</button>)}</section>}
-  <ImportJobsPanel onReview={job=>{if(!job.result)return;setDate(job.sale_date);setType(job.kind);setPreview({name:job.file_name,sha256:job.result.sha256,rows:job.result.rows,sourceQueueId:job.queue_id??undefined,suggestions:job.result.suggestions});}}/>
+  <div className="cashier-upload-anchor" ref={uploadSection}><ImportJobsPanel key={uploadTarget?.key} defaultDate={uploadTarget?.date} defaultKind={uploadTarget?.kind} onReview={job=>{if(!job.result)return;setDate(job.sale_date);setType(job.kind);setPreview({name:job.file_name,sha256:job.result.sha256,rows:job.result.rows,sourceQueueId:job.queue_id??undefined,suggestions:job.result.suggestions});}}/></div>
   {preview&&<p>يوم العمل: {date} — {type==='financial'?'تقرير مالي':'تقرير أصناف'}</p>}
   {preview&&<section className="border rounded-xl p-3 space-y-3"><h2 className="font-bold">مراجعة {preview.name}</h2>
    {type==='financial'?<>
@@ -64,7 +70,16 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
   {!approval&&error&&<p role="alert" className="text-red-700">{error}</p>}
   <h2 className="font-bold">الأيام المسجلة</h2>
   <label className="block">بحث بتاريخ اليوم<input className={input} placeholder="YYYY-MM-DD" value={historySearch} onChange={e=>setHistorySearch(e.target.value)}/></label><RecordPagination {...page}/>
-  {page.visible.map(d=><article key={d.id} className="border rounded-xl bg-white p-3 space-y-2"><h3 className="font-bold">{d.date} — {d.status==='approved'?'معتمد':'بانتظار الاعتماد'}</h3><p>المالي: {d.financialReport?'مرفوع':'ناقص'} — الأصناف: {d.itemsReport?'مرفوع':'ناقص'}</p><p>الإيراد: {d.financialReport?.totalRevenue.toLocaleString('ar-EG')??'لم يحدد'}؛ التكلفة: {d.status==='approved'?d.totalCost?.toLocaleString('ar-EG'):'تُحدد عند الاعتماد'}</p>
+  {page.visible.map(d=><article key={d.id} className="border rounded-xl bg-white p-3 space-y-2"><h3 className="font-bold">{d.date} — {d.status==='approved'?'معتمد':'بانتظار الاعتماد'}</h3><div className="cashier-report-pair">
+     {(['financial','items'] as const).map(kind=>{
+       const report=kind==='financial'?d.financialReport:d.itemsReport;
+       const label=kind==='financial'?'التقرير المالي':'تقرير الأصناف';
+       return <div key={kind} className="cashier-report-slot" data-ready={!!report}>
+         <b>{label}</b>
+         {report?<span>{report.fileName}</span>:<button type="button" className="record-action" disabled={busy} onClick={()=>openUpload(d.date,kind)}>رفع {label}</button>}
+       </div>;
+     })}
+   </div><p>الإيراد: {d.financialReport?.totalRevenue.toLocaleString('ar-EG')??'لم يحدد'}؛ التكلفة: {d.status==='approved'?d.totalCost?.toLocaleString('ar-EG'):'تُحدد عند الاعتماد'}</p>
    {d.status==='pending'&&<button disabled={busy||!d.financialReport||!d.itemsReport} className="operation-primary" onClick={()=>{setError('');setApprovalId(d.id);}}>مراجعة واعتماد اليوم</button>}
    {!!d.shortages?.length&&<div className="text-red-700"><p>عجز مخزون بعد الاعتماد:</p>{d.shortages.map(s=><p key={s.itemId}>{items.find(i=>i.id===s.itemId)?.name??s.itemId}: {s.shortage}</p>)}</div>}
   </article>)}

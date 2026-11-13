@@ -14,8 +14,8 @@ export function DashboardScreen({model,error,onRetry,period,onPeriod,name,onNavi
  const [hide,setHide]=useState(false);
  const range=reportRange(period);
  const report=useMemo(()=>model?({...model.report,points:reportPoints(model.report.entries,range,model.report.firstDate,model.report.lastDate)}):null,[model,range.from,range.to]);
- const intro=<>  <header className="dashboard-heading"><div><p className="eyebrow">بُن العجوز / مساحة العمل</p><h1>أهلًا {name}<span>، نظرة أوضح على محلك.</span></h1><p>المبيعات والنتائج وما يحتاج انتباهك في مكان واحد.</p></div><time dateTime={businessDate()}>{new Date(businessDate()+'T12:00:00').toLocaleDateString('ar-EG',{weekday:'long',day:'numeric',month:'long'})}</time></header>
-</>;
+ const today=businessDate();
+ const intro=<header className="dashboard-heading"><div><h1>أهلًا {name}</h1></div><time dateTime={today}>{new Date(today+'T12:00:00').toLocaleDateString('ar-EG',{weekday:'long',day:'numeric',month:'long'})}</time></header>;
  if(!model||!report)return <main className="dashboard-screen" dir="rtl">{intro}  <div key="dashboard-tools" className="dashboard-tools"><PeriodSelector value={period} onChange={onPeriod}/><QuickItemSearch onNavigate={onNavigate}/></div>{error?<div role="alert" className="record-state"><p>{error}</p><button onClick={onRetry}>إعادة المحاولة</button></div>:<ScreenLoading label="جارٍ تحميل ملخص المحل…"/>}</main>;
  const {balances,pending,approved,channels,products,queued}=model;
  const display=(v:number|null,privateValue=false)=>hide&&privateValue?'••••':v===null?'غير مكتمل':money(v);
@@ -27,8 +27,8 @@ export function DashboardScreen({model,error,onRetry,period,onPeriod,name,onNavi
   {intro}
   {error&&<p role="alert" className="record-state">{error} <button onClick={onRetry}>إعادة المحاولة</button></p>}
   <section className="dashboard-attention" aria-labelledby="dashboard-attention-title"><h2 id="dashboard-attention-title">محتاج متابعة</h2><div className="attention-grid">
-   <button type="button" className="attention-card" onClick={()=>onNavigate('cashier_sync')}><span className="attention-icon"><FolderSync size={21}/></span><span><b>مراجعة الكاشير</b><small>{queued} ملفات واردة · {pending} أيام غير معتمدة</small></span><strong>{queued+pending}</strong><ChevronLeft size={17}/></button>
-   <button type="button" className={`attention-card ${balances.shortages?'attention-warning':''}`} onClick={()=>onNavigate('shortages')}><span className="attention-icon"><AlertTriangle size={21}/></span><span><b>مراجعة المخزون</b><small>عجز أو رصيد وصل للحد الأدنى</small></span><strong>{balances.shortages}</strong><ChevronLeft size={17}/></button>
+   <button type="button" className="attention-card" onClick={()=>onNavigate('cashier_sync')}><span className="attention-icon"><FolderSync size={21}/></span><span><b>مراجعة الكاشير</b><small>{queued} ملفات واردة · {pending} أيام غير معتمدة</small></span><strong>{(queued+pending).toLocaleString('ar-EG')}</strong><ChevronLeft size={17}/></button>
+   <button type="button" className={`attention-card ${balances.shortages?'attention-warning':''}`} onClick={()=>onNavigate('shortages')}><span className="attention-icon"><AlertTriangle size={21}/></span><span><b>مراجعة المخزون</b><small>عجز أو رصيد وصل للحد الأدنى</small></span><strong>{balances.shortages.toLocaleString('ar-EG')}</strong><ChevronLeft size={17}/></button>
    <button type="button" className="attention-card" onClick={()=>onNavigate('customers')}><span className="attention-icon"><Users size={21}/></span><span><b>مديونيات العملاء الحالية</b><small>رصيد الآن · فتح كشف الحساب والتحصيل</small></span><strong>{money(balances.debts)}<small> ج.م</small></strong><ChevronLeft size={17}/></button>
   </div></section>
   <div key="dashboard-tools" className="dashboard-tools"><PeriodSelector value={period} onChange={onPeriod}/><QuickItemSearch onNavigate={onNavigate}/></div>

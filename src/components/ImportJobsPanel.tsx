@@ -3,8 +3,8 @@ import {businessDate} from '../lib/dates';
 import {inspectCashierFile} from '../lib/cashierReportHeader';
 import {cancelImport,enqueueImport,importError,listImports,readImport,uploadImport,type ImportJob,type ImportKind} from '../lib/importJobs';
 const labels:Record<ImportJob['status'],string>={uploading:'بانتظار اكتمال الرفع',queued:'في انتظار المعالجة',processing:'جارٍ قراءة الملف',ready:'جاهز للمراجعة',failed:'يحتاج متابعة',cancelled:'ملغى'};
-export function ImportJobsPanel({onReview}:{onReview?:(job:ImportJob)=>void}){
- const [date,setDate]=useState(businessDate()),[kind,setKind]=useState<ImportKind>('financial'),[file,setFile]=useState<File|null>(null);
+export function ImportJobsPanel({onReview,defaultDate,defaultKind}:{onReview?:(job:ImportJob)=>void;defaultDate?:string;defaultKind?:ImportKind}){
+ const [date,setDate]=useState(defaultDate??businessDate()),[kind,setKind]=useState<ImportKind>(defaultKind??'financial'),[file,setFile]=useState<File|null>(null);
  const [jobs,setJobs]=useState<ImportJob[]|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [refreshError,setRefreshError]=useState('');
  const [inspecting,setInspecting]=useState(false),[sourceDate,setSourceDate]=useState<string|null>(null),[sourceKind,setSourceKind]=useState<ImportKind|null>(null);
