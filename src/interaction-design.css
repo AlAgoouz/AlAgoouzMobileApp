@@ -89,3 +89,7 @@
 .cashier-report-slot[data-ready=true] { background: #edf6ef; border-color: #afc8b5; }
 .cashier-report-slot span { font-size: .78rem; }
 .record-badge { border-color: var(--line); }
+@media (min-width: 1100px) {
+  .workspace-sidebar { background: var(--espresso); }
+  .workspace-sidebar button[aria-current=page] { background: var(--action-gold); color: var(--espresso); }
+}

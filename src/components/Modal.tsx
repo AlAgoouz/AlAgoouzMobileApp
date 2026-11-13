@@ -21,6 +21,11 @@ export function Modal({title,description,onClose,busy=false,dismissible=true,wid
   };
  },[]);
  const keepFocus=(event:React.KeyboardEvent<HTMLDialogElement>)=>{
+  if(event.key==='Escape'&&layout==='side'&&event.target instanceof HTMLInputElement&&event.target.type==='search'){
+   event.preventDefault();
+   if(dismissible&&!busy)onClose?.();
+   return;
+  }
   if(event.key!=='Tab')return;
   const dialog=ref.current!;
   const controls=Array.from(dialog.querySelectorAll<HTMLElement>('button,input,select,textarea,a[href],[tabindex]')).filter(element=>element.tabIndex>=0&&!element.matches(':disabled')&&element.getClientRects().length>0);
