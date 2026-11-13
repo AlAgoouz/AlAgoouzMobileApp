@@ -18,6 +18,7 @@ import {initialPeriod} from './lib/reporting';
 import {canView,canWrite,writePermissions} from './lib/userAccess';
 import {SectionsHub} from './components/SectionsHub';
 import type {QueuedCashierReport} from './components/CashierDayScreen';
+import {cashierCostDetails,correctedCashierCost} from './lib/cashierCosts';
 import {attachCashierReport,approveCashierDay,salesForReports} from './lib/cashierDays';
 import {isStockItem} from './lib/itemPolicy';
 import React, { useState, useEffect, useMemo, useRef } from "react";
@@ -251,7 +252,11 @@ export default function App() {
   const expenseDetail=expenseDetailId?expenses.find(expense=>expense.id===expenseDetailId):undefined;
   const cashierDetail=cashierDetailId?cashierDays.find(day=>day.id===cashierDetailId):undefined;
   const movementItem=movementId?items.find(item=>item.id===movementId):undefined;
-  const reportSales=useMemo(()=>salesForReports({salesInvoices,cashierDays}),[salesInvoices,cashierDays]);
+  const reportSales=useMemo(()=>salesForReports({salesInvoices,cashierDays,purchaseInvoices}),[salesInvoices,cashierDays,purchaseInvoices]);
+  const cashierCosts=useMemo(()=>cashierCostDetails(cashierDays,purchaseInvoices),[cashierDays,purchaseInvoices]);
+  const cashierDaysForDisplay=useMemo(()=>cashierDays.map(day=>({
+    ...day,correctedTotalCost:correctedCashierCost(day,cashierCosts.get(day.id)),
+  })),[cashierDays,cashierCosts]);
   const linkedFinancialPartner=partners.find(p=>p.id===loggedPartnerId);
   const financialPartner=partners.find(p=>p.id===(selectedFinancialPartnerId||loggedPartnerId));
   const currentPartner={...(linkedFinancialPartner??unloadedPartner),id:linkedFinancialPartner?.id??'user:'+member?.userId,name:member?.displayName||linkedFinancialPartner?.name||'مستخدم',username:member?.username??'',role:member?.isOwner?'مالك النظام':'مستخدم النظام'};
@@ -1141,7 +1146,7 @@ export default function App() {
           setActiveScreen('home');
           return true;
         }}/>}
-        {activeScreen === 'cashier_sync' && <CashierDayScreen items={items} days={cashierDays} queued={queuedReports} onBack={()=>setActiveScreen('home')} onAttach={async(date,report)=>{engine.replace(attachCashierReport(engine.state,date,report),report.file.sourceQueueId);await confirmSave();if(report.file.sourceQueueId)setQueuedReports(rows=>rows.filter(r=>r.id!==report.file.sourceQueueId));}} onApprove={async(id)=>{engine.replace(approveCashierDay(engine.state,id,currentPartner.name));await confirmSave();}}/>}
+        {activeScreen === 'cashier_sync' && <CashierDayScreen items={items} days={cashierDaysForDisplay} queued={queuedReports} onBack={()=>setActiveScreen('home')} onAttach={async(date,report)=>{engine.replace(attachCashierReport(engine.state,date,report),report.file.sourceQueueId);await confirmSave();if(report.file.sourceQueueId)setQueuedReports(rows=>rows.filter(r=>r.id!==report.file.sourceQueueId));}} onApprove={async(id)=>{engine.replace(approveCashierDay(engine.state,id,currentPartner.name));await confirmSave();}}/>}
 
         {activeScreen === "products" && (
           <ProductsCatalogScreen onOpenMovement={setMovementId}
@@ -1473,7 +1478,7 @@ export default function App() {
 
         {activeScreen === "sales_invoices" && (!historyEditing?<PagedSalesHistory view={salesHistoryView} onViewChange={setSalesHistoryView} onOpenCustomer={openCustomer} onBack={()=>setActiveScreen('home')} onManage={canWrite(member,'sales')?()=>setHistoryEditing(true):undefined}/>:(
           <SalesInvoicesAndReturnsScreen
-            cashierDays={cashierDays}
+            cashierDays={cashierDaysForDisplay}
             salesInvoices={salesInvoices}
             customers={customers}
             onReturnInvoice={async (invId) => {
@@ -1721,7 +1726,8 @@ export default function App() {
         )}
 
         {expenseDetail&&<ExpenseRecordDetail expense={expenseDetail} onClose={()=>setExpenseDetailId(undefined)}/>}
-        {cashierDetail&&<CashierDayDetail day={cashierDetail} names={Object.fromEntries(items.map(item=>[item.id,item.name]))} onClose={()=>setCashierDetailId(undefined)}/>}
+        {cashierDetail&&<CashierDayDetail day={{...cashierDetail,correctedTotalCost:correctedCashierCost(cashierDetail,cashierCosts.get(cashierDetail.id)),
+          costCorrections:cashierCosts.get(cashierDetail.id)?.map(({line,...detail})=>({itemId:line.itemId,...detail}))}} names={Object.fromEntries(items.map(item=>[item.id,item.name]))} onClose={()=>setCashierDetailId(undefined)}/>}
         {movementItem&&<StockMovementModal item={movementItem} documents={cloud.state} onClose={()=>setMovementId(undefined)}/> }
         {receiptModalInvoice && (
           <InvoiceReceiptModal

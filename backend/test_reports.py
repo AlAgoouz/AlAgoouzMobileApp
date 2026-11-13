@@ -96,6 +96,15 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(len(book['الأيام المسجلة']._charts),1)
         self.assertEqual(book['حصص الشركاء']['C2'].value,14.13)
 
+    def test_uses_the_corrected_cashier_cost_in_an_export_for_the_original_day(self):
+        source,summary=fixture()
+        source['cashier_days']=source['cashier_days'][:1]
+        source['cashier_days'][0]['correctedTotalCost']=Decimal('3.00')
+        summary['report'].update(count=2,revenue=Decimal('17.35'),cost=Decimal('5.11'),
+                                 gross=Decimal('12.24'),spent=Decimal('0.10'),net=Decimal('12.14'),pendingCostDays=0)
+        report=prepare_report(source,summary,'2026-11-04','2026-11-04')
+        self.assertEqual(report.daily,[dict(date='2026-11-04',sales=Decimal('17.35'),profit=Decimal('12.14'))])
+
     def test_arabic_pdf_and_multipage_invoice_use_fixed_local_resources(self):
         from pdf_reports import initialize_pdf, report_pdf, invoice_pdf
         try: initialize_pdf()

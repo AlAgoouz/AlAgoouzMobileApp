@@ -79,7 +79,7 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
          {report?<span>{report.fileName}</span>:<button type="button" className="record-action" disabled={busy} onClick={()=>openUpload(d.date,kind)}>رفع {label}</button>}
        </div>;
      })}
-   </div><p>الإيراد: {d.financialReport?.totalRevenue.toLocaleString('ar-EG')??'لم يحدد'}؛ التكلفة: {d.status==='approved'?d.totalCost?.toLocaleString('ar-EG'):'تُحدد عند الاعتماد'}</p>
+   </div><p>الإيراد: {d.financialReport?.totalRevenue.toLocaleString('ar-EG')??'لم يحدد'}؛ التكلفة: {d.status==='approved'?(d.correctedTotalCost??d.totalCost)?.toLocaleString('ar-EG'):'تُحدد عند الاعتماد'}</p>
    {d.status==='pending'&&<button disabled={busy||!d.financialReport||!d.itemsReport} className="operation-primary" onClick={()=>{setError('');setApprovalId(d.id);}}>مراجعة واعتماد اليوم</button>}
    {!!d.shortages?.length&&<div className="text-red-700"><p>عجز مخزون بعد الاعتماد:</p>{d.shortages.map(s=><p key={s.itemId}>{items.find(i=>i.id===s.itemId)?.name??s.itemId}: {s.shortage}</p>)}</div>}
   </article>)}

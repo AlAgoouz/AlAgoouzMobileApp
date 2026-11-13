@@ -1,3 +1,4 @@
+import {cashierCostDetails,correctedCashierCost} from './cashierCosts';
 import {unitLabel as displayUnit} from './units';
 import type {
   InventoryItem,
@@ -81,7 +82,8 @@ export async function exportFullStoreExcel(
     })),
   );
   XLSX.utils.book_append_sheet(wb, salesSheet, 'فواتير_البيع');
-  const daySheet=XLSX.utils.json_to_sheet(cashierDays.map(d=>({التاريخ:d.date,الحالة:d.status==='approved'?'معتمد':'معلق','ملف الأرقام المالية':d.financialReport?.fileName??'','ملف الأصناف':d.itemsReport?.fileName??'',الإيراد:d.financialReport?.totalRevenue??'',التكلفة:d.totalCost??'لم تعتمد','عدد أصناف العجز':d.shortages?.length??'',المسؤول:d.partnerName??''})));
+  const costs=cashierCostDetails(cashierDays,purchaseInvoices);
+  const daySheet=XLSX.utils.json_to_sheet(cashierDays.map(d=>({التاريخ:d.date,الحالة:d.status==='approved'?'معتمد':'معلق','ملف الأرقام المالية':d.financialReport?.fileName??'','ملف الأصناف':d.itemsReport?.fileName??'',الإيراد:d.financialReport?.totalRevenue??'',التكلفة:correctedCashierCost(d,costs.get(d.id))??'لم تعتمد','عدد أصناف العجز':d.shortages?.length??'',المسؤول:d.partnerName??''})));
   XLSX.utils.book_append_sheet(wb,daySheet,'أيام_الكاشير');
 
   // 3. شيت فواتير الشراء

@@ -36,3 +36,14 @@ export function sumMoney(values:readonly number[]):number{
     return total+toCents(digits,places);
   },0n));
 }
+
+export function sumMoneyProducts(products:readonly (readonly [number,number])[]):number{
+  const terms=products.map(([quantity,price])=>{
+    const left=decimal(quantity);
+    const right=decimal(price);
+    return {digits:left.digits*right.digits,places:left.places+right.places};
+  });
+  const places=Math.max(2,...terms.map(term=>term.places));
+  const total=terms.reduce((sum,term)=>sum+term.digits*10n**BigInt(places-term.places),0n);
+  return fromCents(toCents(total,places));
+}

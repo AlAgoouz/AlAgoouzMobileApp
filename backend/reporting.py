@@ -74,7 +74,7 @@ def prepare_report(source,summary,from_date,to_date):
         if not row.get('financialReport') or not from_date<=day<=to_date:
             continue
         amount=number(row['financialReport'],'totalRevenue',nonnegative=True)
-        cost=number(row,'totalCost',nonnegative=True) if row['status']=='approved' else None
+        cost=number(row,'correctedTotalCost' if 'correctedTotalCost' in row else 'totalCost',nonnegative=True) if row['status']=='approved' else None
         sales.append(dict(id='day:'+text(row,'id'),number='DAY-'+day,date=day,customer='يوم كاشير مكتمل التكلفة' if cost is not None else 'إيراد مالي بانتظار تكلفة الأصناف',channel='cashier_sync',amount=amount,cost=cost,net=None if cost is None else amount-cost))
     for row in records(source,'expenses'):
         day=business_day(row)
