@@ -77,10 +77,18 @@ it('shows seven categories and saves recipe definitions separately from operatio
 });
 it('requires a customer and offers only blends with a manual invoice selling price',async()=>{
  const save=vi.fn(async()=>true);render(<WholesaleInvoiceScreen items={[raw,blend]} customers={[customer]} currentPartnerName="Owner" onSaveSale={save} onBack={()=>{}}/>);
- fireEvent.click(screen.getByRole('button',{name:'اعتماد الفاتورة وخصم المخزون'}));expect(save).not.toHaveBeenCalled();expect(screen.getByRole('alert').textContent).toContain('عميل');
- fireEvent.change(screen.getByLabelText('العميل'),{target:{value:customer.id}});fireEvent.click(screen.getByRole('button',{name:'إضافة توليفة'}));
- expect((screen.getByLabelText('التوليفة') as HTMLSelectElement).options).toHaveLength(2);
- fireEvent.change(screen.getByLabelText('التوليفة'),{target:{value:blend.id}});fireEvent.change(screen.getByLabelText('الكمية بالكيلو'),{target:{value:'2'}});fireEvent.change(screen.getByLabelText('سعر الكيلو المتفق عليه'),{target:{value:'333'}});
+ fireEvent.click(screen.getByRole('button',{name:'مراجعة الفاتورة'}));expect(save).not.toHaveBeenCalled();expect(screen.getByRole('alert').textContent).toContain('عميل');
+ fireEvent.click(screen.getByRole('button',{name:'اختيار العميل'}));
+ fireEvent.change(screen.getByRole('searchbox'),{target:{value:'٠١٠١٢٣٤٥٦٧٨'}});
+ fireEvent.click(screen.getByRole('button',{name:/Customer/}));
+ fireEvent.click(screen.getByRole('button',{name:'إضافة توليفة'}));
+ fireEvent.change(screen.getByRole('searchbox'),{target:{value:'BL1'}});
+ expect(screen.queryByRole('button',{name:/Raw bean/})).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:/Blend/}));
+ fireEvent.change(screen.getByLabelText('الكمية بالكيلو'),{target:{value:'٢'}});
+ fireEvent.change(screen.getByLabelText('سعر الكيلو المتفق عليه'),{target:{value:'٣٣٣'}});
+ fireEvent.click(screen.getByRole('button',{name:'مراجعة الفاتورة'}));
+ expect(save).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('button',{name:'اعتماد الفاتورة وخصم المخزون'}));await waitFor(()=>expect(save).toHaveBeenCalledOnce());
  expect(save).toHaveBeenCalledWith(expect.objectContaining({customerId:customer.id,saleType:'wholesale',totalAmount:666,paidAmount:666,items:[expect.objectContaining({unitPrice:333})]}));
 });
@@ -90,13 +98,17 @@ it('shows a missing day report and blocks approval until the pair is complete',(
  expect((screen.getByRole('button',{name:'مراجعة واعتماد اليوم'}) as HTMLButtonElement).disabled).toBe(true);
  expect(screen.getByText(/تُحدد عند الاعتماد/)).toBeTruthy();
 });
-it('creates a fully paid taxed purchase and exposes no new credit option',()=>{
+it('creates a fully paid taxed purchase and exposes no new credit option',async()=>{
  const save=vi.fn(()=>true);render(<PurchaseScreen items={[raw]} suppliers={[INITIAL_SUPPLIERS[0]]} purchaseInvoices={[]} currentPartnerName="Owner" onSavePurchase={save} onBack={()=>{}}/>);
  fireEvent.click(screen.getByRole('button',{name:'فاتورة جديدة'}));
  expect(screen.queryByRole('button',{name:'آجل (على الحساب)'})).toBeNull();
  fireEvent.change(screen.getByLabelText('ضريبة فاتورة الشراء'),{target:{value:'14'}});
  expect(screen.getByText(/مدفوعة بالكامل/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:'اختيار صنف للفاتورة'}));
   fireEvent.click(screen.getByRole('button',{name:/Raw bean/}));
+  fireEvent.click(screen.getByRole('button',{name:/مراجعة الفاتورة/}));
+  expect(save).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button',{name:/حفظ واعتماد الفاتورة/}));
+  await waitFor(()=>expect(save).toHaveBeenCalledOnce());
   expect(save).toHaveBeenCalledWith(expect.objectContaining({accountingVersion:2,netAmount:100,taxAmount:14,totalAmount:114,paidAmount:114,remainingAmount:0,paymentMethod:'نقدي'}));
 });

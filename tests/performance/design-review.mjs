@@ -235,6 +235,28 @@ export async function verifyDesign(){
         evidence.menu={preview:true,publication:true,replacement:true,rollback:true,zoom:true,publicAccess:true,png:true,svg:true};
         await limit(page,'menu-editor');
       }
+      if(title==='فواتير الجملة'){
+        const trigger=page.getByRole('button',{name:'اختيار العميل',exact:true});
+        for(const width of [320,768,1440]){
+          await page.setViewportSize({width,height:800});
+          await trigger.click();
+          const panel=page.getByRole('dialog',{name:'اختيار عميل',exact:true});
+          const search=panel.getByRole('searchbox');
+          await search.waitFor();
+          assert.equal(await search.evaluate(e=>e===document.activeElement),true);
+          const box=await panel.boundingBox();
+          assert.ok(box&&box.x>=0&&box.x+box.width<=width+1);
+          if(width===320)assert.equal(Math.round(box.width),320);
+          if(width===1440)assert.ok(box.width<600&&Math.abs(box.x+box.width-width)<1);
+          await search.fill('عميل غير موجود');
+          await panel.getByText('مفيش نتائج مطابقة للبحث.').waitFor();
+          await page.screenshot({path:'design-invoice-picker-'+width+'-mobile.png',fullPage:false});
+          await page.keyboard.press('Escape');
+          await panel.waitFor({state:'hidden'});
+          assert.equal(await trigger.evaluate(e=>e===document.activeElement),true);
+        }
+        await page.setViewportSize({width:360,height:800});
+      }
       if(title==='تقارير يوم الكاشير'){
         const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Menu Item Sales Report (UWS)\nDate Range 01 11 26 - 01 11 26\nPrinted on 04/11/26 20:00:00'],['100010 Fixture Drink 2 100.00%\n100010 Fixture Drink 2 100.00%'],['20.00 100.00%\n20.00 100.00%'],['TOTAL SLS 2 20.00\nTOTAL SLS 2 20.00']]),'Report');
         await page.getByLabel('ملف التقرير',{exact:true}).setInputFiles({name:'synthetic-2030-wrong-filename.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:XLSX.write(book,{type:'buffer',bookType:'xlsx'})});

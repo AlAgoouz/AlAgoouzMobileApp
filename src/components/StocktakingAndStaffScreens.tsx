@@ -4,7 +4,8 @@ import {OperationHeader} from './OperationHeader';
 import {Modal} from './Modal';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import {isStockItem} from '../lib/itemPolicy';
-import React, { useState, useMemo } from "react";
+import {parseLocalizedNumber} from '../lib/cashierRows';
+import React, { useState, useMemo, useRef } from "react";
 import { payrollBalance, currentPayrollPeriod } from '../lib/payroll';
 import {Scale, CheckCircle2, History, Search, Users, Wallet, CalendarCheck, Award, AlertOctagon, Banknote, Check, UserPlus, Trash2} from 'lucide-react';
 import {
@@ -62,6 +63,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
   const [typedActuals, setTypedActuals] = useState<Record<string, number>>({});
   // النص الخام داخل خانة الإدخال لكل صنف (حتى لا تُؤثر أثناء الكتابة على الملخص)
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
+  const countInputs = useRef(new Map<string,HTMLInputElement>());
 
   const filteredItems = useMemo(() => {
     return auditableItems.filter((i) => {
@@ -126,16 +128,23 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       netVariance: Number((totalSurplus - totalShortage).toFixed(2)),
       shortageCount,
       surplusCount,
-      matchingCount: auditableItems.length - shortageCount - surplusCount - allVariances.filter(v=>v.actualStock<0).length,
+      matchingCount: allVariances.filter(v=>typedActuals[v.itemId]!==undefined&&Math.abs(v.difference)<=0.0001).length,
     };
-  }, [allVariances, auditableItems.length]);
+  }, [allVariances, typedActuals]);
 
   const handleUpdateActual = (item: InventoryItem, rawVal: string) => {
     // نحفظ النص الخام للعرض، ونُحدّث الرصيد الفعلي فقط بقيمة صالحة
     // (إدخال فارغ أو غير صحيح لا يصفّر الرصيد؛ يبقى آخر قيمة سليمة)
     setRawInputs((prev) => ({ ...prev, [item.id]: rawVal }));
-    const num = parseFloat(rawVal);
-    if (!Number.isFinite(num) || num < 0) return;
+    const num = parseLocalizedNumber(rawVal) ?? NaN;
+    if (!Number.isFinite(num) || num < 0) {
+      setTypedActuals(current=>{
+        const next={...current};
+        delete next[item.id];
+        return next;
+      });
+      return;
+    }
     const inBase =
       item.baseUnit === "kg" && inputMode === "gram"
         ? Number((num / 1000).toFixed(3))
@@ -158,7 +167,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
     if (
       Object.values(rawInputs).some(
         (value) =>
-          !value.trim() || !Number.isFinite(Number(value)) || Number(value) < 0,
+          !value.trim() || (parseLocalizedNumber(value) ?? -1) < 0,
       )
     ) {
       setAuditError(
@@ -166,12 +175,17 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       );
       return;
     }
+    const counted = allVariances.filter(line=>typedActuals[line.itemId]!==undefined);
+    if (!counted.length) {
+      setAuditError('اكتب الرصيد الفعلي لصنف واحد على الأقل قبل اعتماد الجرد.');
+      return;
+    }
     if (!reviewOpen) {
       setReviewOpen(true);
       return;
     }
     const accepted = onCommitStocktaking(
-      allVariances,
+      counted,
       auditNotes || "جرد فعلي للمخزن والفرع على الميزان",
       chargeEmployeeId || undefined,
     );
@@ -196,6 +210,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       {reviewOpen&&<Modal wide title="مراجعة واعتماد الجرد" onClose={()=>{setReviewOpen(false);setAuditError('');}}
         footer={<button type="button" className="operation-primary" onClick={handleSaveAudit}>تأكيد الجرد وتحديث المخزون</button>}>
         {auditError&&<p role="alert" className="text-red-700">{auditError}</p>}
+        <p>تم عد {Object.keys(typedActuals).length} من {auditableItems.length} صنف. الأصناف اللي لسه ما اتعدّتش بتحتفظ برصيدها المسجل.</p>
         <p>العجز {summary.totalShortage.toLocaleString('ar-EG')} ج.م · الزيادة {summary.totalSurplus.toLocaleString('ar-EG')} ج.م</p>
         <RecordPagination {...reviewPage}/>
         {reviewPage.visible.length ? <ul className="record-grid">
@@ -345,9 +360,10 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
 
             {/* قائمة الأصناف وإدخال الوزن الفعلي */}
             <div className="space-y-2.5">
-              {filteredItems.map((item) => {
+              {filteredItems.map((item,index) => {
                 const typed = typedActuals[item.id];
-                const needsActual = item.stock < 0 && typed === undefined;
+                const needsActual = typed === undefined;
+                const nextItem = filteredItems[index+1];
                 const actualInBase =
                   typed !== undefined && Number.isFinite(typed)
                     ? typed
@@ -441,8 +457,12 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                           ):
                         </label>
                         <input
-                          type="number"
-                          step={isKg && inputMode === "kg" ? "0.05" : "1"}
+                          type="text"
+                          inputMode={item.baseUnit==="piece"||item.baseUnit==="count"?"numeric":"decimal"}
+                          ref={node=>{if(node)countInputs.current.set(item.id,node);else countInputs.current.delete(item.id);}}
+                          onKeyDown={event=>{
+                            if(event.key==="Enter"&&nextItem){event.preventDefault();countInputs.current.get(nextItem.id)?.focus();}
+                          }}
                           aria-label={`الرصيد الفعلي: ${item.name}`}
                           value={displayInputValue}
                           onChange={(e) =>
@@ -450,6 +470,9 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                           }
                           className="w-full bg-white border-2 border-[#C59B27] rounded-xl px-3 py-1.5 text-sm font-black text-center text-[#1E1612] focus:outline-none"
                         />
+                        {nextItem&&<button type="button" className="record-action mt-2" onClick={()=>countInputs.current.get(nextItem.id)?.focus()}>
+                          الصنف التالي
+                        </button>}
                       </div>
                     </div>
                   </div>

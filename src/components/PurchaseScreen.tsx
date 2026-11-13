@@ -4,10 +4,11 @@ import {OperationHeader} from './OperationHeader';
 import {Modal} from './Modal';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import {ResponsiveRegister} from './ResponsiveRegister';
+import {RecordPicker} from './RecordPicker';
 import {money} from '../lib/reporting';
 import {latestSupplierPrices} from '../lib/supplierPurchases';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import {Truck, Search, AlertTriangle, Plus, Minus, Trash2, Edit3, Clock, Package, Tag, Check, FileText, X, ShoppingBag, Eye, UserPlus} from 'lucide-react';
 import {
   InventoryItem,
@@ -29,7 +30,7 @@ interface PurchaseScreenProps {
   currentPartnerName: string;
   onSavePurchase: (
     invoice: Omit<PurchaseInvoice, "id" | "invoiceNumber">,
-  ) => boolean;
+  ) => boolean | Promise<boolean>;
   onDeletePurchaseInvoice?: (invoiceId: string) => void;
   onQuickAddSupplier?: (supplier: Omit<Supplier, "id">) => void;
   onQuickAddItem?: (item: Omit<InventoryItem, "id">) => void;
@@ -68,7 +69,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   const [itemCategoryFilter, setItemCategoryFilter] = useState<
     "all" | ItemCategory
   >("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [showSupplierPicker,setShowSupplierPicker]=useState(false);
   const [showItemPickerModal, setShowItemPickerModal] = useState(false);
   const [taxInput,setTaxInput]=useState('0');
   const taxAmount=Number(taxInput);
@@ -87,6 +88,9 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   // نافذة تعريف صنف خام جديد سريعاً من داخل الفاتورة
   const [showNewItemModal, setShowNewItemModal] = useState(false);
   const [invoiceError, setInvoiceError] = useState("");
+  const [reviewInvoice,setReviewInvoice]=useState<Omit<PurchaseInvoice,'id'|'invoiceNumber'>>();
+  const [submitting,setSubmitting]=useState(false);
+  const saving=useRef(false);
 
   // الأصناف القابلة للشراء
   const purchasableItems = useMemo(
@@ -155,17 +159,9 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       if (itemCategoryFilter !== "all" && (i.category==='raw_spice'?'direct_product':i.category) !== itemCategoryFilter) {
         return false;
       }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        return (
-          i.name.toLowerCase().includes(q) ||
-          i.code.toLowerCase().includes(q) ||
-          (i.barcode && i.barcode.includes(q))
-        );
-      }
       return true;
     });
-  }, [purchasableItems, itemCategoryFilter, searchQuery]);
+  }, [purchasableItems, itemCategoryFilter]);
 
   const addItemToCart = (item: InventoryItem) => {
     setCart((prev) => {
@@ -241,7 +237,6 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
     setSelectedSupplierId(suppliers[0]?.id || "");
     setInvoiceDate(businessDate());
     setTaxInput('0');
-    setSearchQuery("");
     setViewMode("create");
   };
 
@@ -260,6 +255,11 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       )
     ) {
       setInvoiceError("أكمل أسعار البيع بأرقام صحيحة غير سالبة");
+      return;
+    }
+    if(!invoiceDate){setInvoiceError('حدد تاريخ الفاتورة');return;}
+    if(cart.some(line=>!Number.isFinite(line.quantity)||line.quantity<=0||!Number.isFinite(line.purchasePrice)||line.purchasePrice<0)){
+      setInvoiceError('راجع الكمية وسعر الشراء في بنود الفاتورة');
       return;
     }
     if(!taxInput.trim()||!Number.isFinite(taxAmount)||taxAmount<0){setInvoiceError('أدخل ضريبة صحيحة أو صفرًا');return;}
@@ -295,7 +295,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       };
     });
 
-    const accepted = onSavePurchase({
+    setReviewInvoice({
       date: invoiceDate,
       supplierId: selectedSupplierId,
       supplierName: supplier?.name || "مورد عام",
@@ -310,12 +310,24 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       partnerName: currentPartnerName,
     });
 
-    if (accepted === false) {
-      setInvoiceError("لم تُحفظ الفاتورة؛ راجع التنبيه والبيانات");
-      return;
+  };
+
+  const confirmPurchase = async () => {
+    if (!reviewInvoice || saving.current) return;
+    saving.current = true;
+    setSubmitting(true);
+    try {
+      const accepted = await onSavePurchase(reviewInvoice);
+      if (accepted === false) throw Error("لم تُحفظ الفاتورة؛ راجع التنبيه والبيانات");
+      setCart([]);
+      setViewMode("list");
+    } catch (cause) {
+      setInvoiceError(cause instanceof Error ? cause.message : "تعذر تأكيد الحفظ.");
+    } finally {
+      saving.current = false;
+      setSubmitting(false);
+      setReviewInvoice(undefined);
     }
-    setCart([]);
-    setViewMode("list");
   };
 
   return (
@@ -414,18 +426,10 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                 <label className="text-[10px] text-[#8C7A6B] font-bold block">
                   اختر المورد
                 </label>
-                <select
-                  value={selectedSupplierId}
-                  onChange={(e) => setSelectedSupplierId(e.target.value)}
-                  className="w-full text-xs font-black text-[#1E1612] bg-transparent focus:outline-none cursor-pointer mt-0.5"
-                >
-                  {suppliers.map((sup) => (
-                    <option key={sup.id} value={sup.id}>
-                      {sup.name} (
-                      {sup.balance > 0 ? `له: ${sup.balance} ج.م` : "خالص"})
-                    </option>
-                  ))}
-                </select>
+                <button type="button" className="picker-trigger" aria-haspopup="dialog" onClick={()=>setShowSupplierPicker(true)}>
+                  <Search size={17} aria-hidden="true"/>
+                  {suppliers.find(supplier=>supplier.id===selectedSupplierId)?.name??'اختيار مورد'}
+                </button>
               </div>
 
               <div className="bg-[#FAF8F4] rounded-xl border border-[#E6DEC8] px-2.5 py-2">
@@ -481,64 +485,26 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
               ))}
             </div>
 
-            {/* شريط بحث عن صنف */}
-            <div className="bg-[#FAF8F4] rounded-xl border border-[#E6DEC8] px-3 py-2 flex items-center gap-2">
-              <Search className="w-4 h-4 text-[#9E7918] shrink-0" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ابحث عن الصنف لإضافته (برازيلي، كولومبي، حبهان...)"
-                className="w-full text-xs font-bold bg-transparent focus:outline-none text-[#1E1612]"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="text-[#8C7A6B]"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {/* شبكة الأصناف القابلة للإضافة بضغطة واحدة */}
-            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-0.5">
-              {filteredPickerItems.map((item) => {
-                const inCart = cart.find((c) => c.item.id === item.id);
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => addItemToCart(item)}
-                    className={`p-2.5 rounded-xl border text-right transition flex items-center justify-between gap-2 ${
-                      inCart
-                        ? "bg-[#FDF8EB] border-[#C59B27] shadow-sm"
-                        : "bg-[#FAF8F4] border-[#E6DEC8] hover:border-[#C59B27]"
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <div className="text-xs font-black text-[#1E1612] truncate">
-                        {item.name}
-                      </div>
-                      <div className="text-[10px] text-[#7A6855] font-semibold mt-0.5">
-                        الرصيد: {item.stock}{" "}
-                        {displayUnit(item.baseUnit)}{" "}
-                        • آخر سعر: {item.lastPurchasePrice} ج
-                      </div>
-                    </div>
-                    <div
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 font-black text-xs ${
-                        inCart
-                          ? "bg-[#1E1612] text-[#FBF5B7]"
-                          : "bg-white text-[#9E7918] border border-[#E6DEC8]"
-                      }`}
-                    >
-                      {inCart ? `${inCart.quantity}` : "+"}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            <button type="button" className="picker-trigger" aria-haspopup="dialog" onClick={()=>setShowItemPickerModal(true)}>
+              <Search size={17} aria-hidden="true"/>اختيار صنف للفاتورة
+            </button>
           </div>
+
+          {showItemPickerModal&&<RecordPicker title="اختيار صنف للمشتريات" searchLabel="ابحث باسم الصنف أو الكود"
+            options={filteredPickerItems.map(item=>({
+              id:item.id,title:item.name,keywords:item.barcode,
+              detail:item.code+' · الرصيد '+item.stock+' '+displayUnit(item.baseUnit),
+            }))}
+            onSelect={id=>{
+              const item=filteredPickerItems.find(value=>value.id===id);
+              if(item)addItemToCart(item);
+              setShowItemPickerModal(false);
+            }}
+            onClose={()=>setShowItemPickerModal(false)}/>}
+          {showSupplierPicker&&<RecordPicker title="اختيار المورد" searchLabel="ابحث باسم المورد أو التليفون"
+            options={suppliers.map(supplier=>({id:supplier.id,title:supplier.name,detail:[supplier.address,supplier.phone].filter(Boolean).join(' · ')}))}
+            selectedId={selectedSupplierId} onSelect={id=>{setSelectedSupplierId(id);setShowSupplierPicker(false);}}
+            onClose={()=>setShowSupplierPicker(false)}/>}
 
           {/* بانر التنبيه لو هناك صنف بسعر أعلى من أرخص مورد */}
           {higherThanCheapestCount > 0 && (
@@ -580,7 +546,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                   الفاتورة فارغة حالياً
                 </div>
                 <div className="text-[11px] text-[#8C7A6B]">
-                  اضغط على أي صنف من القائمة بالأعلى لإضافته وتحديد الكمية
+                  اختار صنف من الزر بالأعلى وحدد الكمية
                   والسعر
                 </div>
               </div>
@@ -596,6 +562,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                     updateCost,
                   } = entry;
                   const lineTotal = quantity * purchasePrice;
+                  const supplierPrice = latestSupplierPrices(item.supplierPrices).find(record=>record.supplierId===selectedSupplierId);
                   const lastPrice = item.lastPurchasePrice || purchasePrice;
                   const diffPercentFromLast =
                     lastPrice > 0
@@ -803,6 +770,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                         </div>
                       </div>
 
+                      <p className="text-xs">{supplierPrice?<>آخر سعر من المورد المحدد {money(supplierPrice.price)} ج.م · {supplierPrice.date}</>:'لسه مفيش سعر شراء مسجل للصنف عند المورد المحدد.'}</p>
                       <p className="text-xs">يتحدث متوسط التكلفة تلقائيًا مع كل شراء، دون الضريبة.</p>
                     </div>
                   );
@@ -829,7 +797,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
             >
               <Check className="w-4 h-4 text-[#D4AF37]" />
               <span>
-                حفظ واعتماد الفاتورة (
+                مراجعة الفاتورة (
                 {totalInvoiceAmount.toLocaleString("ar-EG")} ج.م)
               </span>
             </button>
@@ -843,6 +811,21 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
         </div>
       )}
 
+      {reviewInvoice&&<Modal title="مراجعة فاتورة المشتريات" description={reviewInvoice.supplierName+' · '+reviewInvoice.date}
+        busy={submitting} onClose={()=>setReviewInvoice(undefined)}
+        footer={<button type="button" className="operation-primary" disabled={submitting} onClick={()=>void confirmPurchase()}>
+          {submitting?'جارٍ الحفظ…':'حفظ واعتماد الفاتورة'}
+        </button>}>
+        <dl className="record-facts">
+          <div><dt>قيمة الأصناف</dt><dd>{money(reviewInvoice.netAmount??0)} ج.م</dd></div>
+          <div><dt>الضريبة</dt><dd>{money(reviewInvoice.taxAmount??0)} ج.م</dd></div>
+          <div><dt>المدفوع بالكامل</dt><dd>{money(reviewInvoice.totalAmount)} ج.م</dd></div>
+        </dl>
+        <h3>الكميات اللي هتدخل المخزون</h3>
+        <ul className="invoice-review-lines">{reviewInvoice.items.map(line=><li key={line.itemId}>
+          <span>{line.itemName}</span><b>{line.quantity} {line.unit}</b>
+        </li>)}</ul>
+      </Modal>}
       {/* نافذة تفاصيل فاتورة مشتريات مسجلة */}
       {selectedInvoiceDetails && (
         <Modal title={<>تفاصيل فاتورة مشتريات # {selectedInvoiceDetails.invoiceNumber}</>} description={<>المورد:  {selectedInvoiceDetails.supplierName} • {" "}  {selectedInvoiceDetails.date}</>} onClose={()=>setSelectedInvoiceDetails(null)}><div className="space-y-2 max-h-60 overflow-y-auto">

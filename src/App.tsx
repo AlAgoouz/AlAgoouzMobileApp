@@ -4,7 +4,7 @@ import {saveFinancialOpening} from './lib/financialOpening';
 import {saveCatalogNameDraft,saveCatalogNameDraftChange} from './lib/catalogNameDrafts';
 import {saveRecipeDefinition,saveRecipe} from './lib/recipeCatalog';
 import type {CatalogNameDraft,RecipeProductDefinition} from './types/erp';
-import {PagedSalesHistory} from './components/PagedSalesHistory';
+import {initialSalesHistoryView,PagedSalesHistory} from './components/PagedSalesHistory';
 import {ScreenLoading} from './components/ScreenLoading';
 import {AppErrorBoundary} from './components/AppErrorBoundary';
 import {Modal} from './components/Modal';
@@ -20,7 +20,7 @@ import {SectionsHub} from './components/SectionsHub';
 import type {QueuedCashierReport} from './components/CashierDayScreen';
 import {attachCashierReport,approveCashierDay,salesForReports} from './lib/cashierDays';
 import {isStockItem} from './lib/itemPolicy';
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   LayoutGrid,
   Search,
@@ -209,6 +209,7 @@ export default function App() {
 
   const [selectedFinancialPartnerId,setSelectedFinancialPartnerId]=useState('');
   const [historyEditing,setHistoryEditing]=useState(false);
+  const [salesHistoryView,setSalesHistoryView]=useState(initialSalesHistoryView);
   const needsFullStore=!['home','sections','sales_invoices','shop_menu'].includes(activeScreen)||historyEditing;
   const cloud = useErpStore(needsFullStore);
   const { engine, member } = cloud;
@@ -224,6 +225,8 @@ export default function App() {
   const openRecipes=(targetId?:string)=>{setRecipeTargetId(targetId);setActiveScreen('recipes');};
   useEffect(()=>{if(activeScreen!=='sales_invoices')setHistoryEditing(false);},[activeScreen]);
   useEffect(()=>setSelectedFinancialPartnerId(''),[member?.userId,member?.partnerId]);
+  useEffect(()=>setSalesHistoryView(initialSalesHistoryView),[member?.userId]);
+  const pendingInvoice=useRef<{kind:'purchase'|'sale';id:string;userId:string|undefined;draft:string}>();
   const confirmSave=async()=>{await engine.flush();if(engine.snapshot.status!=='ready')throw Error(engine.snapshot.error||'لم يصل تأكيد اعتماد العملية؛ راجع حالة الحفظ');};
   const loggedPartnerId = member?.partnerId ?? null;
   const {
@@ -615,9 +618,7 @@ export default function App() {
       `فاتورة شراء #${invNum} من (${invoiceData.supplierName}) وتحديث متوسط التكلفة (WAC) وتكلفة التوليفات المرتبطة`,
       invoiceData.totalAmount,
     );
-    showToast(
-      `تم تسجيل فاتورة المشتريات #${invNum}؛ تابع حالة حفظ السحابة أعلى الشاشة.`,
-    );
+    return newInvoice;
   };
 
   // دالة خصم الأصناف من المخزون (خصم مباشر للبن والتوليفات الجاهزة، وفك الوصفة للمشروبات!)
@@ -892,6 +893,22 @@ export default function App() {
     [items],
   );
 
+  async function saveInvoice<T extends {id:string;invoiceNumber:string}>(kind:'purchase'|'sale',data:unknown,create:()=>T,records:()=>T[]){
+    if(engine.hasPending)await confirmSave();
+    const draft=JSON.stringify(data);
+    const pending=pendingInvoice.current;
+    if(pending?.kind===kind&&pending.userId===member?.userId){
+      pendingInvoice.current=undefined;
+      const existing=records().find(invoice=>invoice.id===pending.id);
+      if(existing&&pending.draft===draft)return existing;
+    }
+    let invoice:T|undefined;
+    if(!safeAction(()=>{invoice=create();})||!invoice)return undefined;
+    pendingInvoice.current={kind,id:invoice.id,userId:member?.userId,draft};
+    await confirmSave();
+    pendingInvoice.current=undefined;
+    return invoice;
+  }
   const navigateScreen=(screen:string)=>{
     setPurchaseTargetId(undefined);
     setCustomerTargetId(undefined);
@@ -1039,9 +1056,12 @@ export default function App() {
             suppliers={suppliers}
             purchaseInvoices={purchaseInvoices}
             currentPartnerName={currentPartner.name}
-            onSavePurchase={(data) =>
-              safeAction(() => handleSavePurchase(data))
-            }
+            onSavePurchase={async data=>{
+              const invoice=await saveInvoice('purchase',data,()=>handleSavePurchase(data),()=>engine.state.purchaseInvoices);
+              if(!invoice)return false;
+              showToast('تم حفظ فاتورة المشتريات '+invoice.invoiceNumber);
+              return true;
+            }}
             onDeletePurchaseInvoice={(invId) => {
               safeAction(() => {
                 engine.replace(
@@ -1106,9 +1126,15 @@ export default function App() {
         )}
 
         {activeScreen === 'sales_pos' && <WholesaleInvoiceScreen items={items} customers={customers} currentPartnerName={currentPartner.name} onBack={()=>setActiveScreen('home')} onSaveSale={async data=>{
-          let invoice:SalesInvoice|false=false;
-          if(!safeAction(()=>{invoice=handleSaveSale(data);})||!invoice)return false;
-          try{await confirmSave();setReceiptModalInvoice(invoice);setActiveScreen('home');return true;}catch(error){showToast((error as Error).message);return false;}
+          const invoice=await saveInvoice('sale',data,()=>{
+            const result=handleSaveSale(data);
+            if(!result)throw Error('تعذر اعتماد الفاتورة');
+            return result;
+          },()=>engine.state.salesInvoices);
+          if(!invoice)return false;
+          setReceiptModalInvoice(invoice);
+          setActiveScreen('home');
+          return true;
         }}/>}
         {activeScreen === 'cashier_sync' && <CashierDayScreen items={items} days={cashierDays} queued={queuedReports} onBack={()=>setActiveScreen('home')} onAttach={async(date,report)=>{engine.replace(attachCashierReport(engine.state,date,report),report.file.sourceQueueId);await confirmSave();if(report.file.sourceQueueId)setQueuedReports(rows=>rows.filter(r=>r.id!==report.file.sourceQueueId));}} onApprove={async(id)=>{engine.replace(approveCashierDay(engine.state,id,currentPartner.name));await confirmSave();}}/>}
 
@@ -1440,7 +1466,7 @@ export default function App() {
           />
         )}
 
-        {activeScreen === "sales_invoices" && (!historyEditing?<PagedSalesHistory onOpenCustomer={openCustomer} onBack={()=>setActiveScreen('home')} onManage={canWrite(member,'sales')?()=>setHistoryEditing(true):undefined}/>:(
+        {activeScreen === "sales_invoices" && (!historyEditing?<PagedSalesHistory view={salesHistoryView} onViewChange={setSalesHistoryView} onOpenCustomer={openCustomer} onBack={()=>setActiveScreen('home')} onManage={canWrite(member,'sales')?()=>setHistoryEditing(true):undefined}/>:(
           <SalesInvoicesAndReturnsScreen
             cashierDays={cashierDays}
             salesInvoices={salesInvoices}
