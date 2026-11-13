@@ -57,8 +57,8 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
         downloadExport(file);
         if(forShare)setPdfMessage('تم تنزيل الفاتورة. افتح محادثة واتساب وأرفق الملف.');
       }
-    }catch{
-      setPdfMessage('تعذر تجهيز الفاتورة. راجع الاتصال وتسجيل الدخول ثم أعد المحاولة.');
+    }catch(error){
+      setPdfMessage(error instanceof Error?error.message:'تعذر تجهيز الفاتورة. راجع الاتصال وتسجيل الدخول ثم أعد المحاولة.');
     }finally{
       setPdfBusy(false);
     }

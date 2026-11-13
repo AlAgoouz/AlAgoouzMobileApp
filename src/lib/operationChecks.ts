@@ -6,7 +6,7 @@ import type {
 } from "../types/erp";
 import { isPurchasable, isStockItem } from './itemPolicy';
 
-const round = (value: number) => Number(value.toFixed(2));
+import {multiplyMoney,roundMoney as round,sumMoney} from './money';
 const validMoney = (value: number) => Number.isFinite(value) && value >= 0;
 function sameMoney(actual: number, expected: number) {
   if (!validMoney(actual) || Math.abs(actual - expected) > 0.011)
@@ -92,7 +92,7 @@ export function checkPurchase(
         !validMoney(line.newWholesalePrice))
     )
       throw new Error("راجع كميات الشراء والأسعار");
-    total += round(line.quantity * line.purchasePrice);
+    total += multiplyMoney(line.quantity,line.purchasePrice);
   }
   const tax = data.taxAmount ?? 0;
   if (!validMoney(tax)) throw new Error('الضريبة يجب أن تكون مبلغًا غير سالب');
@@ -125,9 +125,9 @@ export function prepareSale(
       !validMoney(line.unitPrice)
     )
       throw new Error("كميات البيع أو أسعاره غير صالحة");
-    const totalPrice = round(line.unitPrice * line.normalizedQtyInBaseUnit);
+    const totalPrice = multiplyMoney(line.normalizedQtyInBaseUnit,line.unitPrice);
     sameMoney(line.totalPrice, totalPrice);
-    const totalCost = round(item.costPrice * line.normalizedQtyInBaseUnit);
+    const totalCost = multiplyMoney(line.normalizedQtyInBaseUnit,item.costPrice);
     return {
       ...line,
       itemName: item.name,
@@ -138,7 +138,7 @@ export function prepareSale(
       profit: round(totalPrice - totalCost),
     };
   });
-  const subtotal = round(lines.reduce((sum, line) => sum + line.totalPrice, 0));
+  const subtotal = sumMoney(lines.map(line=>line.totalPrice));
   sameMoney(data.subtotal, subtotal);
   if (!validMoney(data.discount) || data.discount > subtotal)
     throw new Error("الخصم يجب أن يكون بين صفر وإجمالي الأصناف");
@@ -151,7 +151,7 @@ export function prepareSale(
   sameMoney(data.remainingAmount, round(data.totalAmount - data.paidAmount));
   if (data.saleType === "retail" && data.remainingAmount > 0)
     throw new Error("البيع النقدي يتطلب سداد إجمالي الفاتورة");
-  const totalCost = round(lines.reduce((sum, line) => sum + line.totalCost, 0));
+  const totalCost = sumMoney(lines.map(line=>line.totalCost));
   return {
     ...data,
     items: lines,

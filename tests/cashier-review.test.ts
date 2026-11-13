@@ -15,3 +15,9 @@ it('cannot hide negative quantities, invalid prices, wrong units or removed cata
  expect(reviewedCashierRows([{name:'unknown',quantity:1}],[item],{0:{itemId:item.id,unit:'piece'}})[0].error).toBeTruthy();
  expect(reviewedCashierRows([{name:'unknown',quantity:1}],[],{0:{itemId:item.id,unit:'kg'}})[0].matchedItem).toBeUndefined();
 });
+
+it('keeps the physical weight of an explicit fractional pack during manual matching',()=>{
+ const rows=[{name:'POS alias',quantity:8,unit:'ربع كيلو'}];
+ expect(reviewedCashierRows(rows,[item],{0:{itemId:item.id,unit:'kg'}})[0]).toMatchObject({quantity:2,unitHint:'kg',packFactor:0.25,error:undefined});
+ expect(reviewedCashierRows(rows,[item],{0:{itemId:item.id,unit:'gram'}})[0]).toMatchObject({quantity:2000,unitHint:'gram',error:undefined});
+});

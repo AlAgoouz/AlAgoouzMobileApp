@@ -56,7 +56,9 @@ def begun_report(matrix, expected_date, invalid, localized_number, row_numbers=N
     if len(set(periods))>1:
         raise invalid('BEGUN_REPORT_DATE_INVALID')
     business_date=periods[0] if periods else None
-    if expected_date and business_date and expected_date!=business_date:
+    if expected_date and business_date is None:
+        raise invalid('BEGUN_REPORT_DATE_REQUIRED')
+    if expected_date and expected_date!=business_date:
         raise invalid('BEGUN_REPORT_DATE_MISMATCH')
     amount,source_row=candidates[0]
     return {'metric':'Begun','amount':amount,'businessDate':business_date,'sourceRow':source_row}

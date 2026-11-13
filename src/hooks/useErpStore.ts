@@ -5,7 +5,7 @@ import { StoreEngine } from '../lib/storeEngine';
 import { cloudStoreInput, toCloud } from '../lib/storeState';
 import { scrubLegacyPasswords } from '../lib/legacyCache';
 import { authErrorMessage } from '../lib/authErrors';
-import { storeWriteError } from '../lib/storeErrors';
+import { StoreWriteFailure,storeWriteError } from '../lib/storeErrors';
 import { clearRecoveryDraft, saveRecoveryDraft } from '../lib/recoveryDraft';
 
 export function useErpStore(loadFull=true) {
@@ -59,13 +59,17 @@ export function useErpStore(loadFull=true) {
         async save(state, version, operationId, queueId, restore) {
           const sb = getSupabaseClient();
           if (!sb) throw new Error('إعداد الاتصال غير صالح');
-          const { data, error } = await sb.rpc(restore ? 'bon_erp_restore_store' : 'bon_erp_save_store', {
+          const { data, error, status } = await sb.rpc(restore ? 'bon_erp_restore_store' : 'bon_erp_save_store', {
             p_expected_version: version,
             p_state: toCloud(state),
             p_operation_id: operationId,
             ...(!restore ? { p_queue_id: queueId ?? null } : {}),
           });
-          if (error) throw new Error(storeWriteError(error.message));
+          if (error) {
+            const code=/^[A-Z][A-Z0-9_]+/.exec(error.message)?.[0]??error.code;
+            const transient=status===0||status===408||status===429||status>=500;
+            throw new StoreWriteFailure(code,transient?'الاتصال بالخادم غير مستقر؛ إعادة المحاولة تستخدم نفس العملية.':storeWriteError(error.message),transient);
+          }
           if (!data || !Number.isSafeInteger(Number(data.version)))
             throw new Error('لم يصل تأكيد حفظ صالح');
           return Number(data.version);
@@ -95,8 +99,12 @@ export function useErpStore(loadFull=true) {
       setAuthReady(true);
       return;
     }
+    let resolving=false;
+    let resolveAgain=false;
     const resolveUser = async () => {
-      const run = ++generation.current;
+      if(disposed||resolving)return;
+      resolving=true;
+      const run = generation.current;
       try {
       const {
         data: { user },
@@ -138,6 +146,9 @@ export function useErpStore(loadFull=true) {
         setAuthError(authErrorMessage(failure, 'signIn'));
         if (!activeUser.current) { setMember(null); engine.logout(); }
         setAuthReady(true);
+      } finally {
+        resolving=false;
+        if(resolveAgain&&!disposed){resolveAgain=false;void resolveUser();}
       }
     };
     void resolveUser();
@@ -147,6 +158,7 @@ export function useErpStore(loadFull=true) {
     } = sb.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         ++generation.current;
+        resolveAgain=false;
         activeUser.current = null;
         accessRef.current = null;
         recoveryFlow.current = true;
@@ -158,14 +170,18 @@ export function useErpStore(loadFull=true) {
         setAuthReady(true);
       } else if (event === 'SIGNED_OUT') {
         ++generation.current;
+        resolveAgain=false;
         activeUser.current = null;
         accessRef.current = null;
         setMember(null);
         engine.logout();
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setTimeout(() => {
-          void resolveUser();
+          if(disposed)return;
+          if(resolving)resolveAgain=true;
+          else void resolveUser();
         }, 0);
+      }
     });
     return () => {
       disposed = true;
@@ -178,7 +194,8 @@ export function useErpStore(loadFull=true) {
     if(!loadFull||member?.role!=='partner'||!canView(member)){setHydrationKey('');return;}
     let alive=true;const key=member.userId;
     const hydrate=async()=>{if(engine.snapshot.status==='signed-out')await engine.load();else await engine.refresh();if(alive)setHydrationKey(key);};
-    void hydrate();return()=>{alive=false;};
+    void hydrate().catch(()=>{if(alive)setHydrationKey(key);});
+    return()=>{alive=false;};
   },[loadFull,member?.userId,member?.role,member?.permissions.view,engine]);
   useEffect(() => {
     if (!member || !canView(member) || member.role==='cashier') return;
@@ -294,6 +311,7 @@ export function useErpStore(loadFull=true) {
     ...snapshot,
     // Keep mounted forms through acknowledgement waits and write failures. The
     // blocking status dialog still prevents actions; hydration is not save status.
+    recoveryWarning:snapshot.recoveryWarning,
     fullReady:hydrationKey===member?.userId&&engine.hasLoaded&&!['signed-out','loading'].includes(snapshot.status),
     engine,
     member,

@@ -9,6 +9,8 @@ from worker import process_import, ImportMessage
 
 logger = logging.getLogger("agouz.imports")
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+PRIVATE_HEADERS={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}
+EXPORT_DATA_ERRORS={'INVOICE_TOTAL_MISMATCH','PDF_ROW_LIMIT','EXPORT_ROW_LIMIT'}
 
 
 @app.middleware("http")
@@ -16,17 +18,19 @@ async def private_responses(request, call_next):
     try:
         size = int(request.headers.get("content-length", "0"))
     except ValueError:
-        return Response(status_code=400)
+        return Response(status_code=400,headers=PRIVATE_HEADERS)
     if size < 0:
-        return Response(status_code=400)
+        return Response(status_code=400,headers=PRIVATE_HEADERS)
     if size > 16384:
-        return Response(status_code=413)
-    body = b""
+        return Response(status_code=413,headers=PRIVATE_HEADERS)
+    chunks=[]
+    received=0
     async for chunk in request.stream():
-        body += chunk
-        if len(body) > 16384:
-            return Response(status_code=413)
-    request._body = body
+        received+=len(chunk)
+        if received>16384:
+            return Response(status_code=413,headers=PRIVATE_HEADERS)
+        chunks.append(chunk)
+    request._body=b''.join(chunks)
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -115,6 +119,11 @@ async def export_report(format:str,from_date:date,to_date:date,authorization:str
         return Response(content=data,media_type=mime,headers={'Content-Disposition':f'attachment; filename="Agouz-{from_date}-{to_date}.{format}"'})
     except PermissionError:
         raise HTTPException(status_code=403,detail='EXPORT_PERMISSION_DENIED') from None
+    except ValueError as failure:
+        if str(failure) in EXPORT_DATA_ERRORS:
+            raise HTTPException(status_code=422,detail=str(failure)) from None
+        logger.warning('report_export_data_failed type=%s',type(failure).__name__)
+        raise HTTPException(status_code=503,detail='EXPORT_NOT_CONFIRMED') from None
     except Exception:
         logger.warning('report_export_failed format=%s',format)
         raise HTTPException(status_code=503,detail='EXPORT_NOT_CONFIRMED') from None
@@ -134,6 +143,11 @@ async def export_invoice(invoice_id:str,authorization:str=Header(default='')):
     except PermissionError:
         raise HTTPException(status_code=403,detail='EXPORT_PERMISSION_DENIED') from None
     except HTTPException:raise
+    except ValueError as failure:
+        if str(failure) in EXPORT_DATA_ERRORS:
+            raise HTTPException(status_code=422,detail=str(failure)) from None
+        logger.warning('invoice_export_data_failed type=%s',type(failure).__name__)
+        raise HTTPException(status_code=503,detail='EXPORT_NOT_CONFIRMED') from None
     except Exception:
         logger.warning('invoice_pdf_failed')
         raise HTTPException(status_code=503,detail='EXPORT_NOT_CONFIRMED') from None

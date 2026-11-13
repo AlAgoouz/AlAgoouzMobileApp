@@ -235,3 +235,24 @@ it('shows a retryable login screen if session verification unexpectedly rejects'
  expect(result.current.member).toBeNull();expect(result.current.authError).toContain('تعذر الاتصال');
  expect(sb.from).not.toHaveBeenCalled();
 });
+
+it('lets an in-flight session lookup finish across a permission polling interval',async()=>{
+  vi.useFakeTimers();
+  const visibility=vi.spyOn(document,'visibilityState','get').mockReturnValue('visible');
+  try{
+    const {sb}=client();
+    sb.auth.getUser.mockImplementation(async()=>{
+      await new Promise(resolve=>setTimeout(resolve,16000));
+      return {data:{user:{id:'user1'}},error:null};
+    });
+    const {result,unmount}=renderHook(()=>useErpStore(false));
+    await act(async()=>{await vi.advanceTimersByTimeAsync(16000);});
+    expect(result.current.authReady).toBe(true);
+    expect(result.current.member?.userId).toBe('user1');
+    expect(sb.auth.getUser).toHaveBeenCalledOnce();
+    unmount();
+  }finally{
+    visibility.mockRestore();
+    vi.useRealTimers();
+  }
+});

@@ -966,6 +966,7 @@ export default function App() {
       >
         {statusText}
       </div>}
+      {cloud.recoveryWarning&&<p role="status" className="w-full p-3 bg-amber-100 text-amber-900 text-sm">{cloud.recoveryWarning}</p>}
       {queueError && (
         <div
           role="alert"

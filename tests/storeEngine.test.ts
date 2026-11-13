@@ -1,3 +1,4 @@
+import {StoreWriteFailure} from '../src/lib/storeErrors';
 import { it, expect, vi, afterEach } from 'vitest';
 import { StoreEngine, type StoreTransport } from '../src/lib/storeEngine';
 import { emptyStore,cloudStoreInput,toCloud } from '../src/lib/storeState';
@@ -155,14 +156,19 @@ it('preserves queue acknowledgement in the same commit', async () => {
   await engine.flush();
   expect(vi.mocked(transport.save).mock.calls[0][3]).toBe('queue1');
 });
-it('surfaces a failed local recovery write before changing state', async () => {
+it('shows a recovery warning and still allows a confirmed server save', async () => {
   const { transport } = setup();
   const engine = new StoreEngine(transport, () => {
     throw new Error('storage full');
   });
   await engine.load();
-  expect(() => engine.replace(emptyStore)).toThrow('storage full');
+  engine.replace(emptyStore);
+  expect(engine.snapshot.recoveryWarning).toContain('لم تُحفظ');
+  expect(engine.hasPending).toBe(true);
+  await engine.flush();
+  expect(transport.save).toHaveBeenCalledOnce();
   expect(engine.snapshot.status).toBe('ready');
+  expect(engine.snapshot.recoveryWarning).toBeUndefined();
   expect(engine.hasPending).toBe(false);
 });
 it('ignores a late save response after logout', async () => {
@@ -333,4 +339,22 @@ it('preserves a waiting cashier report when another report is attached before it
   expect(vi.mocked(transport.save).mock.calls.map((call) => call[3]))
     .toEqual(['cashier-first', 'cashier-second']);
   expect(engine.snapshot.status).toBe('ready');
+});
+
+it('retries a temporary server failure with the original operation ID and payload',async()=>{
+  vi.useFakeTimers();
+  try{
+    const {engine,transport}=setup();
+    vi.mocked(transport.save).mockRejectedValueOnce(new StoreWriteFailure('NETWORK','offline',true)).mockResolvedValueOnce(1);
+    await engine.load();
+    engine.replace(emptyStore);
+    await engine.flush();
+    expect(engine.snapshot.status).toBe('error');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(transport.save).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(transport.save).mock.calls[1]).toEqual(vi.mocked(transport.save).mock.calls[0]);
+    expect(engine.snapshot.status).toBe('ready');
+  }finally{
+    vi.useRealTimers();
+  }
 });

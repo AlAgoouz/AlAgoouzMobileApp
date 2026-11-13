@@ -93,11 +93,10 @@ export function returnSale(
   const customer = state.customers.find((c) => c.id === invoice.customerId);
   if (invoice.remainingAmount > 0 && !customer)
     throw new Error('حساب العميل غير موجود');
-  const debtReversed = Math.min(
-    invoice.remainingAmount,
-    customer?.balance ?? 0,
-  );
-  const refundAmount = Number((invoice.totalAmount - debtReversed).toFixed(2));
+  if (invoice.remainingAmount > (customer?.balance ?? 0))
+    throw new Error('المتبقي على الفاتورة أكبر من مديونية العميل؛ راجع التحصيلات قبل اعتماد المرتجع');
+  const debtReversed = invoice.remainingAmount;
+  const refundAmount = invoice.paidAmount;
   const consumedCost = Number(
     invoice.items
       .filter((line) => ['drink_recipe', 'seasoning_recipe'].includes(line.category))

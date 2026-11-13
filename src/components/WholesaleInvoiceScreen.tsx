@@ -17,8 +17,13 @@ interface InvoiceLine {
   price: string;
 }
 
+import {multiplyMoney,roundMoney,sumMoney} from '../lib/money';
 const numeric = (value: string) => parseLocalizedNumber(value) ?? NaN;
-const amount = (line: InvoiceLine) => Number((numeric(line.quantity) * numeric(line.price)).toFixed(2));
+const amount = (line: InvoiceLine) => {
+  const quantity=numeric(line.quantity),price=numeric(line.price);
+  if(!Number.isFinite(quantity)||!Number.isFinite(price))return NaN;
+  try{return multiplyMoney(quantity,price);}catch{return NaN;}
+};
 
 export function WholesaleInvoiceScreen({items, customers, currentPartnerName, onSaveSale, onBack}: {
   items: InventoryItem[];
@@ -46,7 +51,7 @@ export function WholesaleInvoiceScreen({items, customers, currentPartnerName, on
     id: item.id, title: item.name, detail: item.code + ' · المتاح ' + money(item.stock) + ' كجم',
   })), [blends]);
   const customerName = customers.find(customer => customer.id === customerId)?.name;
-  const total = Number(lines.reduce((sum, line) => sum + (Number.isFinite(amount(line)) ? amount(line) : 0), 0).toFixed(2));
+  const total = sumMoney(lines.map(amount).filter(Number.isFinite));
   const paidAmount = method === 'آجل' ? numeric(paid) : total;
   const moneyOrDash = (value: number) => Number.isFinite(value) ? `${money(value)} ج.م` : '—';
 
@@ -72,11 +77,11 @@ export function WholesaleInvoiceScreen({items, customers, currentPartnerName, on
           throw Error('حدد التوليفة والكمية وسعر البيع لكل سطر');
         }
         const totalPrice = amount(line);
-        const totalCost = Number((quantity * item.costPrice).toFixed(2));
+        const totalCost = multiplyMoney(quantity,item.costPrice);
         return {
           itemId: item.id, itemName: item.name, category: item.category, quantity,
           unitLabel: 'كجم', normalizedQtyInBaseUnit: quantity, unitPrice: price, unitCost: item.costPrice,
-          totalPrice, totalCost, profit: totalPrice - totalCost,
+          totalPrice, totalCost, profit: sumMoney([totalPrice,-totalCost]),
         };
       });
       if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > total || (method === 'آجل' && !paid.trim())) {
@@ -91,7 +96,7 @@ export function WholesaleInvoiceScreen({items, customers, currentPartnerName, on
       setReview({
         date, saleType: 'wholesale', customerId, customerName: customer.name, items: invoiceItems, subtotal: total,
         discount: 0, totalAmount: total, totalCost: 0, netProfit: 0, paidAmount,
-        remainingAmount: Number((total - paidAmount).toFixed(2)), paymentMethod: method, partnerName: currentPartnerName,
+        remainingAmount: roundMoney(total - paidAmount), paymentMethod: method, partnerName: currentPartnerName,
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'تعذر مراجعة الفاتورة');

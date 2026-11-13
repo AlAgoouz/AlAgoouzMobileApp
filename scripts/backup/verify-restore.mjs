@@ -1,5 +1,5 @@
 import {execFileSync,spawnSync} from 'node:child_process';
-import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,rmSync} from 'node:fs';
 import {resolve,join,sep} from 'node:path';
 import {randomBytes,createHash,createHmac} from 'node:crypto';
 import {Worker} from 'node:worker_threads';
@@ -193,6 +193,8 @@ finally{
   if(createdNetwork){try{run('docker',['network','rm',network]);}catch{console.error('RESTORE_NETWORK_CLEANUP_FAILED');process.exitCode=1;}}
   if(createdVolume){try{const label=run('docker',['volume','inspect','--format','{{index .Labels "app.agouz.purpose"}}',volume]).trim();if(label!=='isolated-recovery'||!volume.startsWith(prefix))throw new Error('RESTORE_VOLUME_REFUSED');run('docker',['volume','rm',volume]);}catch{console.error('RESTORE_VOLUME_CLEANUP_FAILED');process.exitCode=1;}}
   if(createdStorageVolume){try{const label=run('docker',['volume','inspect','--format','{{index .Labels "app.agouz.purpose"}}',storageVolume]).trim();if(label!=='isolated-recovery'||!storageVolume.startsWith(prefix))throw new Error('RESTORE_VOLUME_REFUSED');run('docker',['volume','rm',storageVolume]);}catch{console.error('RESTORE_STORAGE_VOLUME_CLEANUP_FAILED');process.exitCode=1;}}
+  try{rmSync(restore,{recursive:true,force:true});}
+  catch{console.error('RESTORE_PLAINTEXT_CLEANUP_FAILED');process.exitCode=1;}
 }
 if(proof&&!process.exitCode){
   proof.cleanupComplete=true;
