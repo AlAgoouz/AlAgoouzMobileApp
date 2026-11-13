@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import React from 'react';
 import {afterEach,expect,it,vi} from 'vitest';
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {ItemDefinitionModal} from '../src/components/ItemDefinitionModal';
 import {WholesaleInvoiceScreen} from '../src/components/WholesaleInvoiceScreen';
 import {CashierDayScreen} from '../src/components/CashierDayScreen';
 import {PurchaseScreen} from '../src/components/PurchaseScreen';
+import {SuppliersAndCustomersScreen} from '../src/components/ManagementScreens';
+import type {PurchaseInvoice} from '../src/types/erp';
 import {INITIAL_ITEMS,INITIAL_CUSTOMERS,INITIAL_SUPPLIERS} from '../src/data/initialData';
 import {approveCashierDay,attachCashierReport} from '../src/lib/cashierDays';
 import {emptyStore} from '../src/lib/storeState';
@@ -111,4 +113,57 @@ it('creates a fully paid taxed purchase and exposes no new credit option',async(
   fireEvent.click(screen.getByRole('button',{name:/حفظ واعتماد الفاتورة/}));
   await waitFor(()=>expect(save).toHaveBeenCalledOnce());
   expect(save).toHaveBeenCalledWith(expect.objectContaining({accountingVersion:2,netAmount:100,taxAmount:14,totalAmount:114,paidAmount:114,remainingAmount:0,paymentMethod:'نقدي'}));
+});
+
+it('opens a supplier invoice from the prices tab and keeps both tab filters',async()=>{
+ const supplier=INITIAL_SUPPLIERS[0];
+ const invoice:PurchaseInvoice={
+   id:'purchase',invoiceNumber:'PUR-21',date:'2026-11-01',supplierId:supplier.id,supplierName:supplier.name,
+   partnerName:'Owner',totalAmount:114,netAmount:100,taxAmount:14,paidAmount:114,remainingAmount:0,paymentMethod:'نقدي',
+   items:[{itemId:raw.id,itemName:raw.name,quantity:1,unit:'kg',purchasePrice:100,
+     previousLastPrice:0,previousWacCost:0,cheapestSupplierPrice:0,cheapestSupplierName:'',updateProductCost:true}],
+ };
+ render(<PurchaseScreen items={[raw]} suppliers={[supplier]} purchaseInvoices={[invoice]}
+   currentPartnerName="Owner" onSavePurchase={()=>true} onBack={()=>{}}/>);
+ fireEvent.change(screen.getByRole('searchbox',{name:'البحث في الفواتير'}),{target:{value:'PUR-21'}});
+ fireEvent.click(screen.getByRole('button',{name:'أسعار الموردين'}));
+ fireEvent.click(screen.getByRole('button',{name:'المورد لعرض الأسعار'}));
+ fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:new RegExp(supplier.name)}));
+ fireEvent.click(screen.getByText('آخر أسعار الشراء لكل صنف'));
+ const details=screen.getByText('آخر أسعار الشراء لكل صنف').parentElement as HTMLDetailsElement;
+ details.open=true;
+ fireEvent(details,new Event('toggle'));
+ expect(await screen.findByText(/Raw bean: 100/)).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'فتح الفاتورة'}));
+ expect(screen.getByRole('dialog').textContent).toContain('PUR-21');
+ fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'إغلاق النافذة'}));
+ expect(screen.queryByRole('dialog')).toBeNull();
+ expect(screen.getByRole('button',{name:'المورد لعرض الأسعار'}).textContent).toContain(supplier.name);
+ fireEvent.click(screen.getByRole('button',{name:'الفواتير'}));
+ expect((screen.getByRole('searchbox',{name:'البحث في الفواتير'}) as HTMLInputElement).value).toBe('PUR-21');
+});
+
+it('restores the search and page when the contacts view is mounted again',()=>{
+ const customers=Array.from({length:22},(_,i)=>({
+   ...INITIAL_CUSTOMERS[0],id:'c-'+i,name:'عميل القاهرة '+(i+1),
+ }));
+ const noop=()=>{};
+ const Harness=()=>{
+   const [shown,setShown]=React.useState(true);
+   const [view,setView]=React.useState({query:'',page:0});
+   return shown?<SuppliersAndCustomersScreen mode="customers" listView={view} onListViewChange={setView}
+     customers={customers} suppliers={[]} purchaseInvoices={[]} salesInvoices={[]} accountPayments={[]}
+     onPaySupplier={()=>true} onCollectCustomer={()=>true} onAddSupplier={noop} onDeleteSupplier={noop}
+     onAddCustomer={noop} onDeleteCustomer={noop} onBack={()=>setShown(false)} />
+     : <button type="button" onClick={()=>setShown(true)}>الرجوع للعملاء</button>;
+ };
+ render(<Harness/>);
+ fireEvent.change(screen.getByRole('searchbox',{name:'بحث في العملاء'}),{target:{value:'القاهرة'}});
+ fireEvent.click(screen.getByRole('button',{name:'الصفحة التالية'}));
+ expect(screen.getByText('عميل القاهرة 22')).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'رجوع'}));
+ fireEvent.click(screen.getByRole('button',{name:'الرجوع للعملاء'}));
+ expect((screen.getByRole('searchbox',{name:'بحث في العملاء'}) as HTMLInputElement).value).toBe('القاهرة');
+ expect(screen.getByText('عميل القاهرة 22')).toBeTruthy();
+ expect(screen.queryByText('عميل القاهرة 1')).toBeNull();
 });

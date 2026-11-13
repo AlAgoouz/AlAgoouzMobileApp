@@ -346,8 +346,12 @@ export async function verifyDesign(){
     await page.route('**/rest/v1/bon_elagouz_store?*',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(new URL(route.request().url()).searchParams.get('select')==='version'?{version:0}:recipeFixture)}));
     await page.reload();await page.getByRole('button',{name:'الأقسام',exact:true}).last().click();
     await page.locator('.section-tile').filter({has:page.locator('.section-tile-title',{hasText:'الوصفات'})}).click();
-    await page.getByLabel('المنتج صاحب الوصفة').selectOption('draft:recipe-draft');
-    await page.getByRole('combobox',{name:/^المكون/}).selectOption('recipe-raw');
+    await page.getByRole('button',{name:'المنتج صاحب الوصفة',exact:true}).click();
+    await page.getByRole('searchbox',{name:'ابحث باسم المنتج أو الكود'}).fill('DR-1');
+    await page.getByRole('button',{name:/مشروب تحت الاستكمال/}).click();
+    await page.getByRole('button',{name:'المكون',exact:true}).click();
+    await page.getByRole('searchbox',{name:'ابحث باسم المكون أو الكود'}).fill('R1');
+    await page.getByRole('button',{name:/خام الوصفة/}).click();
     await page.getByLabel('كمية المكون',{exact:true}).fill('١٨');
     await page.getByRole('button',{name:'إضافة المكون',exact:true}).click();
     assert.equal(await page.getByLabel('إجمالي تكلفة الوصفة').innerText(),new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(7.2)+' ج.م');

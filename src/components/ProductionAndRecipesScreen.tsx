@@ -1,3 +1,9 @@
+import {Modal} from './Modal';
+import {RecordPagination,useRecordPage} from './RecordPagination';
+import {matchesRecordSearch} from '../lib/recordSearch';
+import {RecordTabs} from './RecordTabs';
+import {RecordPickerField} from './RecordPickerField';
+import {parseLocalizedNumber} from '../lib/cashierRows';
 import {Flame as HeaderFlame} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
 import {productionNeeds} from '../lib/inventory';
@@ -44,6 +50,12 @@ export const ProductionAndRecipesScreen: React.FC<
     "produce",
   );
 
+  const [historyQuery,setHistoryQuery]=useState('');
+  const matchingBatches=useMemo(()=>productionBatches.filter(batch=>
+    matchesRecordSearch(historyQuery,batch.batchNumber,batch.blendName,batch.date)),[productionBatches,historyQuery]);
+  const historyPage=useRecordPage(matchingBatches,historyQuery,20);
+  const [reviewOpen,setReviewOpen]=useState(false);
+
   // الأصناف التي هي توليفات بن مصنعة
   const blendItems = useMemo(
     () => items.filter((i) => i.category === "manufactured_blend"),
@@ -54,7 +66,8 @@ export const ProductionAndRecipesScreen: React.FC<
   const [selectedBlendId, setSelectedBlendId] = useState<string>(
     blendItems[0]?.id || "",
   );
-  const [produceQtyKg, setProduceQtyKg] = useState<number>(10);
+  const [produceQuantity, setProduceQuantity] = useState('10');
+  const produceQtyKg = parseLocalizedNumber(produceQuantity) ?? 0;
   const [produceNotes, setProduceNotes] = useState<string>("");
   const [bannerMessage, setBannerMessage] = useState<{
     type: "success" | "error";
@@ -91,7 +104,8 @@ export const ProductionAndRecipesScreen: React.FC<
   );
 
   const handleRunProduction = () => {
-    if (!selectedBlend) return;
+    if (!selectedBlend || !canProduceAll) return;
+    setReviewOpen(false);
     const res = onExecuteProduction(
       selectedBlend.id,
       produceQtyKg,
@@ -122,39 +136,12 @@ export const ProductionAndRecipesScreen: React.FC<
           جديد
         </button>}</OperationHeader>
 
-      {/* شريط التبويبات */}
-      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-3 gap-2 section-tabs sticky top-0 z-20">
-        <button
-          onClick={() => {
-            setActiveTab("produce");
-            setBannerMessage(null);
-          }}
-          className={`py-2 px-2 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === "produce"
-              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27] shadow"
-              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
-          }`}
-        >
-          <Scale className="w-4 h-4 text-[#D4AF37]" />
-          إنتاج توليفة
-        </button>
-        <button onClick={onOpenRecipes} className="record-action"><Layers size={16}/>فتح قسم الوصفات</button>
-        <button
-          onClick={() => {
-            setActiveTab("history");
-            setBannerMessage(null);
-          }}
-          className={`py-2 px-2 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === "history"
-              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27] shadow"
-              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
-          }`}
-        >
-          <History className="w-4 h-4 text-[#D4AF37]" />
-          السجل ({productionBatches.length})
-        </button>
+      <div className="operation-tab-strip">
+        <RecordTabs label="أقسام الإنتاج" value={activeTab}
+          tabs={[{id:'produce',label:'إنتاج توليفة'},{id:'history',label:'سجل التشغيلات ('+productionBatches.length+')'}]}
+          onChange={tab=>{setActiveTab(tab);setBannerMessage(null);}}/>
+        <button type="button" onClick={onOpenRecipes} className="record-action"><Layers size={16}/>فتح قسم الوصفات</button>
       </div>
-
       <div className="p-3.5 space-y-4">
         {bannerMessage && (
           <div
@@ -186,18 +173,9 @@ export const ProductionAndRecipesScreen: React.FC<
                 </span>
               </div>
 
-              <select
-                value={selectedBlend?.id || ""}
-                onChange={(e) => setSelectedBlendId(e.target.value)}
-                className="w-full border-2 border-amber-800/20 rounded-xl px-3.5 py-3 text-sm font-extrabold text-slate-900 bg-amber-50/30 focus:outline-none"
-              >
-                {blendItems.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} — (الرصيد الجاهز حالياً: {b.stock} كجم)
-                  </option>
-                ))}
-              </select>
-
+              <RecordPickerField label="التوليفة المراد إنتاجها" searchLabel="ابحث باسم التوليفة أو الكود"
+                options={blendItems.map(blend=>({id:blend.id,title:blend.name,detail:blend.code+' · الرصيد '+blend.stock+' كجم'}))}
+                value={selectedBlend?.id??''} onChange={setSelectedBlendId}/>
               {selectedBlend && (
                 <div className="grid grid-cols-3 gap-2 pt-1 text-center">
                   <div className="bg-slate-50 rounded-xl p-2 border border-slate-200/70">
@@ -236,15 +214,11 @@ export const ProductionAndRecipesScreen: React.FC<
               </div>
               <div className="flex items-center gap-3">
                 <input
-                  type="number"
-                  min="0.5"
-                  step="0.5"
-                  value={produceQtyKg}
-                  onChange={(e) =>
-                    setProduceQtyKg(
-                      Math.max(0.5, parseFloat(e.target.value) || 1),
-                    )
-                  }
+                  type="text"
+                  inputMode="decimal"
+                  aria-label="كمية الإنتاج بالكيلو"
+                  value={produceQuantity}
+                  onChange={event=>setProduceQuantity(event.target.value)}
                   className="w-28 text-center text-xl font-black text-amber-900 bg-amber-50 border-2 border-amber-400 rounded-2xl py-2.5 focus:outline-none"
                 />
                 <span className="text-sm font-extrabold text-slate-700">
@@ -259,7 +233,7 @@ export const ProductionAndRecipesScreen: React.FC<
                 {[5, 10, 15, 20, 25, 50].map((q) => (
                   <button
                     key={q}
-                    onClick={() => setProduceQtyKg(q)}
+                    onClick={() => setProduceQuantity(String(q))}
                     className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition ${
                       produceQtyKg === q
                         ? "bg-amber-800 text-white border-amber-800"
@@ -338,14 +312,14 @@ export const ProductionAndRecipesScreen: React.FC<
               />
 
               <button
-                onClick={handleRunProduction}
+                onClick={()=>setReviewOpen(true)}
                 disabled={!canProduceAll}
                 className="w-full bg-amber-800 hover:bg-amber-900 disabled:bg-slate-300 text-white font-extrabold py-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2 transition"
               >
                 <Flame className="w-5 h-5" />
                 <span>
                   {canProduceAll
-                    ? `تنفيذ الإنتاج: سحب الخامات وإضافة ${produceQtyKg} كجم للرصيد`
+                    ? `مراجعة إنتاج وإضافة ${produceQtyKg} كجم للرصيد`
                     : "الرصيد غير كافٍ لبعض الخامات (راجع النواقص)"}
                 </span>
               </button>
@@ -353,10 +327,33 @@ export const ProductionAndRecipesScreen: React.FC<
           </div>
         )}
 
+        {reviewOpen&&selectedBlend&&<Modal title="مراجعة تشغيلة الإنتاج" description={selectedBlend.name}
+          onClose={()=>setReviewOpen(false)}
+          footer={<button type="button" className="operation-primary" disabled={!canProduceAll}
+            onClick={handleRunProduction}>تأكيد الإنتاج</button>}>
+          <dl className="record-facts operation-surface">
+            <div><dt>الكمية المضافة</dt><dd>{produceQtyKg} كجم</dd></div>
+            <div><dt>التكلفة المقدرة</dt><dd>{totalBatchEstimatedCost.toFixed(2)} ج.م</dd></div>
+          </dl>
+          <ul className="invoice-review-lines">
+            {productionSimulation.map(ingredient=><li key={ingredient.ingredientId}>
+              <strong>{ingredient.ingredientName}</strong>
+              <span>خصم {ingredient.totalRequiredInBase.toLocaleString('ar-EG',{maximumFractionDigits:6})} {displayUnit(ingredient.baseUnit)}</span>
+            </li>)}
+          </ul>
+          {!canProduceAll&&<p role="alert">الرصيد الحالي لا يكفي لتنفيذ التشغيلة.</p>}
+        </Modal>}
+
         {/* ================= التبويب الثالث: سجل تشغيلات الإنتاج ================= */}
         {activeTab === "history" && (
           <div className="space-y-3">
-            {productionBatches.map((batch) => (
+            <label className="record-search">البحث في سجل التشغيلات
+              <input type="search" value={historyQuery} onChange={event=>setHistoryQuery(event.target.value)}
+                placeholder="رقم التشغيلة أو التوليفة أو التاريخ" />
+            </label>
+            <RecordPagination {...historyPage}/>
+            {!historyPage.total&&<p className="record-state">{productionBatches.length?'لا توجد تشغيلات مطابقة.':'لا توجد تشغيلات مسجلة.'}</p>}
+            {historyPage.visible.map((batch) => (
               <div
                 key={batch.id}
                 className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-2.5"

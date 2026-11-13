@@ -211,3 +211,17 @@ it('requires an explicit physical count for cashier deficits before stocktaking'
  fireEvent.click(screen.getByRole("button",{name:"تأكيد الجرد وتحديث المخزون"}));
  expect(save).toHaveBeenCalledWith([expect.objectContaining({systemStock:-2,actualStock:0,difference:2})],expect.any(String),undefined);
 });
+
+it("shows stock deductions before confirming production with an Arabic decimal quantity", () => {
+  const blend = INITIAL_ITEMS.find(item => item.category === "manufactured_blend")!;
+  const stocked = INITIAL_ITEMS.map(item => ({...item, stock: 100}));
+  const execute = vi.fn(() => ({ok: true, message: "تم الإنتاج"}));
+  render(<ProductionAndRecipesScreen items={stocked} productionBatches={[]} currentPartnerName="Owner"
+    onExecuteProduction={execute} onBack={()=>{}} />);
+  fireEvent.change(screen.getByLabelText("كمية الإنتاج بالكيلو"), {target: {value: "٢٫٥"}});
+  fireEvent.click(screen.getByRole("button", {name: /مراجعة إنتاج وإضافة/}));
+  expect(screen.getByRole("dialog").textContent).toContain("خصم");
+  expect(execute).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", {name: "تأكيد الإنتاج"}));
+  expect(execute).toHaveBeenCalledExactlyOnceWith(blend.id, 2.5, "");
+});

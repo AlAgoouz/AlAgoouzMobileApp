@@ -1,10 +1,16 @@
 import React,{useMemo,useState} from 'react';
-export function useRecordPage<T>(records:readonly T[],resetKey:unknown,pageSize=50){
+export function useRecordPage<T>(records:readonly T[],resetKey:unknown,pageSize=50,controlled?:{page:number;setPage:(page:number)=>void}){
   const [position,setPosition]=useState({key:resetKey,page:0});
   const pages=Math.max(1,Math.ceil(records.length/pageSize));
-  const page=position.key===resetKey?Math.min(position.page,pages-1):0;
+  const requestedPage=controlled?.page??(position.key===resetKey?position.page:0);
+  const page=Math.max(0,Math.min(requestedPage,pages-1));
   const visible=useMemo(()=>records.slice(page*pageSize,(page+1)*pageSize),[records,page,pageSize]);
-  return {visible,page,pages,total:records.length,pageSize,setPage:(next:number)=>setPosition({key:resetKey,page:Math.max(0,Math.min(next,pages-1))})};
+  const setPage=(next:number)=>{
+    const clampedPage=Math.max(0,Math.min(next,pages-1));
+    if(controlled)controlled.setPage(clampedPage);
+    else setPosition({key:resetKey,page:clampedPage});
+  };
+  return {visible,page,pages,total:records.length,pageSize,setPage};
 }
 export function RecordPagination({page,pages,total,pageSize,setPage}:{page:number;pages:number;total:number;pageSize:number;setPage:(page:number)=>void}){
   if(total===0)return null;

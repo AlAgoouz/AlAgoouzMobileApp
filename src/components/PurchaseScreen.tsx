@@ -5,8 +5,11 @@ import {Modal} from './Modal';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import {ResponsiveRegister} from './ResponsiveRegister';
 import {RecordPicker} from './RecordPicker';
+import {RecordPickerField} from './RecordPickerField';
+import {RecordTabs} from './RecordTabs';
+import {SupplierPurchasePanels} from './SupplierPurchasePanels';
 import {money} from '../lib/reporting';
-import {latestSupplierPrices} from '../lib/supplierPurchases';
+import {latestSupplierPrices,supplierPurchaseHistory} from '../lib/supplierPurchases';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
 import React, { useState, useMemo, useRef } from "react";
 import {Truck, Search, AlertTriangle, Plus, Minus, Trash2, Edit3, Clock, Package, Tag, Check, FileText, X, ShoppingBag, Eye, UserPlus} from 'lucide-react';
@@ -54,6 +57,10 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
   // فلاتر سجل فواتير المشتريات
   const [invoiceSearch, setInvoiceSearch] = useState("");
+  const [registerTab,setRegisterTab]=useState<'invoices'|'prices'>('invoices');
+  const [priceSupplierId,setPriceSupplierId]=useState('');
+  const supplierPrices=useMemo(()=>priceSupplierId?supplierPurchaseHistory(purchaseInvoices,priceSupplierId):null,
+    [purchaseInvoices,priceSupplierId]);
   const [invoiceFilter, setInvoiceFilter] = useState<
     "all" | "نقدي" | "آجل_أو_جزئي"
   >("all");
@@ -320,6 +327,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       const accepted = await onSavePurchase(reviewInvoice);
       if (accepted === false) throw Error("لم تُحفظ الفاتورة؛ راجع التنبيه والبيانات");
       setCart([]);
+      setRegisterTab("invoices");
       setViewMode("list");
     } catch (cause) {
       setInvoiceError(cause instanceof Error ? cause.message : "تعذر تأكيد الحفظ.");
@@ -369,6 +377,17 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
           <div><dt>المدفوع للموردين</dt><dd>{money(purchaseStats.totalPaid)} ج.م</dd></div>
           <div><dt>المتبقي من فواتير قديمة</dt><dd>{money(purchaseStats.totalRemaining)} ج.م</dd></div>
         </dl>
+        <RecordTabs label="أقسام المشتريات" value={registerTab} onChange={setRegisterTab}
+          tabs={[{id:'invoices',label:'الفواتير'},{id:'prices',label:'أسعار الموردين'}]} />
+        {registerTab==='prices' && <div className="operation-surface space-y-3 p-4">
+          <RecordPickerField label="المورد لعرض الأسعار" searchLabel="ابحث باسم المورد أو رقم الهاتف"
+            options={suppliers.map(supplier=>({id:supplier.id,title:supplier.name,detail:supplier.phone}))}
+            value={priceSupplierId} onChange={setPriceSupplierId}/>
+          {supplierPrices ? <SupplierPurchasePanels key={priceSupplierId} data={supplierPrices}
+            onOpenInvoice={id=>setSelectedInvoiceDetails(purchaseInvoices.find(invoice=>invoice.id===id)??null)} />
+            : <p className="record-state">{suppliers.length?'اختَر موردًا لعرض أسعار مشترياته.':'لا يوجد موردون مسجلون.'}</p>}
+        </div>}
+        {registerTab==='invoices' && <>
         <label className="record-search">البحث في الفواتير
           <input type="search" value={invoiceSearch} onChange={event=>setInvoiceSearch(event.target.value)}
             placeholder="رقم الفاتورة أو المورد أو الصنف" />
@@ -389,6 +408,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
             {onDeletePurchaseInvoice&&!inv.isCancelled&&<button type="button" className="record-action text-red-700" onClick={()=>setInvoiceToCancel(inv)}>إلغاء</button>}
           </div>},
         ]}/> : <p className="record-state">{purchaseInvoices.length?'لا توجد فواتير مطابقة.':'لا توجد فواتير مشتريات مسجلة.'}</p>}
+        </>}
       </div>}
 
       {invoiceToCancel && <Modal title="إلغاء فاتورة المشتريات"

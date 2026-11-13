@@ -220,12 +220,15 @@ export default function App() {
   const [expenseDetailId,setExpenseDetailId]=useState<string>();
   const [cashierDetailId,setCashierDetailId]=useState<string>();
   const [customerTargetId,setCustomerTargetId]=useState<string>();
+  const [customerView,setCustomerView]=useState({query:'',page:0});
+  const [supplierView,setSupplierView]=useState({query:'',page:0});
+  const [returnFromCustomer,setReturnFromCustomer]=useState('home');
   const openPurchase=(id:string)=>{setPurchaseTargetId(id);setActiveScreen('purchase');};
-  const openCustomer=(id:string)=>{setReceiptModalInvoice(null);setCustomerTargetId(id);setActiveScreen('customers');};
+  const openCustomer=(id:string)=>{setReceiptModalInvoice(null);setReturnFromCustomer(activeScreen==='customers'?'home':activeScreen);setCustomerTargetId(id);setActiveScreen('customers');};
   const openRecipes=(targetId?:string)=>{setRecipeTargetId(targetId);setActiveScreen('recipes');};
   useEffect(()=>{if(activeScreen!=='sales_invoices')setHistoryEditing(false);},[activeScreen]);
   useEffect(()=>setSelectedFinancialPartnerId(''),[member?.userId,member?.partnerId]);
-  useEffect(()=>setSalesHistoryView(initialSalesHistoryView),[member?.userId]);
+  useEffect(()=>{setSalesHistoryView(initialSalesHistoryView);setCustomerView({query:'',page:0});setSupplierView({query:'',page:0});},[member?.userId]);
   const pendingInvoice=useRef<{kind:'purchase'|'sale';id:string;userId:string|undefined;draft:string}>();
   const confirmSave=async()=>{await engine.flush();if(engine.snapshot.status!=='ready')throw Error(engine.snapshot.error||'لم يصل تأكيد اعتماد العملية؛ راجع حالة الحفظ');};
   const loggedPartnerId = member?.partnerId ?? null;
@@ -912,6 +915,7 @@ export default function App() {
   const navigateScreen=(screen:string)=>{
     setPurchaseTargetId(undefined);
     setCustomerTargetId(undefined);
+    setReturnFromCustomer('home');
     setRecipeTargetId(undefined);
     if(screen==='expenses'||screen==='data_control'||screen==='partners'){setMoreInitialTab(screen);setActiveScreen('more');}
     else {if(screen==='more')setMoreInitialTab('menu');setActiveScreen(screen);}
@@ -1099,7 +1103,7 @@ export default function App() {
                 showToast(`✅ تمت إضافة الصنف (${created.name}) للمخزن!`);
               });
             }}
-            onBack={() => setActiveScreen("sections")}
+            onBack={()=>{setActiveScreen(purchaseTargetId?'suppliers':'sections');setPurchaseTargetId(undefined);}}
           />
         )}
 
@@ -1294,7 +1298,7 @@ export default function App() {
 
         {activeScreen === "suppliers" && (
           <SuppliersAndCustomersScreen onUpdateContact={(mode,id,details)=>safeAction(()=>{if(mode==='customers'){checkCustomerDetails(details);setCustomers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}else{checkSupplierDetails(details);setSuppliers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}addAuditLog("تعديل وصفة/صنف","تحديث بيانات التواصل");})}
-            mode="suppliers" onOpenPurchase={openPurchase}
+            mode="suppliers" listView={supplierView} onListViewChange={setSupplierView} onOpenPurchase={openPurchase}
             suppliers={suppliers}
             customers={customers}
             purchaseInvoices={purchaseInvoices}
@@ -1385,7 +1389,7 @@ export default function App() {
 
         {activeScreen === "customers" && (
           <SuppliersAndCustomersScreen onUpdateContact={(mode,id,details)=>safeAction(()=>{if(mode==='customers'){checkCustomerDetails(details);setCustomers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}else{checkSupplierDetails(details);setSuppliers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}addAuditLog("تعديل وصفة/صنف","تحديث بيانات التواصل");})}
-            mode="customers" initialStatementId={customerTargetId}
+            mode="customers" listView={customerView} onListViewChange={setCustomerView} initialStatementId={customerTargetId}
             onOpenSale={id=>setReceiptModalInvoice(salesInvoices.find(invoice=>invoice.id===id)??null)}
             suppliers={suppliers}
             customers={customers}
@@ -1462,7 +1466,7 @@ export default function App() {
                 showToast("🗑️ تم حذف العميل!");
               });
             }}
-            onBack={() => setActiveScreen("home")}
+            onBack={()=>{setCustomerTargetId(undefined);setActiveScreen(returnFromCustomer);}}
           />
         )}
 
