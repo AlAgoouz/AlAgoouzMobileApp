@@ -537,9 +537,11 @@ it.skipIf(!active)('rejects a return refund above the recorded payment when the 
  const previous={...stockState(),items:[bean,blend],salesInvoices:[saleInvoice],
    customers:[{...INITIAL_CUSTOMERS[0],id:'c1',name:'Customer',phone:'01012345678',area:'Cairo',balance:1,totalSales:sale().totalAmount,invoicesCount:1}]};
  seed(previous);
- const invoice=previous.salesInvoices[0];
- const forged={...previous,salesInvoices:[{...invoice,isReturned:true,returnedAt:new Date().toISOString(),
-   returnedBy:'Owner',returnDebtReversed:1,returnRefundAmount:invoice.totalAmount-1}]};
+ const reconciled={...previous,customers:previous.customers.map(customer=>({...customer,balance:saleInvoice.remainingAmount}))};
+ const candidate=returnSale(reconciled,saleInvoice.id,'Owner');
+ const forged={...candidate,salesInvoices:candidate.salesInvoices.map(invoice=>({
+   ...invoice,returnDebtReversed:1,returnRefundAmount:invoice.totalAmount-1,
+ }))};
  reject(forged,'RETURN_PAYMENT_RECONCILIATION_REQUIRED');
 });
 it.skipIf(!active)('requires one Begun amount and the report date at the database queue boundary',()=>{
