@@ -1,10 +1,10 @@
+import {roundMoney as money,sumMoney} from './money';
 import type { StoreState } from './storeState';
 import { businessDate } from './dates';
 import { receiveStock } from './costing';
 import { recalculateRecipeCosts } from './itemCosts';
 import type { StoreEngine } from './storeEngine';
 
-const money = (value: number) => Number(value.toFixed(2));
 
 export function assertPayment(balance: number, amount: number) {
   if (!Number.isFinite(amount) || amount <= 0)
@@ -93,11 +93,10 @@ export function returnSale(
   const customer = state.customers.find((c) => c.id === invoice.customerId);
   if (invoice.remainingAmount > 0 && !customer)
     throw new Error('حساب العميل غير موجود');
-  const debtReversed = Math.min(
-    invoice.remainingAmount,
-    customer?.balance ?? 0,
-  );
-  const refundAmount = Number((invoice.totalAmount - debtReversed).toFixed(2));
+  if (invoice.remainingAmount > (customer?.balance ?? 0))
+    throw new Error('المتبقي على الفاتورة أكبر من مديونية العميل؛ راجع التحصيلات قبل اعتماد المرتجع');
+  const debtReversed = invoice.remainingAmount;
+  const refundAmount = invoice.paidAmount;
   const consumedCost = Number(
     invoice.items
       .filter((line) => ['drink_recipe', 'seasoning_recipe'].includes(line.category))
@@ -418,9 +417,7 @@ export function cancelExpense(
   };
 }
 export function operatingExpenses(expenses: StoreState['expenses']) {
-  return money(
-    expenses
-      .filter((e) => !e.isCancelled && e.category !== 'مسحوبات شركاء')
-      .reduce((sum, e) => money(sum + e.amount), 0),
-  );
+  return sumMoney(expenses
+    .filter(expense=>!expense.isCancelled&&expense.category!=='مسحوبات شركاء')
+    .map(expense=>expense.amount));
 }

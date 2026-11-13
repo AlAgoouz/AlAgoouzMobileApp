@@ -93,6 +93,17 @@ describe("cashier quantities and matching", () => {
     expect(r.quantity).toBe(250);
     expect(r.unitHint).toBe("gram");
   });
+  it("requires weight units instead of extracting them from names",()=>{
+    const [missing,explicit,ambiguous]=mapRawCashierRows([
+      {Name:"ربع بن",Code:"B1",Quantity:2},
+      {Name:"ربع بن",Code:"B1",Quantity:2,Unit:"kg"},
+      {Name:"ربع بن",Code:"B1",Quantity:"1,500",Unit:"kg"},
+    ],[bean]);
+    expect(missing.error).toContain("حدد وحدة");
+    expect(explicit.quantity).toBe(2);
+    expect(explicit.error).toBeUndefined();
+    expect(ambiguous.error).toContain("ملتبسة");
+  });
   it("matches item code without overwriting name", () => {
     const [r] = mapRawCashierRows(
       [{ Name: bean.name, "Item Code": "B1", Quantity: 1, Unit: "kg" }],
@@ -321,6 +332,14 @@ describe("payments and returns", () => {
     expect(next.customers[0].balance).toBe(0);
     expect(next.salesInvoices[0].isReturned).toBe(true);
     expect(() => returnSale(next, "s1", "partner")).toThrow();
+  });
+  it("rejects a return if the customer's debt cannot explain the remaining amount",()=>{
+    const state={...emptyStore,items:[bean],salesInvoices:[invoice],customers:[{
+      id:'c1',name:'عميل',phone:'',type:'عميل محل' as const,balance:50,totalSales:400,invoicesCount:1,
+    }]};
+    expect(()=>returnSale(state,'s1','partner')).toThrow('راجع التحصيلات');
+    expect(state.items[0].stock).toBe(bean.stock);
+    expect(state.salesInvoices[0].paidAmount).toBe(100);
   });
   it("leaves drink ingredients consumed after financial return", () => {
     const state = {

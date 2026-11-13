@@ -436,7 +436,7 @@ export function validateStore(value: unknown): StoreState {
     if (new Set(rows.map((row) => row.id)).size !== rows.length)
       throw new Error(`معرفات مكررة في ${key}`);
   }
-  const ids = new Set(parsed.items.map((i) => i.id));
+  const itemsById=new Map(parsed.items.map(item=>[item.id,item]));
   const reserved=new Set<string>();
   for(const draft of parsed.catalogNameDrafts){
     const d=draft.definition;if(!d)continue;
@@ -468,17 +468,18 @@ export function validateStore(value: unknown): StoreState {
     if (item.hasRecipe && !item.recipe?.length)
       throw new Error(`الوصفة ناقصة: ${item.name}`);
     for (const ing of item.recipe ?? []) {
-      if (!ids.has(ing.ingredientId) || ing.ingredientId === item.id)
+      const ingredient=itemsById.get(ing.ingredientId);
+      if (!ingredient || ing.ingredientId === item.id)
         throw new Error(`مكون مفقود أو دائري في وصفة ${item.name}`);
       if (
-        parsed.items.find((i) => i.id === ing.ingredientId)?.category ===
+        ingredient.category ===
         "drink_recipe"
       )
         throw new Error("المشروب المحضر لا يُستخدم كمكون مخزني في وصفة أخرى");
       convertToBaseUnit(
         ing.quantity,
         ing.unit,
-        parsed.items.find((i) => i.id === ing.ingredientId)!.baseUnit,
+        ingredient.baseUnit,
       );
     }
   }
@@ -489,7 +490,7 @@ export function validateStore(value: unknown): StoreState {
       throw new Error("تحتوي الوصفات اعتمادًا دائريًا؛ راجع المكونات.");
     if (visited.has(id)) return;
     visiting.add(id);
-    for (const ing of parsed.items.find((i) => i.id === id)?.recipe ?? [])
+    for (const ing of itemsById.get(id)?.recipe ?? [])
       walk(ing.ingredientId);
     visiting.delete(id);
     visited.add(id);

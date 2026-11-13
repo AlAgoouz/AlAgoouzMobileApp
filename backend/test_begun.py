@@ -44,6 +44,10 @@ class BegunTests(unittest.TestCase):
             with self.subTest(header=header),self.assertRaisesRegex(InvalidReport,code):
                 parse_report(workbook([[header],['Begun 58 1234.50']]),'sales.xlsx','financial',expected_date=expected)
 
+    def test_online_import_rejects_a_report_without_a_business_date(self):
+        with self.assertRaisesRegex(InvalidReport,'BEGUN_REPORT_DATE_REQUIRED'):
+            parse_report(workbook([['Begun','10.00']]),'sales.xlsx','financial',expected_date='2026-11-01')
+
     def test_source_row_survives_blank_print_layout_rows(self):
         result=parse_report(workbook([['System Sales Report'],[],[],['Begun 58 1234.50']]),'sales.xlsx','financial')
         self.assertEqual(result['rows'][0]['sourceRow'],4)

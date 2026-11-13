@@ -514,9 +514,9 @@ function importAs(user:string,query:string){return sql(`begin;set local request.
 function importJob(user=owner,date='2026-11-01',kind='financial'){
  const job=JSON.parse(importAs(user,`select public.bon_erp_new_import('report.csv','${kind}','${date}',7)`));
  sql(`insert into storage.objects values(gen_random_uuid(),'agouz-cashier-imports','${job.path}')`);
- const ready=JSON.parse(importAs(user,`select public.bon_erp_prepare_import('${job.id}','${'signed_fixture_'.repeat(3)}')`));return {...job,key:ready.workerToken};
+ const ready=JSON.parse(importAs(user,`select public.bon_erp_prepare_import('${job.id}','${'signed_fixture_'.repeat(3)}')`));return {...job,key:ready.workerToken,date};
 }
-function workerCall(job:any,action='claim',result:any={rows:[{metric:'Begun',amount:'5.00',businessDate:null}],sha256:'a'.repeat(64)},attempt:number|null=1){
+function workerCall(job:any,action='claim',result:any={rows:[{metric:'Begun',amount:'5.00',businessDate:job.date}],sha256:'a'.repeat(64)},attempt:number|null=1){
  const query=action==='claim'?`public.bon_erp_claim_import('${job.id}','${job.key}')`:`public.bon_erp_finish_import('${job.id}','${job.key}',${attempt??'null'},${literal(result)},null)`;
  return JSON.parse(sql(`begin;set local role anon;select ${query};commit;`)||'null');
 }
@@ -530,11 +530,39 @@ it.skipIf(!active)('parses into a pending cashier queue exactly once without cha
  expect(()=>importAs(owner,"select public.bon_erp_new_import('another.csv','financial','2026-11-01',7)")).toThrow('CASHIER_IMPORT_ALREADY_PENDING');
  expect(()=>sql(`begin;set local role anon;select * from bon_erp_private.import_jobs;rollback;`)).toThrow('permission denied');
 });
+it.skipIf(!active)('rejects a return refund above the recorded payment when the customer balance is inconsistent',()=>{
+ const blend:InventoryItem={...bean,id:'blend',code:'BL1',category:'manufactured_blend',hasRecipe:true,
+   recipe:[{ingredientId:bean.id,ingredientName:bean.name,quantity:1000,unit:'gram'}]};
+ const saleInvoice={...sale(2,blend),saleType:'wholesale' as const,paymentMethod:'آجل' as const,customerId:'c1',paidAmount:1,remainingAmount:3};
+ const previous={...stockState(),items:[bean,blend],salesInvoices:[saleInvoice],
+   customers:[{...INITIAL_CUSTOMERS[0],id:'c1',name:'Customer',phone:'01012345678',area:'Cairo',balance:1,totalSales:sale().totalAmount,invoicesCount:1}]};
+ seed(previous);
+ const reconciled={...previous,customers:previous.customers.map(customer=>({...customer,balance:saleInvoice.remainingAmount}))};
+ const candidate=returnSale(reconciled,saleInvoice.id,'Owner');
+ const forged={...candidate,salesInvoices:candidate.salesInvoices.map(invoice=>({
+   ...invoice,returnDebtReversed:1,returnRefundAmount:invoice.totalAmount-1,
+ }))};
+ reject(forged,'RETURN_PAYMENT_RECONCILIATION_REQUIRED');
+});
 it.skipIf(!active)('requires one Begun amount and the report date at the database queue boundary',()=>{
  const job=importJob();expect(workerCall(job).saleDate).toBe('2026-11-01');
  for(const rows of [[{metric:'Total Revenue',amount:'5.00'}],[{metric:'Begun',amount:'-5.00'}],[{metric:'Begun',amount:'5.00'},{metric:'Begun',amount:'5.00'}]])expect(()=>workerCall(job,'finish',{rows,sha256:'a'.repeat(64)})).toThrow('BEGUN_RESULT_REQUIRED');
  expect(()=>workerCall(job,'finish',{rows:[{metric:'Begun',amount:'5.00',businessDate:'2026-11-02'}],sha256:'a'.repeat(64)})).toThrow('BEGUN_REPORT_DATE_MISMATCH');
+ expect(()=>workerCall(job,'finish',{rows:[{metric:'Begun',amount:'5.00'}],sha256:'a'.repeat(64)})).toThrow('BEGUN_REPORT_DATE_REQUIRED');
  expect(workerCall(job,'finish').status).toBe('ready');
+});
+it.skipIf(!active)('keeps the original attempt budget when a failed import is queued again',()=>{
+ const job=importJob();
+ expect(workerCall(job).attempt).toBe(1);
+ const prepare=()=>JSON.parse(importAs(owner,`select public.bon_erp_prepare_import('${job.id}','${'signed_fixture_'.repeat(3)}')`));
+ for(const attempt of [2,3]){
+  sql(`update bon_erp_private.import_jobs set status='failed',lease_until=null where id='${job.id}'`);
+  job.key=prepare().workerToken;
+  expect(workerCall(job).attempt).toBe(attempt);
+ }
+ sql(`update bon_erp_private.import_jobs set status='failed',lease_until=null where id='${job.id}'`);
+ expect(prepare()).toEqual({id:job.id,status:'failed'});
+ expect(sql(`select attempt from bon_erp_private.import_jobs where id='${job.id}'`)).toBe('3');
 });
 const uwsRow={code:'200018',name:'Fixture beans',quantity:'0.375',unit:'kg',total:'10.00',sourceFormat:'uws-items-v1',businessDate:'2026-11-01',sourceRow:4,saleCount:3};
 function uwsFixture(row:Record<string,unknown>=uwsRow){
@@ -585,7 +613,7 @@ it.skipIf(!active)('rejects null, wrong and replayed import credentials, result 
  for(const result of [null,{}, {rows:{}}, {rows:[]}, {rows:[{}]}])expect(()=>workerCall(job,'finish',result)).toThrow('INVALID_IMPORT_RESULT');
  expect(()=>workerCall(job,'finish',{rows:[{}],sha256:'a'.repeat(64)},null)).toThrow('IMPORT_LEASE_CHANGED');
  sql(`update bon_erp_private.import_jobs set lease_until=now()-interval '1 second' where id='${job.id}'`);expect(workerCall(job).attempt).toBe(2);
- expect(()=>workerCall(job,'finish')).toThrow('IMPORT_LEASE_CHANGED');expect(workerCall(job,'finish',{rows:[{metric:'Begun',amount:'5.00'}],sha256:'a'.repeat(64)},2).status).toBe('ready');
+ expect(()=>workerCall(job,'finish')).toThrow('IMPORT_LEASE_CHANGED');expect(workerCall(job,'finish',{rows:[{metric:'Begun',amount:'5.00',businessDate:'2026-11-01'}],sha256:'a'.repeat(64)},2).status).toBe('ready');
  expect(sql("select has_schema_privilege('anon','bon_erp_private','USAGE')")).toBe('f');
 });
 it.skipIf(!active)('keeps cashier jobs and storage private and stops processing after account revocation',()=>{
@@ -605,7 +633,7 @@ it.skipIf(!active)('cancels a wrong unreviewed import and rejects content duplic
  expect(sql(`select error_code from bon_erp_private.import_jobs where id='${two.id}'`)).toBe('DUPLICATE_IMPORT_FILE');
  importAs(owner,`select public.bon_erp_cancel_import('${one.id}')`);expect(sql('select count(*) from public.cashier_sync_queue where not processed')).toBe('0');
  expect(()=>workerCall(one)).toThrow('IMPORT_WORKER_DENIED');
- const replacement=importJob();workerCall(replacement);workerCall(replacement,'finish',{rows:[{metric:'Begun',amount:'5.00'}],sha256:'c'.repeat(64)});
+ const replacement=importJob();workerCall(replacement);workerCall(replacement,'finish',{rows:[{metric:'Begun',amount:'5.00',businessDate:'2026-11-01'}],sha256:'c'.repeat(64)});
  sql(`update public.cashier_sync_queue set processed=true where import_job_id='${replacement.id}'`);
  expect(()=>importAs(owner,`select public.bon_erp_cancel_import('${replacement.id}')`)).toThrow('IMPORT_ALREADY_REVIEWED');
 });

@@ -1,3 +1,4 @@
+import {multiplyMoney,roundMoney,sumMoney} from '../lib/money';
 import {unitLabel as displayUnit} from '../lib/units';
 import {ShoppingBag as HeaderShoppingBag} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
@@ -228,16 +229,16 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
     return prices.indexOf(Math.min(...prices));
   }, [compareModalItem]);
 
-  const netInvoiceAmount = useMemo(
-    () =>
-      cart.reduce(
-        (sum, c) => sum + Number((c.quantity * c.purchasePrice).toFixed(2)),
-        0,
-      ),
-    [cart],
-  );
+  const netInvoiceAmount = useMemo(()=>{
+    try{return sumMoney(cart.map(line=>multiplyMoney(line.quantity,line.purchasePrice)));}
+    catch{return NaN;}
+  },[cart]);
 
-  const totalInvoiceAmount=Number((netInvoiceAmount+(Number.isFinite(taxAmount)?taxAmount:0)).toFixed(2));
+  let totalInvoiceAmount=NaN;
+  if(Number.isFinite(netInvoiceAmount)){
+    try{totalInvoiceAmount=roundMoney(netInvoiceAmount+(Number.isFinite(taxAmount)?taxAmount:0));}
+    catch{/* Approval reports invalid totals. */}
+  }
 
   const handleStartNewInvoice = () => {
     setCart([]);
@@ -265,6 +266,10 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       return;
     }
     if(!invoiceDate){setInvoiceError('حدد تاريخ الفاتورة');return;}
+    if(!Number.isFinite(totalInvoiceAmount)){
+      setInvoiceError('إجمالي الفاتورة خارج النطاق المسموح؛ راجع الكمية والسعر.');
+      return;
+    }
     if(cart.some(line=>!Number.isFinite(line.quantity)||line.quantity<=0||!Number.isFinite(line.purchasePrice)||line.purchasePrice<0)){
       setInvoiceError('راجع الكمية وسعر الشراء في بنود الفاتورة');
       return;

@@ -1,3 +1,4 @@
+import {StoreWriteFailure} from './storeErrors';
 import { emptyStore, validateStore, type StoreState } from './storeState';
 
 export type StoreStatus =
@@ -13,6 +14,7 @@ export interface StoreSnapshot {
   version: number;
   status: StoreStatus;
   error: string;
+  recoveryWarning?: string;
 }
 export interface StoreTransport {
   load(): Promise<{ state: unknown; version: number }>;
@@ -34,6 +36,7 @@ export class StoreEngine {
   };
   private listeners = new Set<() => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private retryCount=0;
   private pending:
     | { state: StoreState; version: number; id: string; queueId?: string; restore?: boolean }
     | undefined;
@@ -63,9 +66,12 @@ export class StoreEngine {
     this.listeners.forEach((fn) => fn());
   }
   async load() {
+    if (this.snapshot.status === 'saving') {
+      await this.flushInFlight;
+      return;
+    }
     clearTimeout(this.timer);
-    if (this.snapshot.status === 'saving')
-      throw new Error('انتظر انتهاء الحفظ');
+    this.retryCount=0;
     const epoch = ++this.epoch;
     this.publish({ ...this.snapshot, status: 'loading', error: '' });
     try {
@@ -93,6 +99,7 @@ export class StoreEngine {
   logout() {
     ++this.epoch;
     this.hydrated = false;
+    this.retryCount=0;
     clearTimeout(this.timer);
     this.pending = undefined;
     this.queued = undefined;
@@ -120,7 +127,9 @@ export class StoreEngine {
 
     this.authorize(this.snapshot.state,state);
     const validated = validateStore(state);
-    this.preserve(validated); // Failing local recovery storage must be visible, not ignored.
+    let recoveryWarning:string|undefined;
+    try { this.preserve(validated); }
+    catch { recoveryWarning='مسودة الاسترداد لم تُحفظ على الجهاز. خليك في الصفحة لحد تأكيد الحفظ على الخادم.'; }
     if (saving) {
       this.queued = {
         state: validated,
@@ -132,6 +141,7 @@ export class StoreEngine {
         state: validated,
         status: 'saving',
         error: '',
+        recoveryWarning,
       });
       return;
     }
@@ -146,6 +156,7 @@ export class StoreEngine {
       state: validated,
       status: 'dirty',
       error: '',
+      recoveryWarning,
     });
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
@@ -213,10 +224,12 @@ export class StoreEngine {
         ? await this.transport.save(...args, true)
         : await this.transport.save(...args);
       if (epoch !== this.epoch) return;
+      this.retryCount=0;
       if (this.queued) {
         const nextQueued = this.queued;
         this.queued = undefined;
         this.pending = {
+          ...this.snapshot,
           state: nextQueued.state,
           version,
           id: nextQueued.id,
@@ -244,12 +257,16 @@ export class StoreEngine {
       // payload and operation ID before advancing to the queued draft.
       const message =
         error instanceof Error ? error.message : 'تعذر حفظ البيانات';
+      const code=error instanceof StoreWriteFailure?error.code:message;
+      const conflict=/STORE_CONFLICT|QUEUE_PROCESSED/.test(code);
+      if(!conflict&&error instanceof StoreWriteFailure&&error.transient&&this.retryCount<3){
+        const delay=2000*2**this.retryCount++;
+        this.timer=setTimeout(()=>void this.flush(),delay);
+      }
       this.publish({
         ...this.snapshot,
-        status: /STORE_CONFLICT|QUEUE_PROCESSED/.test(message)
-          ? 'conflict'
-          : 'error',
-        error: message,
+        status:conflict?'conflict':'error',
+        error:message,
       });
     }
   }

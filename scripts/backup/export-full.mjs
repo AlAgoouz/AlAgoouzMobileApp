@@ -1,6 +1,6 @@
 // Full logical database export. This stage does NOT mark a backup as restore-verified.
 import {execFileSync} from 'node:child_process';
-import {readFileSync,writeFileSync,mkdirSync,existsSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,existsSync,rmSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {encryptFile,decryptFile,sha256} from './archive.mjs';
@@ -99,3 +99,9 @@ try{
   writeFileSync(join(work,'receipt.json'),JSON.stringify(receipt,null,2),{mode:0o600});
   console.log(JSON.stringify({status:'uploaded-pending-restore-verification',generation,work,authUsers:inventory.auth_users,uploadVerified:true,decryptionVerified:true,restoreVerified:false}));
 }catch(error){console.error(error.message);process.exitCode=1;}
+finally{
+  for(const file of ['database.dump','roles.sql','source.tar','vault-secrets.json','recovery-config.json','storage-index.json','storage','archive.tar.gz','downloaded.tar.gz','failure.private.log']){
+    try{rmSync(join(work,file),{force:true,recursive:file==='storage'});}
+    catch{console.error('BACKUP_PLAINTEXT_CLEANUP_FAILED');process.exitCode=1;}
+  }
+}

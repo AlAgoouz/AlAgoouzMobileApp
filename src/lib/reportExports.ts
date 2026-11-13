@@ -3,6 +3,12 @@ async function exportFile(path:string,name:string,mime:string){
  const sb=getSupabaseClient();if(!sb)throw Error('تعذر الاتصال بخدمة التصدير.');
  const {data,error}=await sb.auth.getSession();if(error||!data.session)throw Error('انتهت الجلسة؛ سجّل الدخول مجددًا.');
  const response=await fetch(path,{headers:{Authorization:`Bearer ${data.session.access_token}`},cache:'no-store'});
+ if(response.status===422){
+  const error=await response.json().catch(()=>null);
+  if(error?.detail==='INVOICE_TOTAL_MISMATCH')throw Error('مبالغ الفاتورة غير متطابقة؛ راجعها قبل التصدير.');
+  if(error?.detail==='PDF_ROW_LIMIT'||error?.detail==='EXPORT_ROW_LIMIT')throw Error('عدد السجلات أكبر من حد التصدير.');
+  throw Error('راجع البيانات قبل إعادة التصدير.');
+ }
  if(!response.ok||!response.headers.get('content-type')?.startsWith(mime))throw Error('تعذر تجهيز التقرير؛ راجع الاتصال أو اختر نطاقًا أصغر وأعد المحاولة.');
  const bytes=await response.arrayBuffer();
  if(bytes.byteLength>8*1024*1024)throw Error('التقرير أكبر من حد التنزيل؛ اختر نطاقًا أصغر.');

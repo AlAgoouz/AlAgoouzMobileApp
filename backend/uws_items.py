@@ -55,10 +55,12 @@ def parse_uws_items(matrix,row_numbers,expected_date,invalid,localized_number):
         if row and str(row[0]).strip().lower().startswith('page no:'): continue
         for value in row:
             for line in printed_lines(value):
-                item=re.fullmatch(r'(\d{4,20})\s+(.+?)\s+(\d+(?:\.\d+)?)\s+\d+(?:\.\d+)?%',line)
-                if item:
+                fields=line.rsplit(None,2)
+                item=re.fullmatch(r'(\d{4,20})\s+(\S.*)',fields[0]) if len(fields)==3 else None
+                if item and re.fullmatch(r'\d+(?:\.\d+)?',fields[1]) and re.fullmatch(r'\d+(?:\.\d+)?%',fields[2]):
                     finish()
-                    code,name,count=item.groups()
+                    code,name=item.groups()
+                    count=fields[1]
                     if code in codes: raise invalid('UWS_DUPLICATE_ITEM_CODE')
                     codes.add(code); quantity=number(count)
                     if quantity<=0 or quantity!=quantity.to_integral_value(): raise invalid('UWS_NUMBER_INVALID')

@@ -7,6 +7,9 @@ export interface ParsedCashierRow {
   unitHint: 'kg' | 'gram' | 'piece' | 'count' | 'liter' | 'ml';
   totalPrice?: number;
   unitPrice?: number;
+  sourceUnit?: ParsedCashierRow['unitHint'];
+  packFactor?: number;
+  dataError?: string;
   matchedItem?: InventoryItem;
   error?: string;
   sourceFormat?: 'uws-items-v1';
@@ -139,6 +142,7 @@ export function mapRawCashierRows(
         unitPrice === undefined
       )
         error = 'سعر الوحدة غير صالح';
+      let dataError = error;
       let candidates = rawCode
         ? [...new Set([...(codes.get(normalize(rawCode))??[]),...(barcodes.get(rawCode)??[])])]
         : [];
@@ -164,14 +168,8 @@ export function mapRawCashierRows(
       const unit = String(values.unit ?? '')
         .trim()
         .toLowerCase();
-      const hint = `${unit} ${rawName}`;
-      const pack = /ثمن|تمن/.test(hint)
-        ? 0.125
-        : /ربع/.test(hint)
-          ? 0.25
-          : /نصف|نص(?:\s|$)/.test(hint)
-            ? 0.5
-            : undefined;
+      const packName = unit.match(/^(ثمن|تمن|ربع|نصف|نص)(?:\s+(?:كيلو|كجم|kg))?$/)?.[1];
+      const pack = packName ? ({ثمن:0.125,تمن:0.125,ربع:0.25,نصف:0.5,نص:0.5} as Record<string,number>)[packName] : undefined;
       let unitHint: ParsedCashierRow['unitHint'] =
         matchedItem?.baseUnit ?? 'piece';
       let quantity = rawQuantity ?? 0;
@@ -179,7 +177,7 @@ export function mapRawCashierRows(
       const kilos = /^(كيلو|كجم|kg|kilogram|kilograms)$/.test(unit);
       if (grams) unitHint = 'gram';
       else if (kilos) unitHint = 'kg';
-      else if (pack && matchedItem?.baseUnit === 'kg') {
+      else if (pack) {
         unitHint = 'kg';
         quantity *= pack;
       } else if (/^(مل|مليلتر|ml)$/.test(unit)) unitHint = 'ml';
@@ -190,8 +188,14 @@ export function mapRawCashierRows(
       )
         unitHint = 'piece';
       else if (unit) error = `وحدة غير معروفة: ${unit}`;
-      else if (matchedItem?.baseUnit === 'kg')
-        error = 'حدد وحدة الوزن صراحةً لتجنب خصم كمية خاطئة';
+      else if (matchedItem && ['kg','liter'].includes(matchedItem.baseUnit))
+        error = 'حدد وحدة الكمية صراحةً لتجنب خصم كمية خاطئة';
+      const sourceUnit = unit && !error?.startsWith('وحدة غير معروفة') ? unitHint : undefined;
+      if (typeof values.qty === 'string' && /^[+-]?[٠-٩۰-۹\d]{1,3},[٠-٩۰-۹\d]{3}$/.test(values.qty.trim())
+        && (sourceUnit === undefined || ['kg','liter','gram','ml'].includes(sourceUnit))) {
+        dataError = 'صيغة الكمية ملتبسة؛ استخدم نقطة عشرية أو رقمًا دون فاصل آلاف';
+        error = dataError;
+      }
       if (
         matchedItem &&
         ((['piece','count'].includes(matchedItem.baseUnit) && !['piece','count'].includes(unitHint)) ||
@@ -215,6 +219,9 @@ export function mapRawCashierRows(
         unitHint,
         totalPrice,
         unitPrice,
+        sourceUnit,
+        packFactor:pack,
+        dataError,
         matchedItem,
         error,
         ...(row.sourceFormat==='uws-items-v1'?{sourceFormat:'uws-items-v1' as const,saleCount:Number(row.saleCount),sourceRow:Number(row.sourceRow)}:{}),
@@ -258,16 +265,20 @@ export type CashierReview=Record<number,{itemId:string;unit:ParsedCashierRow['un
 export function reviewedCashierRows(rows:Record<string,unknown>[],catalog:InventoryItem[],choices:CashierReview){
  const nonempty=rows.filter(row=>Object.values(row).some(value=>String(value??'').trim()));
  const parsed=mapRawCashierRows(nonempty,catalog);
- return nonempty.map((row,index)=>{
-  const base=parsed[index],choice=choices[index];
+ return parsed.map((base,index)=>{
+  const choice=choices[index];
     // Printed reports have authoritative codes and units. Correct the catalog,
     // never reinterpret their quantities through a manual matching override.
     if(base.sourceFormat==='uws-items-v1')return base;
   if(!choice)return base;
   const selected=catalog.find(item=>item.id===choice.itemId);
   if(!selected||!choice.unit)return {...base,matchedItem:undefined,error:'اختر الصنف ووحدة الكمية لتأكيد المطابقة'};
-  const preserved=Object.fromEntries(Object.entries(row).filter(([key])=>!['code','name','unit'].some(field=>aliases[field].some(alias=>normalize(alias)===normalize(key)))));
-  const result=mapRawCashierRows([{...preserved,code:selected.code,name:selected.name,unit:choice.unit}],catalog)[0];
-  return {...result,rawName:base.rawName,rawCode:base.rawCode};
+  const group=(unit:ParsedCashierRow['unitHint'])=>['kg','gram'].includes(unit)?'kg':(['liter','ml'].includes(unit)?'liter':'count');
+  const sourceUnit=base.sourceUnit??choice.unit;
+  if(group(choice.unit)!==group(selected.baseUnit)||group(sourceUnit)!==group(choice.unit))
+    return {...base,matchedItem:selected,error:'الوحدة المختارة لا تطابق وحدة الملف أو الصنف'};
+  const scale=(unit:ParsedCashierRow['unitHint'])=>['gram','ml'].includes(unit)?1000:1;
+  const quantity=base.quantity*scale(choice.unit)/scale(sourceUnit);
+  return {...base,matchedItem:selected,unitHint:choice.unit,quantity,error:base.dataError};
  });
 }

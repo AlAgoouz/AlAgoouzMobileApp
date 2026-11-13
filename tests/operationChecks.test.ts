@@ -1,3 +1,4 @@
+import {multiplyMoney,roundMoney,sumMoney} from '../src/lib/money';
 import { expect, it } from "vitest";
 import {
   checkPurchase,
@@ -186,4 +187,11 @@ it("recalculates multiple recipe levels independently of catalog order", () => {
   };
   const result = recalculateRecipeCosts([second, first, bean]);
   expect(result.map((i) => i.costPrice)).toEqual([100, 50, 100]);
+});
+
+it('rounds decimal products at a cent like PostgreSQL numeric and sums exact cents',()=>{
+  expect(multiplyMoney(0.015,67)).toBe(1.01);
+  expect(roundMoney(1.005)).toBe(1.01);
+  expect(roundMoney(-1.005)).toBe(-1.01);
+  expect(sumMoney([0.1,0.2,-0.3])).toBe(0);
 });
