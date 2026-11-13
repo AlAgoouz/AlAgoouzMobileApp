@@ -531,7 +531,10 @@ it.skipIf(!active)('parses into a pending cashier queue exactly once without cha
  expect(()=>sql(`begin;set local role anon;select * from bon_erp_private.import_jobs;rollback;`)).toThrow('permission denied');
 });
 it.skipIf(!active)('rejects a return refund above the recorded payment when the customer balance is inconsistent',()=>{
- const previous={...stockState(),salesInvoices:[{...sale(),customerId:'c1',paidAmount:1,remainingAmount:sale().totalAmount-1}],
+ const blend:InventoryItem={...bean,id:'blend',code:'BL1',category:'manufactured_blend',hasRecipe:true,
+   recipe:[{ingredientId:bean.id,ingredientName:bean.name,quantity:1000,unit:'gram'}]};
+ const saleInvoice={...sale(2,blend),saleType:'wholesale' as const,paymentMethod:'آجل' as const,customerId:'c1',paidAmount:1,remainingAmount:3};
+ const previous={...stockState(),items:[bean,blend],salesInvoices:[saleInvoice],
    customers:[{...INITIAL_CUSTOMERS[0],id:'c1',name:'Customer',phone:'01012345678',area:'Cairo',balance:1,totalSales:sale().totalAmount,invoicesCount:1}]};
  seed(previous);
  const invoice=previous.salesInvoices[0];
