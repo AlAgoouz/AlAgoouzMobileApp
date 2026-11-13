@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {BookOpen} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
 import {RecipeEditor} from './RecipeEditor';
+import {RecordPickerField} from './RecordPickerField';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
 import {requiresRecipe,categoryLabel} from '../lib/itemPolicy';
 import {money} from '../lib/reporting';
@@ -35,7 +36,9 @@ export function RecipesScreen({items,drafts,initialTargetId,canManage,onSave,onD
  const save=async()=>{if(!target||busy||!canManage||!recipeValid)return;setBusy(true);setError('');setSaved(false);try{await onSave(target,recipe);if('item'in target)setSelected(current=>current?.key===selected?.key?{...current,target:{item:{...target.item,recipe:structuredClone(recipe)}}}:current);setSaved(true);}catch(e){setError(e instanceof Error?e.message:'لم يتأكد حفظ الوصفة');}finally{setBusy(false);}};
  return <main className="min-h-screen pb-24" dir="rtl"><OperationHeader title={<>الوصفات</>} description={<>تحديد المقادير وحساب تكلفة المشروبات والتحويجات والتوليفات.</>} icon={BookOpen} onBack={onBack}>{canManage&&<button className="record-action" onClick={()=>setCreate(true)}>تعريف منتج بوصفة</button>}</OperationHeader><div className="p-4 space-y-4">
   <p className="operation-note">الوصفات لا تنفذ إنتاجًا أو بيعًا. المشروبات والتحويجات تستهلك مكوناتها عند البيع، والتوليفات تُنتج من قسم إنتاج التوليفات.</p>
-  <label className="block">المنتج صاحب الوصفة<select className="operation-input" value={selected?.key??''} disabled={busy} onChange={e=>select(e.target.value)}><option value="">اختر منتجًا</option>{targets.map(t=><option key={t.key} value={t.key}>{t.name} — {categoryLabel(t.category)}{'draft'in t.target?' — بانتظار الوصفة':''}</option>)}</select></label>
+  <RecordPickerField label="المنتج صاحب الوصفة" searchLabel="ابحث باسم المنتج أو الكود"
+    options={targets.map(t=>({id:t.key,title:t.name,detail:categoryLabel(t.category)+('draft'in t.target?' · بانتظار الوصفة':''),keywords:'draft'in t.target?t.target.draft.definition?.code:t.target.item.code}))}
+    value={selected?.key??''} disabled={busy} onChange={select}/>
   {!targets.length&&<p className="record-state">عرّف منتجًا من نوع توليفة أو مشروب له وصفة أو تحويجة؛ سيظهر هنا لاستكمال مكوناته.</p>}
   {target&&definition&&<section className="visual-card space-y-4"><h2 className="text-xl font-bold">{'draft'in target?target.draft.name:target.item.name}</h2><p>كود الكاشير: {definition.code} · {categoryLabel(definition.category)}</p>{'draft'in target?<p className="record-state">البيانات محفوظة تحت الاستكمال. اعتماد وصفة صحيحة يجهّز المنتج للاستخدام؛ الرصيد الافتتاحي المخطط لا يدخل المخزون قبل ذلك.</p>:target.item.category==='manufactured_blend'&&<p className="operation-note">متوسط تكلفة الرصيد الجاهز: {money(target.item.costPrice)} ج.م / كجم. تكلفة الوصفة أدناه مرجع للإنتاج الجديد، وحفظ المقادير لا يعيد تسعير الرصيد أو المستندات السابقة.</p>}
    {'draft'in target&&canManage&&<button className="record-action" disabled={busy} onClick={()=>setEditingDefinition(target.draft)}>تعديل بيانات المنتج قبل اعتماد وصفته</button>}

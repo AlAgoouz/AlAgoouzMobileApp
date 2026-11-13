@@ -1,3 +1,5 @@
+import {matchesRecordSearch} from '../lib/recordSearch';
+import {RecordTabs} from './RecordTabs';
 import {unitLabel as displayUnit} from '../lib/units';
 import {Scale as HeaderScale,Users as HeaderUsers} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
@@ -40,6 +42,10 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
   onCommitStocktaking,
   onBack,
 }) => {
+  const [auditQuery,setAuditQuery]=useState('');
+  const matchingAudits=useMemo(()=>auditRecords.filter(record=>
+    matchesRecordSearch(auditQuery,record.auditNumber,record.date,record.partnerName)),[auditRecords,auditQuery]);
+  const auditPage=useRecordPage(matchingAudits,auditQuery,20);
   const [activeTab, setActiveTab] = useState<"new_audit" | "history">(
     "new_audit",
   );
@@ -223,32 +229,10 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       </Modal>}
 
 
-      {/* تبويبات الجرد */}
-      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 section-tabs sticky top-0 z-20">
-        <button
-          onClick={() => setActiveTab("new_audit")}
-          className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === "new_audit"
-              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
-              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
-          }`}
-        >
-          <Scale className="w-4 h-4 text-[#D4AF37]" />
-          إجراء جرد فعلي الآن
-        </button>
-        <button
-          onClick={() => setActiveTab("history")}
-          className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === "history"
-              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
-              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
-          }`}
-        >
-          <History className="w-4 h-4 text-[#D4AF37]" />
-          سجل محاضر الجرد ({auditRecords.length})
-        </button>
+      <div className="operation-tab-strip">
+        <RecordTabs label="أقسام الجرد" value={activeTab}
+          tabs={[{id:'new_audit',label:'إجراء جرد فعلي الآن'},{id:'history',label:'سجل محاضر الجرد ('+auditRecords.length+')'}]} onChange={setActiveTab}/>
       </div>
-
       <div className="p-3.5 space-y-4">
         {!reviewOpen && auditError && (
           <p role="alert" className="text-red-700 font-bold">
@@ -523,7 +507,13 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
         {/* سجل محاضر الجرد السابقة */}
         {activeTab === "history" && (
           <div className="space-y-3">
-            {auditRecords.map((rec) => (
+            <label className="record-search">البحث في محاضر الجرد
+              <input type="search" value={auditQuery} onChange={event=>setAuditQuery(event.target.value)}
+                placeholder="رقم المحضر أو التاريخ أو اسم المسؤول" />
+            </label>
+            <RecordPagination {...auditPage}/>
+            {!auditPage.total&&<p className="record-state">{auditRecords.length?'لا توجد محاضر مطابقة.':'لا توجد محاضر جرد مسجلة.'}</p>}
+            {auditPage.visible.map((rec) => (
               <div
                 key={rec.id}
                 className="bg-white rounded-2xl p-4 border border-[#E6DEC8] shadow-sm space-y-2.5"
@@ -620,6 +610,11 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
   onOpenExpense,
 }) => {
   const [activeTab, setActiveTab] = useState<"staff" | "ledger">("staff");
+  const [ledgerQuery,setLedgerQuery]=useState('');
+  const matchingTransactions=useMemo(()=>transactions.filter(transaction=>
+    matchesRecordSearch(ledgerQuery,transaction.employeeName,transaction.date,transaction.type)),
+    [transactions,ledgerQuery]);
+  const ledgerPage=useRecordPage(matchingTransactions,ledgerQuery,20);
   const [actionModal, setActionModal] = useState<{
     employee: Employee;
     type: EmployeeTransaction["type"];
@@ -780,32 +775,10 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
           عامل جديد
         </button></OperationHeader>
 
-      {/* التبويبات */}
-      <div className="p-3 bg-white border-b border-[#E6DEC8] grid grid-cols-2 gap-2 section-tabs sticky top-0 z-20">
-        <button
-          onClick={() => setActiveTab("staff")}
-          className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === "staff"
-              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
-              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
-          }`}
-        >
-          <Users className="w-4 h-4 text-[#D4AF37]" />
-          بطاقات العمال ({employees.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("ledger")}
-          className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition border ${
-            activeTab === "ledger"
-              ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
-              : "bg-[#FAF8F4] text-[#5C4B3E] border-[#E6DEC8]"
-          }`}
-        >
-          <History className="w-4 h-4 text-[#D4AF37]" />
-          سجل السلف واليوميات ({transactions.length})
-        </button>
+      <div className="operation-tab-strip">
+        <RecordTabs label="أقسام العمال والرواتب" value={activeTab}
+          tabs={[{id:'staff',label:'بطاقات العمال ('+employees.length+')'},{id:'ledger',label:'سجل السلف واليوميات ('+transactions.length+')'}]} onChange={setActiveTab}/>
       </div>
-
       <div className="p-3.5 space-y-4">
         {/* ملخص مالي للعمال */}
         <div className="rounded-3xl bg-gradient-to-br from-[#1E1612] via-[#2B201A] to-[#1A130F] text-white p-4 shadow-lg border-2 border-[#C59B27] grid grid-cols-3 gap-2 text-center">
@@ -969,7 +942,13 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
         {/* سجل حركات العمال (السلف واليوميات والخصومات) */}
         {activeTab === "ledger" && (
           <div className="space-y-2.5">
-            {transactions.map((tr) => (
+            <label className="record-search">البحث في حركات العمال
+              <input type="search" value={ledgerQuery} onChange={event=>setLedgerQuery(event.target.value)}
+                placeholder="اسم العامل أو نوع الحركة أو التاريخ" />
+            </label>
+            <RecordPagination {...ledgerPage}/>
+            {!ledgerPage.total&&<p className="record-state">{transactions.length?'لا توجد حركات مطابقة.':'لا توجد حركات مسجلة.'}</p>}
+            {ledgerPage.visible.map((tr) => (
               <div
                 key={tr.id}
                 className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] shadow-sm flex items-center justify-between"

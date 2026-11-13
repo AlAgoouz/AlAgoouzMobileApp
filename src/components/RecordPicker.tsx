@@ -1,5 +1,6 @@
 import React, {useMemo, useState} from 'react';
 import {Check, Search} from 'lucide-react';
+import {matchesRecordSearch} from '../lib/recordSearch';
 import {Modal} from './Modal';
 import {RecordPagination, useRecordPage} from './RecordPagination';
 
@@ -10,10 +11,6 @@ export interface PickerOption {
   keywords?: string;
 }
 
-const normalize = (value: string) => value.normalize('NFKC').toLowerCase()
-  .replace(/[أإآ]/g, 'ا').replace(/[\u064b-\u065f\u0640]/g, '')
-  .replace(/[٠-٩۰-۹]/g, digit => String(digit.charCodeAt(0) % 16));
-
 export function RecordPicker({title, searchLabel, options, selectedId, onSelect, onClose}: {
   title: string;
   searchLabel: string;
@@ -23,14 +20,8 @@ export function RecordPicker({title, searchLabel, options, selectedId, onSelect,
   onClose: () => void;
 }) {
   const [query, setQuery] = useState('');
-  const results = useMemo(() => {
-    const terms = normalize(query).trim().split(/\s+/).filter(Boolean);
-    if (!terms.length) return options;
-    return options.filter(option => {
-      const target = normalize([option.title, option.detail, option.keywords].filter(Boolean).join(' '));
-      return terms.every(term => target.includes(term));
-    });
-  }, [query, options]);
+  const results = useMemo(() => options.filter(option =>
+    matchesRecordSearch(query, option.title, option.detail, option.keywords)), [query, options]);
   const page = useRecordPage(results, query, 12);
   return <Modal title={title} layout="side" onClose={onClose}>
     <label className="picker-search">

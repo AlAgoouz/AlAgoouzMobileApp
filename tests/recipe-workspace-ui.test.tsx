@@ -15,7 +15,13 @@ const milk:InventoryItem={...raw,id:'milk',code:'M',name:'Milk',category:'direct
 const cup:InventoryItem={...raw,id:'cup',code:'U',name:'Cup',category:'direct_product',baseUnit:'count',costPrice:1.5};
 const definition:RecipeProductDefinition={code:'D1',category:'drink_recipe',baseUnit:'piece',retailPrice:50,openingStock:0,minStock:0};
 const pending=()=>recordRecipeDefinition({...emptyStore,items:[raw,milk,cup]},'draft','Latte',definition,{name:'Owner'});
-const add=(id:string,quantity:string)=>{fireEvent.change(screen.getByLabelText('المكون'),{target:{value:id}});fireEvent.change(screen.getByLabelText('كمية المكون'),{target:{value:quantity}});fireEvent.click(screen.getByRole('button',{name:'إضافة المكون'}));};
+const pickIngredient=(id:string)=>{
+ const item=[raw,milk,cup].find(row=>row.id===id)!;
+ fireEvent.click(screen.getByRole('button',{name:'المكون',exact:true}));
+ fireEvent.change(screen.getByRole('searchbox',{name:'ابحث باسم المكون أو الكود'}),{target:{value:item.name}});
+ fireEvent.click(screen.getByRole('button',{name:new RegExp(item.name)}));
+};
+const add=(id:string,quantity:string)=>{pickIngredient(id);fireEvent.change(screen.getByLabelText('كمية المكون'),{target:{value:quantity}});fireEvent.click(screen.getByRole('button',{name:'إضافة المكون'}));};
 const common={canManage:true,onDefine:vi.fn().mockResolvedValue(undefined),onBack:()=>{}};
 it('saves drink metadata for the recipe section without asking for ingredients or a manual cost',async()=>{
  const save=vi.fn(),define=vi.fn().mockResolvedValue(undefined);render(<ItemDefinitionModal items={[raw]} requireDetails initialName="Latte" onSave={save} onSaveRecipeDefinition={define} onClose={()=>{}}/>);
@@ -43,13 +49,13 @@ it('blocks uncommitted or invalid quantities instead of saving their previous va
  add(raw.id,'18');const button=screen.getByRole('button',{name:'اعتماد الوصفة وتجهيز المنتج'}) as HTMLButtonElement;
  fireEvent.change(screen.getByLabelText('كمية Coffee'),{target:{value:''}});expect(button.disabled).toBe(true);fireEvent.click(button);expect(save).not.toHaveBeenCalled();
  fireEvent.change(screen.getByLabelText('كمية Coffee'),{target:{value:'٢٥'}});expect(button.disabled).toBe(false);expect(screen.getByLabelText('إجمالي تكلفة الوصفة').textContent).toBe(money(10)+' ج.م');
- fireEvent.change(screen.getByLabelText('المكون'),{target:{value:milk.id}});fireEvent.change(screen.getByLabelText('كمية المكون'),{target:{value:'100'}});expect(button.disabled).toBe(true);
+ pickIngredient(milk.id);fireEvent.change(screen.getByLabelText('كمية المكون'),{target:{value:'100'}});expect(button.disabled).toBe(true);
  fireEvent.click(screen.getByRole('button',{name:'إضافة المكون'}));expect(button.disabled).toBe(false);fireEvent.click(button);await waitFor(()=>expect(save).toHaveBeenCalledOnce());
  expect(save).toHaveBeenCalledWith({draft:s.catalogNameDrafts[0]},expect.arrayContaining([expect.objectContaining({ingredientId:raw.id,quantity:25}),expect.objectContaining({ingredientId:milk.id,quantity:100,unit:'ml'})]));
 });
 it('keeps the draft and ingredients available for retry if server confirmation fails',async()=>{
  const s=pending(),save=vi.fn().mockRejectedValue(Error('تعذر تأكيد الحفظ'));render(<RecipesScreen {...common} items={s.items} drafts={s.catalogNameDrafts} onSave={save}/>);add(raw.id,'18');
- fireEvent.click(screen.getByRole('button',{name:'اعتماد الوصفة وتجهيز المنتج'}));await screen.findByText('تعذر تأكيد الحفظ');expect((screen.getByLabelText('كمية Coffee') as HTMLInputElement).value).toBe('18');expect(screen.getByLabelText('المنتج صاحب الوصفة')).toHaveProperty('value','draft:draft');
+ fireEvent.click(screen.getByRole('button',{name:'اعتماد الوصفة وتجهيز المنتج'}));await screen.findByText('تعذر تأكيد الحفظ');expect((screen.getByLabelText('كمية Coffee') as HTMLInputElement).value).toBe('18');expect(screen.getByRole('button',{name:'المنتج صاحب الوصفة'}).textContent).toContain('Latte');
 });
 it('opens the recipe belonging to the selected product rather than navigating to production',()=>{
  const item:InventoryItem={...raw,id:'drink',code:'D1',name:'Latte',category:'drink_recipe',baseUnit:'piece',stock:0,hasRecipe:true,recipe:[{ingredientId:raw.id,ingredientName:raw.name,quantity:18,unit:'gram'}]},open=vi.fn(),production=vi.fn();

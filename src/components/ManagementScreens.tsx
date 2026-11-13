@@ -7,6 +7,7 @@ import {CashierDayHistory} from './CashierDayHistory';
 import type {CashierDay} from '../types/erp';
 import {SupplierPurchasePanels} from './SupplierPurchasePanels';
 import {OperationalHealth} from './OperationalHealth';
+import {matchesRecordSearch} from '../lib/recordSearch';
 import {supplierPurchaseHistory} from '../lib/supplierPurchases';
 import {ContactEditModal} from './ContactEditModal';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
@@ -409,16 +410,11 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   const filtered = useMemo(() => {
     return items.filter((i) => {
       if (filterCat !== "all" && (i.category==='raw_spice'?'direct_product':i.category) !== filterCat) return false;
-      if (
-        search.trim() &&
-        !i.name.toLowerCase().includes(search.toLowerCase()) &&
-        !i.code.toLowerCase().includes(search.toLowerCase())
-      ) {
-        return false;
-      }
-      return true;
+      return matchesRecordSearch(search,i.name,i.code);
     });
   }, [items, filterCat, search]);
+
+  const inventoryPage=useRecordPage(filtered,filterCat+'|'+search,20);
 
   const totalInventoryCapital = useMemo(
     () =>
@@ -515,6 +511,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label="البحث في المخزون"
               placeholder="بحث باسم الصنف أو الكود..."
               className="w-full text-xs font-bold bg-transparent focus:outline-none"
             />
@@ -528,13 +525,14 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
           </button>
         </div>
 
+        {inventoryPage.total>inventoryPage.pageSize&&<RecordPagination {...inventoryPage}/>}
         {filtered.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 text-center text-xs text-[#7A6855] border border-[#E6DEC8]">
             لا توجد أصناف في هذا القسم حالياً. اضغط (+ إضافة) لإضافة صنف جديد.
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((item) => {
+            {inventoryPage.visible.map((item) => {
               const isLow =
                 isStockItem(item) && item.stock <= item.minStock;
               const unitLabel =
@@ -766,21 +764,26 @@ export const ShortagesScreen: React.FC<{
   onNavigateToProduction: () => void;
   onBack: () => void;
 }> = ({ items, onOpenMovement, onNavigateToPurchase, onNavigateToProduction, onBack }) => {
-  const lowItems = items.filter(
-    (i) => isStockItem(i) && i.stock <= i.minStock,
-  );
+  const [query,setQuery]=useState('');
+  const lowItems = useMemo(()=>items.filter(i=>isStockItem(i)&&i.stock<=i.minStock),[items]);
+  const matches=useMemo(()=>lowItems.filter(item=>matchesRecordSearch(query,item.name,item.code)),[lowItems,query]);
+  const shortagePage=useRecordPage(matches,query,20);
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
       <OperationHeader title={<>النواقص ( {lowItems.length} )</>} description={<>الأصناف التي تحتاج توريدًا أو مراجعة رصيدها.</>} icon={HeaderTriangleAlert} onBack={onBack}></OperationHeader>
 
       <div className="p-3.5 space-y-2.5">
-        {lowItems.length === 0 ? (
+        <label className="record-search">البحث في النواقص
+          <input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="اسم الصنف أو الكود" />
+        </label>
+        {shortagePage.total>shortagePage.pageSize&&<RecordPagination {...shortagePage}/>}
+        {shortagePage.total === 0 ? (
           <div className="bg-white rounded-2xl p-8 text-center text-xs text-[#7A6855] border border-[#E6DEC8]">
-            لا توجد نواقص حالياً. جميع الأرصدة فوق الحد الأدنى.
+            {lowItems.length?'لا توجد نواقص مطابقة.':'لا توجد نواقص حاليًا.'}
           </div>
         ) : (
-          lowItems.map((item) => {
+          shortagePage.visible.map((item) => {
             const cheapest =
               item.supplierPrices.length > 0
                 ? item.supplierPrices.reduce(
@@ -836,6 +839,8 @@ export const ShortagesScreen: React.FC<{
 export const SuppliersAndCustomersScreen: React.FC<{
   mode: "suppliers" | "customers";
   initialStatementId?: string;
+  listView?:{query:string;page:number};
+  onListViewChange?:(view:{query:string;page:number})=>void;
   onOpenPurchase?: (id:string)=>void;
   onOpenSale?: (id:string)=>void;
   suppliers: Supplier[];
@@ -863,6 +868,8 @@ export const SuppliersAndCustomersScreen: React.FC<{
 }> = ({
   mode,
   initialStatementId,
+  listView,
+  onListViewChange,
   onOpenPurchase,
   onOpenSale,
   suppliers,
@@ -880,6 +887,18 @@ export const SuppliersAndCustomersScreen: React.FC<{
   onDeleteCustomer,
   onBack,
 }) => {
+  const [localView,setLocalView]=useState({query:'',page:0});
+  const view=listView??localView;
+  const {query}=view;
+  const setView=onListViewChange??setLocalView;
+  const matchingSuppliers=useMemo(()=>suppliers.filter(supplier=>
+    matchesRecordSearch(query,supplier.name,supplier.phone,supplier.address,supplier.representativeName)),[suppliers,query]);
+  const matchingCustomers=useMemo(()=>customers.filter(customer=>
+    matchesRecordSearch(query,customer.name,customer.phone,customer.area)),[customers,query]);
+  const pagination={page:view.page,setPage:(next:number)=>setView({...view,page:next})};
+  const supplierPage=useRecordPage(matchingSuppliers,query,20,pagination);
+  const customerPage=useRecordPage(matchingCustomers,query,20,pagination);
+  const page=mode==='suppliers'?supplierPage:customerPage;
   const [editingContact,setEditingContact]=useState<Customer|Supplier|null>(null);
   const [payModalTarget, setPayModalTarget] = useState<{
     id: string;
@@ -965,9 +984,17 @@ export const SuppliersAndCustomersScreen: React.FC<{
           إضافة
         </button></OperationHeader>
 
-      <div className="p-3.5 space-y-2.5">
+      <div className="record-workspace">
+        <label className="record-search">{mode==='suppliers'?'بحث في الموردين':'بحث في العملاء'}
+          <input type="search" value={query} onChange={event=>setView({query:event.target.value,page:0})}
+            placeholder={mode==='suppliers'?'الاسم أو التليفون أو المندوب':'الاسم أو التليفون أو المنطقة'}/>
+        </label>
+        {!page.total&&<p className="record-state" role="status">{query.trim()?'مفيش نتائج مطابقة للبحث.':mode==='suppliers'?'لسه مفيش موردين مسجلين.':'لسه مفيش عملاء مسجلين.'}</p>}
+        {page.total>page.pageSize&&<RecordPagination {...page}/>}
+      </div>
+      <div className="p-3.5 contact-records">
         {mode === "suppliers"
-          ? suppliers.map(sup=>{
+          ? supplierPage.visible.map(sup=>{
               const purchases=supplierPurchaseHistory(purchaseInvoices,sup.id);
               return <article key={sup.id} className="bg-white border rounded-2xl p-4 space-y-3">
                 <h2 className="font-black">{sup.name}</h2><p>{sup.phone} — {sup.address||'العنوان غير مسجل'}</p><p>المندوب: {sup.representativeName||'غير مسجل'}</p>
@@ -976,7 +1003,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
                 <SupplierPurchasePanels data={purchases} onOpenInvoice={onOpenPurchase}/>
               </article>;
             })
-          : customers.map((cust) => (
+          : customerPage.visible.map((cust) => (
               <div
                 key={cust.id}
                 className="bg-white rounded-2xl p-3.5 border border-[#E6DEC8] shadow-sm space-y-2"
@@ -1394,6 +1421,11 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   const [expAmount, setExpAmount] = useState("");
   const [expFrequency,setExpFrequency]=useState<NonNullable<Expense['frequency']>>('daily');
   const [expenseFilter,setExpenseFilter]=useState<'all'|'monthly_fixed'|'daily'>('all');
+  const [expenseQuery,setExpenseQuery]=useState('');
+  const matchingExpenses=useMemo(()=>expenses.filter(expense=>
+    (expenseFilter==='all'||expense.frequency===expenseFilter)&&
+    matchesRecordSearch(expenseQuery,expense.date,expense.category,expense.title,expense.notes)),[expenses,expenseFilter,expenseQuery]);
+  const expensePage=useRecordPage(matchingExpenses,expenseFilter+'|'+expenseQuery,20);
   const [expenseError, setExpenseError] = useState("");
   const [expCategory, setExpCategory] =
     useState<Expense["category"]>("أكياس وتغليف");
@@ -1652,7 +1684,13 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                 <option value="all">كل المصروفات</option><option value="daily">اليومية</option><option value="monthly_fixed">الشهرية الثابتة</option>
               </select>
             </label>
-            {expenses.filter(e=>expenseFilter==='all'||e.frequency===expenseFilter).map((e) => (
+            <label className="record-search">البحث في المصروفات
+              <input type="search" value={expenseQuery} onChange={event=>setExpenseQuery(event.target.value)}
+                placeholder="التاريخ أو نوع المصروف أو البيان" />
+            </label>
+            <RecordPagination {...expensePage}/>
+            {expenses.length>0&&!expensePage.total&&<p className="record-state">لا توجد مصروفات مطابقة.</p>}
+            {expensePage.visible.map((e) => (
               <div
                 key={e.id}
                 className="bg-white rounded-2xl p-3 border border-[#E6DEC8] shadow-sm flex items-center justify-between"

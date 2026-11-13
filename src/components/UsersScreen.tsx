@@ -2,6 +2,7 @@ import {Modal} from './Modal';
 import React,{useEffect,useState} from 'react';
 import {ShieldCheck,UserPlus,Users} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
+import {RecordPagination,useRecordPage} from './RecordPagination';
 import {listUserAccounts,saveUserAccount,type UserInput} from '../lib/userAccounts';
 import {writePermissions,type ManagedUser,type UserAccess} from '../lib/userAccess';
 import type {Partner} from '../types/erp';
@@ -10,6 +11,7 @@ const fresh=():UserInput=>({email:'',password:'',username:'',displayName:'',role
 export function UsersScreen({access,partners,onBack}:{access:UserAccess;partners:Partner[];onBack:()=>void}){
  const [users,setUsers]=useState<ManagedUser[]>([]),[loading,setLoading]=useState(true),[revision,setRevision]=useState(0);
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[showDeleted,setShowDeleted]=useState(false);
+ const [query,setQuery]=useState('');
  const [form,setForm]=useState<UserInput|null>(null);
  useEffect(()=>{
   if(!access.isOwner){setLoading(false);return;}
@@ -30,15 +32,21 @@ export function UsersScreen({access,partners,onBack}:{access:UserAccess;partners
   if(deleted&&!window.confirm(`إزالة المستخدم ${u.displayName} ومنع دخوله مع الاحتفاظ بسجله؟`))return;
   void commit({id:u.userId,username:u.username,displayName:u.displayName,role:u.role,partnerId:u.partnerId,permissions:u.permissions,disabled,deleted});
  };
+ const term=query.trim().toLocaleLowerCase('ar-EG');
+ const page=useRecordPage(users.filter(user=>(showDeleted||!user.deleted)&&
+   [user.displayName,user.username,user.email].some(value=>value?.toLocaleLowerCase('ar-EG').includes(term))),query+'|'+showDeleted,20);
  const editingMaster=!!form?.id&&users.some(u=>u.userId===form.id&&u.isOwner);
  return <main className="operation-screen p-4 pb-28 space-y-4" dir="rtl">
   <OperationHeader title="المستخدمين وصلاحيات الدخول" description="حسابات الدخول مستقلة عن حسابات الشركاء وحصصهم." icon={Users} onBack={onBack} busy={busy}/>
   {!access.isOwner?<section className="bg-white rounded-2xl border p-4 space-y-2"><h2 className="font-bold">حسابك</h2><p>{access.displayName}</p><p className="operation-note">إضافة المستخدمين وتعديل الصلاحيات متاحان لحساب المالك الرئيسي فقط.</p></section>:<>
    <div className="operation-note flex items-start gap-2"><ShieldCheck size={20} className="shrink-0"/><p>المالك الرئيسي هو الحساب الماستر؛ لا يُحذف ولا يُعطّل. حذف المستخدمين الآخرين يمنع الدخول ويحتفظ بالسجل، ويمكن للمالك استرجاعهم.</p></div>
-   <div className="flex gap-2"><button disabled={busy||loading} className="bg-[#211711] text-[#F3DDA5] rounded-xl p-3 flex gap-2 items-center" onClick={()=>{setError('');setForm(fresh());}}><UserPlus size={18}/>إضافة مستخدم</button><button disabled={busy||loading} className="border rounded-xl p-3" onClick={()=>{setError('');refresh();}}>تحديث القائمة</button></div>
+   <div className="flex flex-wrap gap-2"><button disabled={busy||loading} className="operation-primary" onClick={()=>{setError('');setForm(fresh());}}><UserPlus size={18}/>إضافة مستخدم</button><button disabled={busy||loading} className="border rounded-xl p-3" onClick={()=>{setError('');refresh();}}>تحديث القائمة</button></div>
    <label className="flex gap-2 items-center"><input type="checkbox" checked={showDeleted} onChange={e=>setShowDeleted(e.target.checked)}/>عرض المستخدمين المحذوفين</label>
    {loading&&<p role="status">جارٍ تحميل حسابات الدخول…</p>}
-   {users.filter(u=>showDeleted||!u.deleted).map(u=><article key={u.userId} className="bg-white border border-[#E6DEC8] rounded-2xl p-4 space-y-3">
+   <label className="record-search">بحث في المستخدمين<input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="الاسم أو البريد الإلكتروني"/></label>
+   {!loading&&!error&&!page.total&&<p className="record-state" role="status">مفيش حسابات مطابقة للبحث.</p>}
+   {page.total>page.pageSize&&<RecordPagination {...page}/>}
+   {page.visible.map(u=><article key={u.userId} className="bg-white border border-[#E6DEC8] rounded-2xl p-4 space-y-3">
     <div className="flex justify-between gap-2"><h2 className="font-black">{u.displayName}</h2><span className="text-xs text-[#806019]">{u.isOwner?'المالك الرئيسي — محمي':u.deleted?'محذوف':u.disabled?'معطّل':'نشط'}</span></div>
     <p dir="ltr" className="break-all text-right text-xs">{u.email}</p><p className="text-xs">اسم المستخدم: {u.username}</p>
     <p className="text-xs">{u.role==='cashier'?'رفع ملفات الكاشير فقط':u.isOwner?'صلاحيات النظام الكاملة':u.permissions.view?'الاطلاع على جميع بيانات المحل، مع أذونات التعديل المحددة':'لا يوجد تصريح للاطلاع على بيانات المحل'}</p>

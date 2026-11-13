@@ -93,3 +93,11 @@
   .workspace-sidebar { background: var(--espresso); }
   .workspace-sidebar button[aria-current=page] { background: var(--action-gold); color: var(--espresso); }
 }
+
+.operation-tab-strip { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; padding-inline:clamp(.75rem,2vw,1.4rem); margin-block: .65rem; }
+.operation-tab-strip .record-tabs { flex:1 1 16rem; min-width:0; }
+.operation-tab-strip > .record-action { width:auto; padding-inline:.7rem; display:inline-flex; align-items:center; gap:.35rem; }
+.record-tabs button[aria-pressed=true] { background:var(--action-gold); color:var(--espresso); }
+.contact-records { display:grid; gap:.65rem; min-width:0; }
+.contact-records > article, .contact-records > div { min-width:0; overflow-wrap:anywhere; }
+@media (min-width: 768px) { .contact-records { grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; } }

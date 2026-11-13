@@ -1,3 +1,4 @@
+import {RecordTabs} from './RecordTabs';
 import {Sparkles as HeaderSparkles,ChartNoAxesCombined as HeaderChartNoAxesCombined} from 'lucide-react';
 import {ReportExportButtons} from './ReportExportButtons';
 import {FinancialOpeningPanel} from './FinancialOpeningPanel';
@@ -354,51 +355,11 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
           <Download className="w-5 h-5" />
         </button></OperationHeader>
 
-      <div className="report-tabs bg-white border-b border-[#E6DEC8] py-2 px-3 grid grid-cols-4" aria-label="أقسام التقرير">
-        <button
-          onClick={() => setBottomTab('summary')} aria-pressed={bottomTab==='summary'}
-          className={`flex flex-col items-center gap-1 py-1 ${
-            bottomTab === 'summary'
-              ? 'text-[#1E1612] font-black'
-              : 'text-[#9C8B7A]'
-          }`}
-        >
-          <LayoutGrid className="w-5 h-5 text-[#C59B27]" />
-          <span className="text-[11px]">الملخص</span>
-        </button>
-        <button
-          onClick={() => setBottomTab('partners_share')} aria-pressed={bottomTab==='partners_share'}
-          className={`flex flex-col items-center gap-1 py-1 ${
-            bottomTab === 'partners_share'
-              ? 'text-[#1E1612] font-black'
-              : 'text-[#9C8B7A]'
-          }`}
-        >
-          <Users className="w-5 h-5 text-[#C59B27]" />
-          <span className="text-[11px]">حصص الشركاء</span>
-        </button>
-        <button
-          onClick={() => setBottomTab('products')} aria-pressed={bottomTab==='products'}
-          className={`flex flex-col items-center gap-1 py-1 ${
-            bottomTab === 'products'
-              ? 'text-[#1E1612] font-black'
-              : 'text-[#9C8B7A]'
-          }`}
-        >
-          <Package className="w-5 h-5 text-[#C59B27]" />
-          <span className="text-[11px]">ربحية الأصناف</span>
-        </button>
-        <button
-          onClick={() => setBottomTab('invoices')} aria-pressed={bottomTab==='invoices'}
-          className={`flex flex-col items-center gap-1 py-1 ${
-            bottomTab === 'invoices'
-              ? 'text-[#1E1612] font-black'
-              : 'text-[#9C8B7A]'
-          }`}
-        >
-          <FileText className="w-5 h-5 text-[#C59B27]" />
-          <span className="text-[11px]">الفواتير</span>
-        </button>
+      <div className="operation-tab-strip">
+        <RecordTabs label="أقسام التقرير" value={bottomTab} onChange={setBottomTab} tabs={[
+          {id:'summary',label:'الملخص'},{id:'partners_share',label:'حصص الشركاء'},
+          {id:'products',label:'ربحية الأصناف'},{id:'invoices',label:'الفواتير'},
+        ]}/>
       </div>
       <div className="report-period"><PeriodSelector value={selection} onChange={onPeriod??setLocalPeriod}/><p className="report-period-note">الفترة تطبّق على الملخص والفواتير والرسم الزمني. تسوية الشركاء تراكمية، وربحية سعر الصنف مبنية على الأسعار الحالية.</p></div>
       <div className={`report-content p-4 space-y-4 flex-1 ${bottomTab==='summary'?'report-summary':''}`}>
