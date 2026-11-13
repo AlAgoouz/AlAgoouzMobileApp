@@ -7,7 +7,7 @@ function session(loggedIn=true){vi.mocked(getSupabaseClient).mockReturnValue({au
 afterEach(()=>{vi.unstubAllGlobals();vi.clearAllMocks();});
 it('uses the signed-in caller and an encoded invoice ID without sending client financial data',async()=>{
  session();fetcher.mockResolvedValue(new Response('%PDF-fixture',{headers:{'content-type':'application/pdf'}}));
- const result=await serverInvoicePdf('a/b');expect(result.name).toBe('Agouz-invoice.pdf');expect(result.type).toBe('application/pdf');
+ const result=await serverInvoicePdf('a/b','INV-10023');expect(result.name).toBe('invoice-INV-10023.pdf');expect(result.type).toBe('application/pdf');
  expect(fetcher).toHaveBeenCalledWith('/api/invoices/a%2Fb/pdf',{headers:{Authorization:'Bearer caller-fixture'},cache:'no-store'});
 });
 it('never downloads an authentication page, invalid file or an unsigned request as a PDF',async()=>{

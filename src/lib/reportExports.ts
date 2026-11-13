@@ -10,7 +10,11 @@ async function exportFile(path:string,name:string,mime:string){
  if(mime==='application/pdf'?!new TextDecoder().decode(header).startsWith('%PDF-'):header[0]!==80||header[1]!==75)throw Error('لم يتأكد اكتمال ملف التقرير؛ أعد المحاولة.');
  return new File([bytes],name,{type:mime});
 }
-export const serverInvoicePdf=(id:string)=>exportFile(`/api/invoices/${encodeURIComponent(id)}/pdf`,'Agouz-invoice.pdf','application/pdf');
+export const serverInvoicePdf=(id:string,invoiceNumber?:string)=>exportFile(
+ `/api/invoices/${encodeURIComponent(id)}/pdf`,
+ invoiceNumber?`invoice-${invoiceNumber.replace(/[^a-zA-Z0-9_-]/g,'_')}.pdf`:'Agouz-invoice.pdf',
+ 'application/pdf',
+);
 export function downloadExport(file:File){
  const url=URL.createObjectURL(file),link=document.createElement('a');link.href=url;link.download=file.name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }

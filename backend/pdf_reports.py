@@ -4,12 +4,35 @@ import html
 import io
 import contextlib
 from pathlib import Path
+from string import Template
 from threading import Lock
 from decimal import Decimal
 
 _lock=Lock()
 _libraries=[]
 _ready=False
+_ASSETS=Path(__file__).parent/'assets'
+_SHOP_ADDRESS='3 شارع المطافي، الزيتون - القاهرة'
+_SHOP_PHONE='01201144388'
+
+
+def render_pdf(markup, resources):
+    initialize_pdf()
+    from weasyprint import HTML
+    from weasyprint.text.fonts import FontConfiguration
+    from weasyprint.urls import URLFetcher,URLFetcherResponse
+
+    class LocalAssetFetcher(URLFetcher):
+        def fetch(self,url,headers=None):
+            if url not in resources:
+                raise ValueError('PDF_RESOURCE_DENIED')
+            filename,mime=resources[url]
+            return URLFetcherResponse(url,body=(_ASSETS/filename).read_bytes(),headers={'Content-Type':mime})
+
+    protocols={url.split(':',1)[0] for url in resources}
+    fetcher=LocalAssetFetcher(allowed_protocols=protocols,fail_on_errors=True)
+    return HTML(string=markup,url_fetcher=fetcher).write_pdf(font_config=FontConfiguration())
+
 
 
 def initialize_pdf():
@@ -32,16 +55,6 @@ def initialize_pdf():
 
 
 def pdf_bytes(title,period,sections):
-    initialize_pdf()
-    from weasyprint import HTML
-    from weasyprint.text.fonts import FontConfiguration
-    from weasyprint.urls import URLFetcher,URLFetcherResponse
-    font=(Path(__file__).parent/'assets'/'Amiri-Regular.ttf').read_bytes()
-    class LocalFontFetcher(URLFetcher):
-        def fetch(self,url,headers=None):
-            if url!='agouz-font:amiri':raise ValueError('PDF_RESOURCE_DENIED')
-            return URLFetcherResponse(url,body=font,headers={'Content-Type':'font/ttf'})
-    fetch=LocalFontFetcher(allowed_protocols={'agouz-font'},fail_on_errors=True)
     escape=lambda v:html.escape('غير مكتمل' if v is None else str(v),quote=True)
     parts=[]
     for heading,columns,rows in sections:
@@ -52,7 +65,7 @@ def pdf_bytes(title,period,sections):
     @font-face{font-family:Agouz;src:url('agouz-font:amiri')}@font-face{font-family:Agouz;font-weight:bold;src:url('agouz-font:amiri')}@page{size:A4;margin:16mm;@bottom-center{content:"بُن العجوز — " counter(page);font-family:Agouz;font-size:10pt}}
     body{font-family:Agouz;font-size:12pt;color:#352719;line-height:1.5}header{border-bottom:3px solid #b48d42;padding-bottom:10pt}h1{font-size:25pt;margin:0}h2{font-size:16pt;margin:18pt 0 6pt}p{color:#766145}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#352719;color:white}td,th{padding:7pt;border:1px solid #ddcfb5;text-align:right;overflow-wrap:anywhere}tr{break-inside:avoid}thead{display:table-header-group}tbody tr:nth-child(even){background:#faf7f0}
     </style></head><body><header><h1>بُن العجوز — أصل المزاج</h1><h2>'''+escape(title)+'</h2><p>'+escape(period)+'</p></header>'+''.join(parts)+'</body></html>'
-    return HTML(string=markup,url_fetcher=fetch).write_pdf(font_config=FontConfiguration())
+    return render_pdf(markup,{'agouz-font:amiri':('Amiri-Regular.ttf','font/ttf')})
 
 
 def report_pdf(report):
@@ -76,7 +89,54 @@ def invoice_pdf(invoice):
     subtotal,discount=number(invoice,'subtotal',nonnegative=True),number(invoice,'discount',nonnegative=True)
     if any(Decimal(line[1])<=0 for line in lines) or abs(sum(line[4] for line in lines)-subtotal)>Decimal('0.011') or abs(subtotal-discount-total)>Decimal('0.011'):
         raise ValueError('INVOICE_TOTAL_MISMATCH')
+    if invoice.get('saleType')=='wholesale':
+        return wholesale_invoice_pdf(invoice,lines,subtotal,discount,total,paid,remaining)
     return pdf_bytes(('فاتورة مرتجعة — ' if invoice.get('isReturned') else 'فاتورة مبيعات — ')+text(invoice,'invoiceNumber'),business_day(invoice),[
         ('العميل',['الاسم','الهاتف'],[[text(invoice,'customerName'),text(invoice,'customerPhone',True)]]),
         ('محتويات الفاتورة',['الصنف','الكمية','الوحدة','السعر','الإجمالي'],lines),
         ('الحساب',['البيان','جنيه مصري'],[['قبل الخصم',number(invoice,'subtotal')],['الخصم',number(invoice,'discount')],['الإجمالي',total],['المدفوع',paid],['المتبقي',remaining]])])
+
+
+def wholesale_invoice_pdf(invoice, lines, subtotal, discount, total, paid, remaining):
+    from reporting import business_day,text
+
+    def money(value):
+        return f'<span class="money"><bdi dir="ltr">{value:,.2f}</bdi> ج.م</span>'
+
+    def amount(label, value):
+        return f'<div class="amount"><span>{label}</span>{money(value)}</div>'
+
+    if invoice.get('isReturned'):
+        status,status_class='مرتجعة','returned'
+    elif remaining==0:
+        status,status_class='مدفوعة','paid'
+    elif paid>0:
+        status,status_class='مدفوعة جزئيًا','open'
+    else:
+        status,status_class='آجلة','open'
+
+    rows=''.join(
+        f'<tr><td>{index}</td><td><bdi>{html.escape(name)}</bdi></td>'
+        f'<td><bdi dir="ltr">{quantity}</bdi> {html.escape(unit)}</td>'
+        f'<td>{money(price)}</td><td>{money(value)}</td></tr>'
+        for index,(name,quantity,unit,price,value) in enumerate(lines,1)
+    )
+    # Current wholesale invoices have no tax charge. Their saved totals are used as-is.
+    payment=''
+    if remaining>0 and not invoice.get('isReturned'):
+        payment=amount('المدفوع',paid)+amount('المتبقي',remaining)
+    template=Template((_ASSETS/'wholesale-invoice.html').read_text(encoding='utf-8'))
+    markup=template.substitute(
+        invoice_number=html.escape(text(invoice,'invoiceNumber')),
+        shop_address=_SHOP_ADDRESS,shop_phone=_SHOP_PHONE,
+        customer=html.escape(text(invoice,'customerName')),
+        customer_phone=html.escape(text(invoice,'customerPhone',True)) or 'غير مسجل',
+        issue_date=business_day(invoice),
+        status=status,status_class=status_class,rows=rows,
+        subtotal=amount('قبل الخصم',subtotal) if discount>0 else '',
+        discount=money(discount),tax=money(Decimal(0)),total=money(total),payment=payment,
+    )
+    return render_pdf(markup,{
+        'agouz-asset:cairo':('Cairo-Variable.ttf','font/ttf'),
+        'agouz-asset:invoice-logo':('invoice-logo.webp','image/webp'),
+    })

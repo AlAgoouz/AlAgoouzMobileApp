@@ -39,14 +39,44 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
   onClose,
 }) => {
   const [phoneInput, setPhoneInput] = useState(customerPhone);
-  const [pdfBusy,setPdfBusy]=useState(false),[pdfError,setPdfError]=useState('');
-  const exportPdf=async(share:boolean)=>{
-    if(pdfBusy)return;setPdfBusy(true);setPdfError('');
+  const isWholesale=invoice.saleType==='wholesale';
+  const [pdfBusy,setPdfBusy]=useState(false);
+  const [pdfMessage,setPdfMessage]=useState('');
+  const [shareFile,setShareFile]=useState<File>();
+
+  const exportPdf=async(forShare:boolean)=>{
+    if(pdfBusy)return;
+    setPdfBusy(true);
+    setPdfMessage('');
     try{
-      const file=await serverInvoicePdf(invoice.id);
-      if(share&&navigator.canShare?.({files:[file]})&&navigator.share){try{await navigator.share({files:[file],title:`فاتورة ${invoice.invoiceNumber}`});}catch(error){if((error as Error).name==='AbortError')return;downloadExport(file);setPdfError('تم تنزيل الفاتورة؛ افتح محادثة العميل من زر واتساب وأرفق الملف.');}}
-      else {downloadExport(file);if(share)setPdfError('تم تنزيل الفاتورة؛ افتح محادثة العميل من زر واتساب وأرفق الملف.');}
-    }catch(error){if((error as Error).name!=='AbortError')setPdfError((error as Error).message);}finally{setPdfBusy(false);}
+      const file=await serverInvoicePdf(invoice.id,invoice.invoiceNumber);
+      if(forShare&&typeof navigator.share==='function'&&navigator.canShare?.({files:[file]})){
+        setShareFile(file);
+        setPdfMessage('الملف جاهز. اضغط على مشاركة الملف واختر واتساب.');
+      }else{
+        downloadExport(file);
+        if(forShare)setPdfMessage('تم تنزيل الفاتورة. افتح محادثة واتساب وأرفق الملف.');
+      }
+    }catch{
+      setPdfMessage('تعذر تجهيز الفاتورة. راجع الاتصال وتسجيل الدخول ثم أعد المحاولة.');
+    }finally{
+      setPdfBusy(false);
+    }
+  };
+
+  const sharePdf=async()=>{
+    if(!shareFile||pdfBusy)return;
+    setPdfBusy(true);
+    try{
+      await navigator.share({files:[shareFile],title:`فاتورة ${invoice.invoiceNumber}`});
+      setPdfMessage('');
+    }catch(error){
+      if((error as Error).name==='AbortError')return;
+      downloadExport(shareFile);
+      setPdfMessage('تم تنزيل الفاتورة. افتح محادثة واتساب وأرفق الملف.');
+    }finally{
+      setPdfBusy(false);
+    }
   };
 
   const buildWhatsAppInvoiceText = () => {
@@ -99,11 +129,9 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
   };
 
   const handleSendWhatsApp = () => {
-    const text = encodeURIComponent(buildWhatsAppInvoiceText());
     const formattedPhone = formatEgyptWhatsAppPhone(phoneInput);
-    const url = formattedPhone
-      ? `https://wa.me/${formattedPhone}?text=${text}`
-      : `https://wa.me/?text=${text}`;
+    const base = `https://wa.me/${formattedPhone}`;
+    const url = isWholesale ? base : `${base}?text=${encodeURIComponent(buildWhatsAppInvoiceText())}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
@@ -200,7 +228,7 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-2xl shadow flex items-center justify-center gap-1.5 text-xs"
             >
               <MessageCircle className="w-4 h-4" />
-              <span>إرسال واتساب</span>
+              <span>{isWholesale?'فتح محادثة واتساب':'إرسال واتساب'}</span>
             </button>
             <button
               onClick={handlePrintReceipt}
@@ -295,11 +323,11 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
           </div>
 
           {/* أزرار الطباعة والواتساب */}
-          {invoice.saleType==='wholesale'&&invoice.items.every(line=>line.category==='manufactured_blend')&&<div className="grid grid-cols-2 gap-2">
+          {isWholesale&&<div className="grid grid-cols-2 gap-2">
             <button disabled={pdfBusy} onClick={()=>void exportPdf(false)} className="border rounded-xl p-3 font-bold">{pdfBusy?'جارٍ تجهيز الفاتورة…':'تنزيل الفاتورة PDF'}</button>
-            <button disabled={pdfBusy} onClick={()=>void exportPdf(true)} className="border rounded-xl p-3 font-bold">مشاركة ملف الفاتورة</button>
+            <button disabled={pdfBusy} onClick={()=>void (shareFile?sharePdf():exportPdf(true))} className="border rounded-xl p-3 font-bold">{shareFile?'مشاركة الملف':'تجهيز PDF للمشاركة'}</button>
           </div>}
-          {pdfError&&<p role="status" className="text-xs">{pdfError}</p>}
+          {pdfMessage&&<p role="status" className="text-xs">{pdfMessage}</p>}
 
         </div></Modal>
   );

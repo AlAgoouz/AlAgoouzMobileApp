@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>$invoice_number</title>
+<style>
+  @font-face { font-family: Cairo; src: url("agouz-asset:cairo"); font-weight: 200 1000; }
+  @page { size: A4; margin: 18.5mm; }
+  body { margin: 0; font: 11pt/1.65 Cairo, sans-serif; color: #231c18; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10mm;
+    padding-bottom: 6mm; border-bottom: 2pt solid #593a2a; margin-bottom: 6.5mm; break-inside: avoid; }
+  .identity { display: flex; align-items: center; gap: 6mm; }
+  .identity img { width: 22mm; height: 22mm; object-fit: contain; }
+  h1, h2, p { margin: 0; }
+  h1 { color: #593a2a; font-size: 19pt; line-height: 1.3; }
+  .tagline { color: #815636; margin: 1mm 0; }
+  .contact { color: #52504d; font-size: 10pt; }
+  .identifier { background: linear-gradient(135deg,#593a2a,#805635); color: white; padding: 3mm 6mm;
+    border-radius: 3mm; min-width: 29mm; text-align: center; }
+  .identifier strong { display: block; font-size: 16pt; overflow-wrap: anywhere; }
+  .details { display: table; border-collapse: separate; border-spacing: 4mm 0; width: calc(100% + 8mm);
+    table-layout: fixed; margin: 0 -4mm 6mm; break-inside: avoid; }
+  .panel { background: #f7f5f1; border: 0.75pt solid #e6ddd1; border-radius: 3mm; padding: 4.5mm; }
+  .details .panel { display: table-cell; vertical-align: middle; }
+  .panel h2 { color: #593a2a; font-size: 11pt; margin-bottom: 2mm; }
+  .panel p { overflow-wrap: anywhere; }
+  .paid { color: #257850; }
+  .open { color: #925416; }
+  .returned { color: #962f30; }
+  .lines { width: 100%; table-layout: fixed; border-collapse: collapse; }
+  .lines th, .lines td { padding: 2.9mm 3mm; text-align: right; overflow-wrap: anywhere; }
+  .lines th { background: #593a2a; color: white; font-weight: 700; border-inline-end: 0.5pt solid #775645; }
+  .lines th:first-child, .lines td:first-child { text-align: center; padding-inline: 0; }
+  .lines td { border-bottom: 0.75pt solid #e6ddd1; }
+  .lines tr { break-inside: avoid; }
+  .lines tbody tr:nth-child(even) { background: #f8f6f2; }
+  .money { white-space: nowrap; font-size: 10pt; }
+  .closing { display: flex; gap: 5mm; justify-content: space-between; align-items: flex-end;
+    margin-top: 6.5mm; break-inside: avoid; }
+  .stamp { border: 1.3pt dashed #593a2a; border-radius: 3mm; padding: 4mm;
+    color: #593a2a; text-align: center; min-width: 38mm; }
+  .stamp strong { display: block; overflow-wrap: anywhere; }
+  .totals { width: 76mm; }
+  .amount { display: flex; align-items: baseline; justify-content: space-between; gap: 2mm; }
+  .amount + .amount { margin-top: 1.6mm; }
+  .grand { border-top: 1.4pt solid #593a2a; padding-top: 3mm; color: #593a2a; font-size: 13pt; }
+  .grand .money { font-size: inherit; }
+  footer { border-top: 0.75pt solid #e6ddd1; margin-top: 8mm; padding-top: 4mm;
+    text-align: center; color: #55514c; break-inside: avoid; }
+  footer p + p { font-size: 10pt; }
+</style>
+</head>
+<body>
+<header>
+  <div class="identity">
+    <img src="agouz-asset:invoice-logo" alt="شعار بُن العجوز">
+    <div>
+      <h1>بن العجوز</h1>
+      <p class="tagline">أصل المزاج</p>
+      <p class="contact"><b>العنوان:</b> $shop_address</p>
+      <p class="contact"><b>الهاتف:</b> <bdi dir="ltr">$shop_phone</bdi></p>
+    </div>
+  </div>
+  <div class="identifier">فاتورة عميل<strong dir="ltr">$invoice_number</strong></div>
+</header>
+<section class="details">
+  <div class="panel">
+    <h2>بيانات العميل</h2>
+    <p><b>الاسم:</b> <bdi>$customer</bdi></p>
+    <p><b>الهاتف:</b> <bdi dir="ltr">$customer_phone</bdi></p>
+  </div>
+  <div class="panel">
+    <p><b>تاريخ الإصدار:</b> <bdi dir="ltr">$issue_date</bdi></p>
+    <p><b>حالة الدفع:</b> <strong class="$status_class">$status</strong></p>
+    <p><b>أصدرها:</b> بن العجوز</p>
+  </div>
+</section>
+<table class="lines">
+  <colgroup><col style="width:7%"><col style="width:33%"><col style="width:15%"><col style="width:22.5%"><col style="width:22.5%"></colgroup>
+  <thead><tr><th>#</th><th>البيان</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
+  <tbody>$rows</tbody>
+</table>
+<section class="closing">
+  <div class="stamp">رقم الفاتورة<strong dir="ltr">$invoice_number</strong></div>
+  <div class="panel totals">
+    $subtotal
+    <div class="amount"><span>الخصم</span>$discount</div>
+    <div class="amount"><span>ض.ق.م (0%)</span>$tax</div>
+    <div class="amount grand"><strong>الإجمالي المستحق</strong><strong>$total</strong></div>
+    $payment
+  </div>
+</section>
+<footer>
+  <p>نتشرف بخدمتكم دائمًا، ونشكركم على ثقتكم في بن العجوز.</p>
+  <p>لأي استفسار، تواصل معنا على <bdi dir="ltr">$shop_phone</bdi>.</p>
+</footer>
+</body>
+</html>

@@ -110,12 +110,30 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(len(reader.pages),1)
         font_names=[str(value.get_object().get('/BaseFont')) for value in reader.pages[0]['/Resources']['/Font'].get_object().values()]
         self.assertTrue(any('Agouz' in name or 'Amiri' in name for name in font_names),font_names)
-        invoice=dict(invoiceNumber='INV-AR-1',date='2026-11-04',customerName='شركة بن العجوز للتجارة — القاهرة',customerPhone='01012345678',subtotal=100,discount=0,totalAmount=100,paidAmount=40,remainingAmount=60,items=[dict(itemName='توليفة العجوز الخاصة رقم '+str(i),quantity=1,unitLabel='كيلو',unitPrice=1,totalPrice=1) for i in range(100)])
+        invoice=dict(saleType='wholesale',invoiceNumber='INV-AR-1',date='2026-11-04',customerName='شركة بن العجوز للتجارة — القاهرة',customerPhone='01012345678',subtotal=100,discount=0,totalAmount=100,paidAmount=40,remainingAmount=60,items=[dict(itemName='توليفة العجوز الخاصة رقم '+str(i),quantity=1,unitLabel='كيلو',unitPrice=1,totalPrice=1) for i in range(100)])
         receipt=invoice_pdf(invoice)
-        self.assertGreater(len(PdfReader(io.BytesIO(receipt)).pages),1)
+        receipt_reader=PdfReader(io.BytesIO(receipt))
+        self.assertGreater(len(receipt_reader.pages),1)
+        self.assertIn('INV-AR-1',receipt_reader.pages[0].extract_text())
+        self.assertIn('01201144388',receipt_reader.pages[0].extract_text())
+        self.assertIn('01012345678',receipt_reader.pages[0].extract_text())
+        self.assertIn('60.00',receipt_reader.pages[-1].extract_text())
+        self.assertTrue(receipt_reader.pages[0].images)
+        # A realistic two-line paid invoice exposes the entire design on one page.
+        compact=dict(invoice,invoiceNumber='INV-DEMO',customerName='عميل تجريبي',
+                     subtotal=7700,totalAmount=7700,paidAmount=7700,remainingAmount=0,
+                     items=[dict(itemName='توليفة بن خاصة',quantity=10,unitLabel='كجم',unitPrice=650,totalPrice=6500),
+                            dict(itemName='توليفة بن محوّجة',quantity=1,unitLabel='كجم',unitPrice=1200,totalPrice=1200)])
+        compact_pdf=invoice_pdf(compact)
+        compact_reader=PdfReader(io.BytesIO(compact_pdf))
+        self.assertEqual(len(compact_reader.pages),1)
+        printed=compact_reader.pages[0].extract_text()
+        for value in ('INV-DEMO','6,500.00','1,200.00','7,700.00','0.00','2026-11-04'):
+            self.assertIn(value,printed)
         folder=Path(__file__).resolve().parents[1]/'tmp'/'report-examples'; folder.mkdir(parents=True,exist_ok=True)
         (folder/'Agouz-report-ar.pdf').write_bytes(data)
-        (folder/'Agouz-invoice-ar.pdf').write_bytes(receipt)
+        (folder/'Agouz-invoice-ar.pdf').write_bytes(compact_pdf)
+        (folder/'Agouz-invoice-multipage.pdf').write_bytes(receipt)
         (folder/'Agouz-report-ar.xlsx').write_bytes(workbook_bytes(report))
         source,summary=fixture();source['cashier_days'][1]['financialReport']={'totalRevenue':Decimal('123.45')}
         summary['report'].update(count=3,revenue=Decimal('140.80'),cost=None,gross=None,net=None,pendingCostDays=1)
