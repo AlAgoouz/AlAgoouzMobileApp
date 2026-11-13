@@ -12,7 +12,7 @@ import type {CashierDay,SalesInvoice} from '../types/erp';
 const InvoiceReceiptModal=React.lazy(()=>import('./ReceiptAndStatementModals').then(m=>({default:m.InvoiceReceiptModal})));
 const number=z.number().finite();
 const summary=z.object({id:z.string(),invoiceNumber:z.string(),date:z.string(),customerName:z.string(),totalAmount:number,paidAmount:number,remainingAmount:number,netProfit:number,paymentMethod:z.string(),isReturned:z.boolean().optional(),itemsCount:number});
-const daySummary=z.object({id:z.string(),date:z.string(),status:z.enum(['pending','approved']),totalCost:number.optional(),financialReport:z.object({totalRevenue:number}).optional(),itemsCount:number});
+const daySummary=z.object({id:z.string(),date:z.string(),status:z.enum(['pending','approved']),totalCost:number.optional(),correctedTotalCost:number.optional(),financialReport:z.object({totalRevenue:number}).optional(),itemsCount:number});
 export type SalesHistoryView = {kind:HistoryKind|null;query:string;offset:number};
 export const initialSalesHistoryView:SalesHistoryView={kind:null,query:'',offset:0};
 export function PagedSalesHistory({onBack,onManage,onOpenCustomer,view=initialSalesHistoryView,onViewChange}:{onBack:()=>void;onManage?:()=>void;onOpenCustomer?:(id:string)=>void;view?:SalesHistoryView;onViewChange?:(view:SalesHistoryView)=>void}){
@@ -41,7 +41,7 @@ export function PagedSalesHistory({onBack,onManage,onOpenCustomer,view=initialSa
     ? <ResponsiveRegister label="أيام الكاشير" rows={data.rows.map(row=>daySummary.parse(row))} columns={[
       {title:'اليوم',render:day=><time dateTime={day.date}>{day.date}</time>},
       {title:'الإيراد',render:day=>day.financialReport?money(day.financialReport.totalRevenue)+' ج.م':'التقرير المالي لم يصل'},
-      {title:'التكلفة',render:day=>day.status==='approved'&&day.totalCost!==undefined?money(day.totalCost)+' ج.م':'تُحدد عند الاعتماد'},
+      {title:'التكلفة',render:day=>day.status==='approved'&&day.totalCost!==undefined?money(day.correctedTotalCost??day.totalCost)+' ج.م':'تُحدد عند الاعتماد'},
       {title:'الحالة',render:day=><span className="record-badge">{day.status==='approved'?'معتمد':'بانتظار الاعتماد'}</span>},
       {title:'التفاصيل',render:day=><button type="button" className="record-action" disabled={detailBusy} onClick={()=>void open(day.id,'cashier')}>تفاصيل اليوم والتكلفة</button>},
     ]}/>

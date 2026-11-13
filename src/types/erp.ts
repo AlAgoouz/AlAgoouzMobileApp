@@ -191,6 +191,11 @@ export interface CashierDay {
   consumption?: {itemId:string;quantity:number;unitCost:number;totalCost:number}[];
   shortages?: {itemId:string;shortage:number}[];
   totalCost?: number;
+  correctedTotalCost?: number;
+  costCorrections?: {
+    itemId:string;covered:number;uncovered:number;totalCost:number;
+    allocations:{purchaseId:string;invoiceNumber:string;purchaseDate:string;quantity:number;unitCost:number}[];
+  }[];
   approvedAt?: string;
   partnerName?: string;
 }

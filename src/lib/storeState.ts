@@ -523,7 +523,14 @@ export function invoiceDetail(value:unknown):SalesInvoice {
  return invoice as unknown as SalesInvoice;
 }
 export function cashierDayDetail(value:unknown):CashierDay {
- return schema.shape.cashierDays.unwrap().element.parse(value) as CashierDay;
+ const original=schema.shape.cashierDays.unwrap().element.parse(value);
+ const costs=z.object({
+  correctedTotalCost:money.optional(),
+  costCorrections:z.array(z.object({itemId:id,covered:money,uncovered:money,totalCost:money,
+   allocations:z.array(z.object({purchaseId:id,invoiceNumber:id,purchaseDate:id,quantity:number.positive(),unitCost:money})),
+  })).optional(),
+ }).parse(value);
+ return {...original,...costs};
 }
 export function toCloud(state: StoreState) {
   return Object.fromEntries(

@@ -467,6 +467,41 @@ function cashierPair(){
   const pending=attachCashierReport(withMoney,businessDate(),{type:'items',file:{fileName:'items.xlsx',sha256:'b'.repeat(64),uploadedAt:new Date().toISOString()},lines:[{itemId:drink.id,quantity:5,unitLabel:'piece',normalizedQtyInBaseUnit:5}]});
   return {before,pending,posted:approveCashierDay(pending,pending.cashierDays[0].id,'Owner')};
 }
+it.skipIf(!active)('posts the supplier price of covered shortages on the original cashier reporting day',()=>{
+ const {posted}=cashierPair();
+ const day={...posted.cashierDays[0],date:'2026-11-01',approvedAt:'2026-11-01T10:00:00.000Z'};
+ const item=posted.items.find(item=>item.id===bean.id)!;
+ const supplier={...INITIAL_SUPPLIERS[0],id:'supplier',address:'Cairo',representativeName:'Agent',phone:'01012345678',balance:0,totalPurchases:0,invoicesCount:0};
+ const before={...posted,cashierDays:[day],suppliers:[supplier]};
+ const invoice:import('../src/types/erp').PurchaseInvoice={
+  id:'coverage',invoiceNumber:'PUR-FIFO',date:'2026-11-03',createdAt:new Date().toISOString(),supplierId:supplier.id,supplierName:supplier.name,
+  accountingVersion:2,netAmount:8,taxAmount:0,totalAmount:8,paidAmount:8,remainingAmount:0,paymentMethod:'نقدي',partnerName:'Owner',
+  inventoryBefore:[item],items:[{itemId:bean.id,itemName:bean.name,quantity:2,unit:'kg',purchasePrice:4,previousLastPrice:1,previousWacCost:1,cheapestSupplierPrice:1,cheapestSupplierName:'Supplier',updateProductCost:true}],
+ };
+ const received=receiveStock(item,2,4,{id:invoice.id,date:invoice.date,type:'purchase'});
+ const after={...before,items:before.items.map(i=>i.id===item.id?received:i),
+  purchaseInvoices:[{...invoice,inventoryAfter:[received]}],suppliers:[{...supplier,totalPurchases:8,invoicesCount:1}]};
+ seed(before);
+ accept(after);
+ reject({...after,purchaseInvoices:[{...invoice,inventoryBefore:[{...item,stock:0}]}]},'CASHIER_COST_PURCHASE_EVIDENCE_REQUIRED');
+ seed(after);
+ const summary=readJson("select public.bon_erp_dashboard_v2('2026-11-01','2026-11-01')");
+ expect(summary.report).toMatchObject({revenue:200,cost:3,gross:197});
+ expect(readJson("select public.bon_erp_dashboard('2026-11-01','2026-11-01')").report.cost).toBe(3);
+ expect(salesForReports(after)[0]).toMatchObject({totalCost:3,netProfit:197});
+ expect(readJson("select public.bon_erp_dashboard_v2('2026-11-03','2026-11-03')").report.cost).toBe(0);
+ expect(readJson(`select public.bon_erp_sale_detail('${day.id}','cashier')`)).toMatchObject({
+  totalCost:1.5,correctedTotalCost:3,costCorrections:[{itemId:bean.id,covered:0.5,uncovered:0,totalCost:3,
+   allocations:[{invoiceNumber:'PUR-FIFO',quantity:0.5,unitCost:4}]}],
+ });
+ expect(readJson("select public.bon_erp_sales_page('cashier')").rows[0]).toMatchObject({totalCost:1.5,correctedTotalCost:3});
+ const exported=readJson("select public.bon_erp_export_report_v2('2026-11-01','2026-11-01')");
+ expect(exported.purchase_invoices).toEqual([]);
+ expect(exported.cashier_days[0]).toMatchObject({totalCost:1.5,correctedTotalCost:3});
+ const cancelled={...after,purchaseInvoices:[{...invoice,isCancelled:true}]};
+ seed(cancelled);
+ expect(readJson("select public.bon_erp_dashboard_v2('2026-11-01','2026-11-01')").report.cost).toBe(1.5);
+});
 it.skipIf(!active)('assigns a cashier code to an existing product without changing its recorded sales, stock or costs',()=>{
  const {posted}=cashierPair();seed(posted);const changed=adjustCatalogItem(posted,bean.id,{code:'200018'},'Owner');
  expect(changed.cashierDays).toEqual(posted.cashierDays);expect(changed.stocktakingRecords).toEqual(posted.stocktakingRecords);expect(changed.items.find(item=>item.id===bean.id)).toEqual({...posted.items.find(item=>item.id===bean.id),code:'200018'});accept(changed);

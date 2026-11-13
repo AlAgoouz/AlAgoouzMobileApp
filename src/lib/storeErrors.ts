@@ -4,6 +4,7 @@ const specificErrors:Record<string,string>={
   STORE_TOO_LARGE:'حجم البيانات تجاوز الحد المسموح؛ تواصل مع المالك.',
   RECIPE_CYCLE_OR_DEPTH:'راجع الوصفة: يوجد اعتماد دائري أو تداخل أكبر من الحد المسموح.',
   INVALID_SALES_QUANTITY:'كمية البيع لازم تكون أكبر من صفر.',
+  CASHIER_COST_PURCHASE_EVIDENCE_REQUIRED:'تعذر مطابقة رصيد ما قبل التوريد لتسوية تكلفة الكاشير. حدّث البيانات وأعد اعتماد فاتورة الشراء.',
   CASHIER_COST_MISMATCH:'تكلفة الكاشير لا تطابق تفاصيل الأصناف؛ راجع المطابقة والمكونات.',
 };
 

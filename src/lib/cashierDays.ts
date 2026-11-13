@@ -1,5 +1,6 @@
 import type {CashierDay,CashierReportFile,SalesInvoice} from '../types/erp';
 import type {StoreState} from './storeState';
+import {cashierCostDetails,correctedCashierCost} from './cashierCosts';
 import {inventoryDeductions,deductInventory} from './inventory';
 const round=(n:number)=>Number(n.toFixed(2));
 function validDate(date:string){const value=new Date(date+'T12:00:00Z');if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(value.getTime())||value.toISOString().slice(0,10)!==date)throw Error('تاريخ يوم الكاشير غير صالح');}
@@ -40,6 +41,13 @@ export function approveCashierDay(state:StoreState,id:string,actor:string):Store
 }
 // Derived reporting view only: no second sales document or invented item revenue is persisted.
 export type ReportSale=Omit<SalesInvoice,'totalCost'|'netProfit'>&{totalCost:number|null;netProfit:number|null};
-export function salesForReports(state:Pick<StoreState,'salesInvoices'|'cashierDays'>):ReportSale[]{
- return [...state.salesInvoices,...state.cashierDays.filter(d=>d.financialReport).map(d=>({id:d.id,invoiceNumber:`DAY-${d.date}`,date:d.date,saleType:'cashier_sync' as const,customerName:'مبيعات يوم الكاشير',items:[],subtotal:d.financialReport!.totalRevenue,discount:0,totalAmount:d.financialReport!.totalRevenue,totalCost:d.status==='approved'?d.totalCost!:null,netProfit:d.status==='approved'?round(d.financialReport!.totalRevenue-d.totalCost!):null,paidAmount:d.financialReport!.totalRevenue,remainingAmount:0,paymentMethod:'نقدي' as const,partnerName:d.partnerName??'تقرير مالي'}))];
+export function salesForReports(state:Pick<StoreState,'salesInvoices'|'cashierDays'>&Partial<Pick<StoreState,'purchaseInvoices'>>):ReportSale[]{
+ const details=cashierCostDetails(state.cashierDays,state.purchaseInvoices??[]);
+ return [...state.salesInvoices,...state.cashierDays.filter(d=>d.financialReport).map(d=>{
+  const revenue=d.financialReport!.totalRevenue;
+  const cost=d.status==='approved'?correctedCashierCost(d,details.get(d.id))??null:null;
+  return {id:d.id,invoiceNumber:`DAY-${d.date}`,date:d.date,saleType:'cashier_sync' as const,customerName:'مبيعات يوم الكاشير',
+   items:[],subtotal:revenue,discount:0,totalAmount:revenue,totalCost:cost,netProfit:cost===null?null:round(revenue-cost),
+   paidAmount:revenue,remainingAmount:0,paymentMethod:'نقدي' as const,partnerName:d.partnerName??'تقرير مالي'};
+ })];
 }
