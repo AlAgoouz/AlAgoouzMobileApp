@@ -134,9 +134,9 @@ begin
         cross join lateral jsonb_array_elements(coalesce(day->'shortages','[]')) shortage
         where day->>'status'='approved' and shortage->>'itemId'=item->>'id'))
       and (
-        not coalesce(pg_input_is_valid(p->>'createdAt','timestamp with time zone'),false)
-        or (p->>'createdAt')::timestamptz>clock_timestamp()+interval '5 minutes'
-        or (p->>'createdAt')::timestamptz<clock_timestamp()-interval '7 days'
+        case when pg_input_is_valid(p->>'createdAt','timestamp with time zone')
+          then not isfinite((p->>'createdAt')::timestamptz)
+          else true end
         or (select count(*) from jsonb_array_elements(coalesce(p->'inventoryBefore','[]')) snapshot
             where snapshot->>'id'=item->>'id')<>1
         or not exists(select 1 from jsonb_array_elements(coalesce(p->'inventoryBefore','[]')) snapshot

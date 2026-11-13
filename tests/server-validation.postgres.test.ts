@@ -471,7 +471,7 @@ it.skipIf(!active)('posts the supplier price of covered shortages on the origina
  const {posted}=cashierPair();
  const day={...posted.cashierDays[0],date:'2026-11-01',approvedAt:'2026-11-01T10:00:00.000Z'};
  const item=posted.items.find(item=>item.id===bean.id)!;
- const supplier={...INITIAL_SUPPLIERS[0],id:'supplier',address:'Cairo',representativeName:'Agent',phone:'01012345678',balance:0,totalPurchases:0,invoicesCount:0};
+ const supplier={id:'supplier',name:'Supplier',category:'Raw',address:'Cairo',representativeName:'Agent',phone:'01012345678',balance:0,totalPurchases:0,invoicesCount:0};
  const before={...posted,cashierDays:[day],suppliers:[supplier]};
  const invoice:import('../src/types/erp').PurchaseInvoice={
   id:'coverage',invoiceNumber:'PUR-FIFO',date:'2026-11-03',createdAt:new Date().toISOString(),supplierId:supplier.id,supplierName:supplier.name,
