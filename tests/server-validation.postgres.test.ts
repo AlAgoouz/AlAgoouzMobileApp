@@ -531,8 +531,8 @@ it.skipIf(!active)('parses into a pending cashier queue exactly once without cha
  expect(()=>sql(`begin;set local role anon;select * from bon_erp_private.import_jobs;rollback;`)).toThrow('permission denied');
 });
 it.skipIf(!active)('rejects a return refund above the recorded payment when the customer balance is inconsistent',()=>{
- const previous={...stockState(),salesInvoices:[{...sale(),customerId:'c1',paidAmount:5,remainingAmount:sale().totalAmount-5}],
-   customers:[{id:'c1',name:'Customer',phone:'',type:'عميل محل' as const,balance:1,totalSales:sale().totalAmount,invoicesCount:1}]};
+ const previous={...stockState(),salesInvoices:[{...sale(),customerId:'c1',paidAmount:1,remainingAmount:sale().totalAmount-1}],
+   customers:[{...INITIAL_CUSTOMERS[0],id:'c1',name:'Customer',phone:'01012345678',area:'Cairo',balance:1,totalSales:sale().totalAmount,invoicesCount:1}]};
  seed(previous);
  const invoice=previous.salesInvoices[0];
  const forged={...previous,salesInvoices:[{...invoice,isReturned:true,returnedAt:new Date().toISOString(),

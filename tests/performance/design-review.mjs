@@ -367,7 +367,7 @@ export async function verifyDesign(){
     assert.equal(await ingredientCard.evaluate(e=>getComputedStyle(e).transform),'none','Record cards must respect reduced motion');
     await page.route('**/rest/v1/rpc/bon_erp_save_store',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Isolated fixture refuses writes'})}));
     await page.getByRole('button',{name:'اعتماد الوصفة وتجهيز المنتج',exact:true}).click();
-    await page.getByText(/Isolated fixture refuses writes/).first().waitFor();
+    await page.getByText(/الاتصال بالخادم غير مستقر/).first().waitFor();
     assert.equal(await page.getByLabel('كمية خام الوصفة',{exact:true}).inputValue(),'18');
     await page.screenshot({path:'design-recipe-save-failure-mobile.png',fullPage:true});
     await page.unroute('**/rest/v1/rpc/bon_erp_save_store');

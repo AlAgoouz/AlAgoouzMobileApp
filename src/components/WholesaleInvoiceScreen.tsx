@@ -51,7 +51,9 @@ export function WholesaleInvoiceScreen({items, customers, currentPartnerName, on
     id: item.id, title: item.name, detail: item.code + ' · المتاح ' + money(item.stock) + ' كجم',
   })), [blends]);
   const customerName = customers.find(customer => customer.id === customerId)?.name;
-  const total = sumMoney(lines.map(amount).filter(Number.isFinite));
+  let total=NaN;
+  try{total=sumMoney(lines.map(amount).filter(Number.isFinite));}
+  catch{/* The invoice cannot be approved with an out-of-range total. */}
   const paidAmount = method === 'آجل' ? numeric(paid) : total;
   const moneyOrDash = (value: number) => Number.isFinite(value) ? `${money(value)} ج.م` : '—';
 

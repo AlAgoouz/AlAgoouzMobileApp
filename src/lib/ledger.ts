@@ -1,10 +1,10 @@
+import {roundMoney as money,sumMoney} from './money';
 import type { StoreState } from './storeState';
 import { businessDate } from './dates';
 import { receiveStock } from './costing';
 import { recalculateRecipeCosts } from './itemCosts';
 import type { StoreEngine } from './storeEngine';
 
-const money = (value: number) => Number(value.toFixed(2));
 
 export function assertPayment(balance: number, amount: number) {
   if (!Number.isFinite(amount) || amount <= 0)
@@ -417,9 +417,7 @@ export function cancelExpense(
   };
 }
 export function operatingExpenses(expenses: StoreState['expenses']) {
-  return money(
-    expenses
-      .filter((e) => !e.isCancelled && e.category !== 'مسحوبات شركاء')
-      .reduce((sum, e) => money(sum + e.amount), 0),
-  );
+  return sumMoney(expenses
+    .filter(expense=>!expense.isCancelled&&expense.category!=='مسحوبات شركاء')
+    .map(expense=>expense.amount));
 }
