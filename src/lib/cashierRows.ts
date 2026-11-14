@@ -1,4 +1,5 @@
 import type { InventoryItem } from '../types/erp';
+import {multiplyMoney} from './money';
 
 export interface ParsedCashierRow {
   rawName: string;
@@ -236,20 +237,14 @@ export async function cashierSourceId(
   const canonical = JSON.stringify({
     date: saleDate,
     rows: rows
-      .map((r) => ({
-        id: r.matchedItem?.id ?? r.rawCode ?? r.rawName,
-        quantity: Number(
-          (['gram', 'ml'].includes(r.unitHint)
-            ? r.quantity / 1000
-            : r.quantity
-          ).toFixed(6),
-        ),
-        total:
-          r.totalPrice ??
-          (r.unitPrice !== undefined
-            ? Number((r.unitPrice * r.quantity).toFixed(2))
-            : null),
-      }))
+      .map((r) => {
+        const baseQuantity = ['gram', 'ml'].includes(r.unitHint) ? r.quantity / 1000 : r.quantity;
+        return {
+          id: r.matchedItem?.id ?? r.rawCode ?? r.rawName,
+          quantity: Number(baseQuantity.toFixed(6)),
+          total: r.totalPrice ?? (r.unitPrice === undefined ? null : multiplyMoney(baseQuantity, r.unitPrice)),
+        };
+      })
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   });
   const digest = await crypto.subtle.digest(

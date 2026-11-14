@@ -62,7 +62,10 @@ it('submits email and password once, displays auth failure, and permits retry', 
 });
 it('escapes the actual receipt print output', () => {
   let html = '';
+  const print = vi.fn();
   vi.spyOn(window, 'open').mockReturnValue({
+    focus: vi.fn(),
+    print,
     document: {
       write: (value: string) => {
         html = value;
@@ -91,6 +94,7 @@ it('escapes the actual receipt print output', () => {
     />,
   );
   fireEvent.click(screen.getByText('طباعة الفاتورة'));
+  expect(print).toHaveBeenCalledOnce();
   expect(html).toContain('&lt;img');
   expect(html).not.toContain(payload);
   vi.restoreAllMocks();
