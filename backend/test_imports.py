@@ -102,7 +102,18 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(os.environ, {'SUPABASE_URL': 'https://isolated.supabase.co', 'SUPABASE_PUBLISHABLE_KEY': 'fixture'}):
             async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(200, content=b'123'))) as client:
                 with self.assertRaisesRegex(BackendUnavailable, '^IMPORT_FILE_SIZE_CHANGED$'):
-                    await download(client, 'fixed/path.csv', 'secret-fixture', 4)
+                    await download(client, f'{JOB}/{JOB}/report.csv', 'secret-fixture', 4)
+
+
+class GenericItemDates(unittest.TestCase):
+    def test_recognizes_dates_and_rejects_mismatched_or_mixed_days(self):
+        data = b'code,quantity,date\n1000,2,2026-11-01\n'
+        self.assertEqual(parse_report(data, 'items.csv', 'items', expected_date='2026-11-01')['businessDate'], '2026-11-01')
+        with self.assertRaisesRegex(InvalidReport, 'ITEM_REPORT_DATE_MISMATCH'):
+            parse_report(data, 'items.csv', 'items', expected_date='2026-11-02')
+        with self.assertRaisesRegex(InvalidReport, 'ITEM_REPORT_DATE_INVALID'):
+            parse_report(data+b'1001,3,2026-11-02\n', 'items.csv', 'items', expected_date='2026-11-01')
+        self.assertNotIn('businessDate', parse_report(b'code,quantity\n1000,2\n', 'items.csv', 'items', expected_date='2026-11-01'))
 
 
 class PublisherTests(unittest.TestCase):
@@ -116,6 +127,12 @@ class PublisherTests(unittest.TestCase):
         self.assertEqual(self.client.post(f'/api/imports/{JOB}/enqueue', content=b'x'*16385).status_code, 413)
         self.assertEqual(self.client.post(f'/api/imports/{JOB}/enqueue', content=(b'x'*4096 for _ in range(5))).status_code, 413)
         self.assertEqual(self.client.get('/api/health', headers={'content-length':'bad'}).status_code, 400)
+
+    def test_chunked_request_limit_preserves_private_headers(self):
+        response = self.client.post('/api/import-worker', content=(b'x' * 8192 for _ in range(3)))
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.headers['cache-control'], 'no-store')
+        self.assertEqual(response.headers['x-content-type-options'], 'nosniff')
 
     def test_publish_requires_database_authorization_and_does_not_forward_jwt(self):
         rpc_mock = AsyncMock(side_effect=[{'status':'uploading', 'object_path':f'{JOB}/{JOB}/report.csv'}, {'status':'queued','workerToken':KEY}, {'status':'ready'}])

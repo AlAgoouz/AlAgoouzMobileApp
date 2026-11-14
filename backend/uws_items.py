@@ -12,7 +12,7 @@ def printed_lines(value):
     return lines[:1] if len(lines)==2 and lines[0]==lines[1] else lines
 
 
-def report_date(matrix, invalid, expected_date=None):
+def report_date(matrix, invalid, expected_date=None, *, required=True, prefix="UWS_REPORT"):
     periods=[]
     for row in matrix:
         for value in row:
@@ -27,10 +27,11 @@ def report_date(matrix, invalid, expected_date=None):
                     start,end=day(match.groups()[:3]),day(match.groups()[3:])
                     if start!=end: raise ValueError()
                 except ValueError:
-                    raise invalid('UWS_REPORT_DATE_INVALID') from None
+                    raise invalid(f'{prefix}_DATE_INVALID') from None
                 periods.append(start)
-    if not periods or len(set(periods))!=1: raise invalid('UWS_REPORT_DATE_INVALID')
-    if expected_date and periods[0]!=expected_date: raise invalid('UWS_REPORT_DATE_MISMATCH')
+    if not periods and not required: return None
+    if not periods or len(set(periods))!=1: raise invalid(f'{prefix}_DATE_INVALID')
+    if expected_date and periods[0]!=expected_date: raise invalid(f'{prefix}_DATE_MISMATCH')
     return periods[0]
 
 

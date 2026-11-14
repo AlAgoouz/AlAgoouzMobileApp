@@ -1,5 +1,5 @@
 import {StoreWriteFailure} from './storeErrors';
-import { emptyStore, validateStore, type StoreState } from './storeState';
+import { emptyStore, validateStore, validateNewInvoiceQuantities, type StoreState } from './storeState';
 
 export type StoreStatus =
   | 'signed-out'
@@ -19,6 +19,7 @@ export interface StoreSnapshot {
 export interface StoreTransport {
   load(): Promise<{ state: unknown; version: number }>;
   getVersion?(): Promise<number>;
+  discardCashierSave?(operationId: string): Promise<'saved' | 'discarded'>;
   save(
     state: StoreState,
     version: number,
@@ -38,7 +39,7 @@ export class StoreEngine {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private retryCount=0;
   private pending:
-    | { state: StoreState; version: number; id: string; queueId?: string; restore?: boolean }
+    | { state: StoreState; version: number; id: string; queueId?: string; restore?: boolean; cashierAttachment?: boolean }
     | undefined;
   private queued:
     | { state: StoreState; id: string; queueId?: string }
@@ -66,6 +67,7 @@ export class StoreEngine {
     this.listeners.forEach((fn) => fn());
   }
   async load() {
+    if (this.pending?.cashierAttachment && this.snapshot.status !== 'saving') return;
     if (this.snapshot.status === 'saving') {
       await this.flushInFlight;
       return;
@@ -111,9 +113,50 @@ export class StoreEngine {
     });
   }
   replace(state: StoreState, queueId?: string) {
+    this.replaceState(state, queueId);
+  }
+
+  attachCashier(state: StoreState, queueId?: string) {
+    if (this.hasPending || this.batchState || this.snapshot.status !== 'ready')
+      throw new Error('انتظر تأكيد حفظ التعديلات الحالية قبل إرفاق تقرير الكاشير');
+    this.replaceState(state, queueId, true);
+  }
+
+  get hasPendingCashierAttachment() {
+    return Boolean(this.pending?.cashierAttachment);
+  }
+
+  async discardCashierAttachment() {
+    const pending = this.pending;
+    if (!pending?.cashierAttachment || !this.transport.discardCashierSave ||
+        !['error', 'conflict'].includes(this.snapshot.status))
+      throw new Error('تعذر بدء مراجعة الإرفاق؛ انتظر انتهاء الحفظ');
+    clearTimeout(this.timer);
+    const epoch = ++this.epoch;
+    this.publish({ ...this.snapshot, status: 'loading', error: '' });
+    try {
+      const result = await this.transport.discardCashierSave(pending.id);
+      if (epoch !== this.epoch) return;
+      const remote = await this.transport.load();
+      if (epoch !== this.epoch) return;
+      const state = validateStore(remote.state);
+      this.pending = undefined;
+      this.retryCount = 0;
+      this.hydrated = true;
+      this.publish({ ...remote, state, status: 'ready', error: '' });
+      return result;
+    } catch {
+      if (epoch !== this.epoch) return;
+      const message = 'تعذر تأكيد حالة الإرفاق من الخادم. تحقق من الاتصال وجرّب مرة أخرى.';
+      this.publish({ ...this.snapshot, status: 'error', error: message });
+      throw new Error(message);
+    }
+  }
+
+  private replaceState(state: StoreState, queueId?: string, cashierAttachment = false, restore = false) {
     if (!['ready', 'dirty', 'saving'].includes(this.snapshot.status))
       throw new Error('انتظر الحفظ أو عالج مشكلة الاتصال أولًا');
-    if (this.pending?.restore)
+    if (this.pending?.restore || this.pending?.cashierAttachment)
       throw new Error('انتظر الحفظ أو عالج مشكلة الاتصال أولًا');
     if (this.batchState) {
       this.batchState = state;
@@ -127,6 +170,7 @@ export class StoreEngine {
 
     this.authorize(this.snapshot.state,state);
     const validated = validateStore(state);
+    if (!restore) validateNewInvoiceQuantities(this.snapshot.state, validated);
     let recoveryWarning:string|undefined;
     try { this.preserve(validated); }
     catch { recoveryWarning='مسودة الاسترداد لم تُحفظ على الجهاز. خليك في الصفحة لحد تأكيد الحفظ على الخادم.'; }
@@ -150,6 +194,8 @@ export class StoreEngine {
       version: this.snapshot.version,
       id: crypto.randomUUID(),
       queueId: queueId ?? draft?.queueId,
+      cashierAttachment,
+      restore,
     };
     this.publish({
       ...this.snapshot,
@@ -174,8 +220,7 @@ export class StoreEngine {
   restore(state: StoreState) {
     if (this.hasPending || this.batchState || this.snapshot.status !== 'ready')
       throw new Error('احفظ التعديلات الحالية أولًا قبل استعادة نسخة');
-    this.replace(state);
-    this.pending!.restore = true;
+    this.replaceState(state, undefined, false, true);
   }
   transaction<T>(action: () => T): T {
     if (this.batchState) {

@@ -172,13 +172,13 @@ describe("cashier quantities and matching", () => {
       await cashierSourceId(rows, "2026-11-02"),
     );
   });
-  it("deduplicates equivalent quantities expressed in grams or kilos", async () => {
+  it.each([{ Total: 50 }, { "Unit Price": 200 }])("deduplicates equivalent quantities expressed in grams or kilos (%j)", async (pricing) => {
     const grams = mapRawCashierRows(
-      [{ Code: "B1", Quantity: 250, Unit: "g", Total: 50 }],
+      [{ Code: "B1", Quantity: 250, Unit: "g", ...pricing }],
       [bean],
     );
     const kilos = mapRawCashierRows(
-      [{ Code: "B1", Quantity: 0.25, Unit: "kg", Total: 50 }],
+      [{ Code: "B1", Quantity: 0.25, Unit: "kg", ...pricing }],
       [bean],
     );
     expect(await cashierSourceId(grams, "2026-11-01")).toBe(

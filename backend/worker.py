@@ -2,7 +2,7 @@ import asyncio
 import logging
 from pydantic import BaseModel, Field
 from uuid import UUID
-from clients import rpc, download, http_client, BackendUnavailable
+from clients import rpc, download, http_client, InvalidImportPath
 from parser import parse_report, InvalidReport
 
 logger = logging.getLogger("agouz.imports")
@@ -26,7 +26,7 @@ async def process_import(payload: ImportMessage) -> str:
                 data = await download(client, job["path"], job["downloadToken"], job["bytes"])
                 result = await asyncio.to_thread(parse_report, data, job["fileName"], job["kind"], job.get("catalog"), expected_date=job.get('saleDate'))
                 error = None
-            except InvalidReport as exc:
+            except (InvalidReport, InvalidImportPath) as exc:
                 result, error = None, str(exc)
             await rpc(client, "bon_erp_finish_import", {"p_id": job_id, "p_key": payload.worker_token, "p_attempt": job["attempt"], "p_result": result, "p_error": error})
             logger.info("import_finished job=%s valid=%s", job_id, error is None)

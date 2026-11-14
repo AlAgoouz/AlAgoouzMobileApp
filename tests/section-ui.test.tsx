@@ -44,6 +44,8 @@ it('reviews server-parsed paired reports, posts one day with a shortage, and rej
  expect(live.items[0].stock).toBe(1);expect(salesForReports(live)).toHaveLength(1);expect(salesForReports(live)[0].netProfit).toBeNull();
  fireEvent.change(screen.getByLabelText('نوع التقرير'),{target:{value:'items'}});
  await upload('items.csv');
+ expect(screen.getByRole('button',{name:'حفظ التقرير لهذا اليوم'})).toHaveProperty('disabled',true);
+ fireEvent.click(screen.getByRole('checkbox',{name:/أؤكد أن يوم البيع/}));
  fireEvent.click(screen.getByRole('button',{name:'حفظ التقرير لهذا اليوم'}));await waitFor(()=>expect(attach).toHaveBeenCalledTimes(2));
  fireEvent.click(screen.getByRole('button',{name:'مراجعة واعتماد اليوم'}));
  expect(approve).not.toHaveBeenCalled();

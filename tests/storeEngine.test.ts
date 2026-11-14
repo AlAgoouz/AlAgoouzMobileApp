@@ -358,3 +358,24 @@ it('retries a temporary server failure with the original operation ID and payloa
     vi.useRealTimers();
   }
 });
+
+it.each(['saved', 'discarded'] as const)('reconciles a cashier attachment reported as %s before releasing local edits', async (outcome) => {
+  vi.useFakeTimers();
+  const {engine, transport} = setup();
+  await engine.load();
+  transport.save = vi.fn().mockRejectedValue(new StoreWriteFailure('NETWORK', 'offline', true));
+  transport.discardCashierSave = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(outcome);
+  engine.attachCashier(structuredClone(emptyStore), crypto.randomUUID());
+  expect(() => engine.replace(emptyStore)).toThrow();
+  await engine.flush();
+  await engine.load();
+  expect(engine.hasPendingCashierAttachment).toBe(true);
+  await expect(engine.discardCashierAttachment()).rejects.toThrow();
+  expect(engine.hasPendingCashierAttachment).toBe(true);
+  await expect(engine.discardCashierAttachment()).resolves.toBe(outcome);
+  expect(transport.discardCashierSave).toHaveBeenLastCalledWith(vi.mocked(transport.save).mock.calls[0][2]);
+  expect(engine.hasPendingCashierAttachment).toBe(false);
+  expect(engine.snapshot.status).toBe('ready');
+  await vi.advanceTimersByTimeAsync(20000);
+  expect(transport.save).toHaveBeenCalledTimes(1);
+});

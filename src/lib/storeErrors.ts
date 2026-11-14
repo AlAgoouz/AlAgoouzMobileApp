@@ -1,4 +1,15 @@
-const specificErrors:Record<string,string>={
+const specificErrors:Record<string,string> = {
+  AUDIT_LOG_IMMUTABLE: 'سجل المراجعة محفوظ. يمكن إضافة حركات جديدة إلى السجل.',
+  AUDIT_ACTOR_MISMATCH: 'هوية منفّذ الحركة لا تطابق الحساب المفتوح.',
+  CASHIER_SAVE_DISCARDED: 'أُلغيت محاولة إرفاق التقرير. تحقّق من الحالة وأعد فتح الملف.',
+  STORE_CONFLICT: 'جهاز آخر حفظ تعديلات. احفظ نسخة من عملك، ثم حمّل البيانات مجددًا.',
+  QUEUE_PROCESSED: 'سبق التعامل مع الملف. حدّث بيانات الكاشير لمراجعة التقارير المسجلة.',
+  OPERATION_ID_REUSED: 'تعذر مطابقة محاولة الحفظ. راجع آخر عملية مسجلة قبل تكرارها.',
+  STORE_NOT_INITIALIZED: 'بيانات المحل غير مهيأة؛ تواصل مع المالك.',
+  INVALID_PURCHASE_QUANTITY: 'كمية الشراء لازم تكون أكبر من صفر.',
+  QUEUE_REPORT_REQUIRED: 'التقرير لا يطابق نوع الملف أو تاريخ يوم العمل المحدد.',
+  EXPORT_ROW_LIMIT: 'عدد السجلات أكبر من حد التصدير؛ اختر نطاقًا أصغر.',
+  EXPORT_SIZE_LIMIT: 'البيانات أكبر من حد التصدير؛ اختر نطاقًا أصغر.',
   RETURN_PAYMENT_RECONCILIATION_REQUIRED:'المتبقي على الفاتورة لا يطابق مديونية العميل؛ راجع التحصيلات قبل المرتجع.',
   RETURN_FINANCIAL_MISMATCH:'مبلغ المرتجع أو عكس المديونية لا يطابق الفاتورة.',
   STORE_TOO_LARGE:'حجم البيانات تجاوز الحد المسموح؛ تواصل مع المالك.',

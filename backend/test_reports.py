@@ -178,7 +178,9 @@ class GeneratedTests(unittest.TestCase):
 
 
 class ExportApiTests(unittest.TestCase):
-    def setUp(self): self.client=TestClient(main.app)
+    def setUp(self):
+        self.client=TestClient(main.app)
+        self.reserve = self.enterContext(patch.object(main, 'reserve_export', AsyncMock()))
 
     def test_authentication_precedes_generation_and_exports_are_private(self):
         with patch('report_source.report_source',AsyncMock(return_value=fixture())) as source:
@@ -200,6 +202,24 @@ class ExportApiTests(unittest.TestCase):
         with patch.object(main,'rpc',AsyncMock(return_value=None)):
             self.assertEqual(self.client.get('/api/invoices/missing/pdf',headers=headers).status_code,404)
         self.assertEqual(self.client.get('/api/reports/xlsx?from_date=2026-11-30&to_date=2026-11-01',headers=headers).status_code,400)
+
+    def test_rate_limit_stops_both_exports_before_data_read(self):
+        from fastapi import HTTPException
+        self.reserve.side_effect = HTTPException(429, detail='EXPORT_RATE_LIMIT', headers={'Retry-After':'300'})
+        with patch('report_source.report_source', AsyncMock()) as source, patch.object(main, 'rpc', AsyncMock()) as rpc:
+            for route in ('/api/reports/pdf?from_date=2026-11-01&to_date=2026-11-30', '/api/invoices/fixture/pdf'):
+                result = self.client.get(route, headers={'Authorization':'Bearer fixture'})
+                self.assertEqual(result.status_code, 429)
+                self.assertEqual(result.headers['retry-after'], '300')
+                self.assertEqual(result.headers['cache-control'], 'no-store')
+            source.assert_not_awaited()
+            rpc.assert_not_awaited()
+
+    def test_permanent_data_error_returns_422(self):
+        with patch('report_source.report_source', AsyncMock(side_effect=ValueError('EXPORT_SIZE_LIMIT'))):
+            result = self.client.get('/api/reports/xlsx?from_date=2026-11-01&to_date=2026-11-30', headers={'Authorization':'Bearer fixture'})
+        self.assertEqual(result.status_code, 422)
+        self.assertEqual(result.json()['detail'], 'EXPORT_SIZE_LIMIT')
 
 
 if __name__=='__main__': unittest.main()

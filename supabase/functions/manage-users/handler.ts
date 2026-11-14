@@ -4,18 +4,23 @@ const configuredOrigins=():string[]=>{
  const raw=(globalThis as any).Deno?.env?.get?.('AGOUZ_ALLOWED_ORIGINS')??(globalThis as any).process?.env?.AGOUZ_ALLOWED_ORIGINS??'';
  return typeof raw==='string'?raw.split(',').map(s=>s.trim()).filter(Boolean):[];
 };
-const allowedOrigin=(origin:string|null)=>!!origin&&(origin==='https://agouz.vercel.app'||origin==='https://agouz-alagoouz.vercel.app'||/^https:\/\/agouz-[a-z0-9-]+-alagoouz\.vercel\.app$/.test(origin)||/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(origin)||configuredOrigins().includes(origin));
+const allowedOrigin = (origin: string | null) => Boolean(origin && (
+  origin === 'https://agouz.vercel.app' ||
+  origin === 'https://agouz-alagoouz.vercel.app' ||
+  configuredOrigins().includes(origin)
+));
 type Services={user:any;admin:any};
 
 export function manageUsersHandler(services:(authorization:string)=>Services){
  return async(req:Request):Promise<Response>=>{
   const origin=req.headers.get('origin');
   const headers:Record<string,string>={'Content-Type':'application/json','Vary':'Origin','Access-Control-Allow-Headers':'authorization,apikey,x-client-info,content-type','Access-Control-Allow-Methods':'POST,OPTIONS','Cache-Control':'no-store'};
-  if(allowedOrigin(origin))headers['Access-Control-Allow-Origin']=origin!;
+  const permitted = allowedOrigin(origin);
+  if (origin && permitted) headers['Access-Control-Allow-Origin'] = origin;
   const respond=(status:number,value:object)=>new Response(JSON.stringify(value),{status,headers});
+  if(origin&&!permitted)return respond(403,{error:'المصدر غير مسموح'});
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
   if(req.method!=='POST')return respond(405,{error:'طريقة الطلب غير متاحة'});
-  if(origin&&!allowedOrigin(origin))return respond(403,{error:'المصدر غير مسموح'});
   const authorization=req.headers.get('authorization')??'';
   if(!/^Bearer\s+\S+$/i.test(authorization))return respond(401,{error:'سجّل الدخول أولًا'});
   try{

@@ -1,10 +1,29 @@
 import os
+import re
 from urllib.parse import quote, urlparse
 import httpx
 
 
 class BackendUnavailable(RuntimeError):
     pass
+
+
+class InvalidImportPath(ValueError):
+    pass
+
+
+class ExportDataError(ValueError):
+    pass
+
+
+_UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+_IMPORT_PATH = re.compile(rf"{_UUID}/{_UUID}/report\.(csv|xls|xlsx)")
+
+
+def import_path(path):
+    if not isinstance(path, str) or not _IMPORT_PATH.fullmatch(path):
+        raise InvalidImportPath("INVALID_IMPORT_PATH")
+    return quote(path, safe="/")
 
 
 def settings():
@@ -25,6 +44,13 @@ async def rpc(client, name, args, bearer=None, *, decimal=False):
     if response.status_code in (401, 403):
         raise PermissionError("IMPORT_PERMISSION_DENIED")
     if not response.is_success:
+        if name == 'bon_erp_export_report_v2' and response.status_code == 400:
+            try:
+                code = response.json().get('message')
+            except (AttributeError, ValueError):
+                code = None
+            if code in ('EXPORT_ROW_LIMIT', 'EXPORT_SIZE_LIMIT', 'INVALID_REPORT_RANGE'):
+                raise ExportDataError(code)
         raise BackendUnavailable("IMPORT_BACKEND_UNAVAILABLE")
     if decimal:
         from decimal import Decimal
@@ -33,8 +59,9 @@ async def rpc(client, name, args, bearer=None, *, decimal=False):
 
 
 async def signed_download_token(client, path, bearer):
+    encoded_path = import_path(path)
     root, key = settings()
-    response = await client.post(root + "/storage/v1/object/sign/agouz-cashier-imports/" + quote(path, safe="/"), headers={"apikey": key, "Authorization": "Bearer " + bearer}, json={"expiresIn": 3600})
+    response = await client.post(root + "/storage/v1/object/sign/agouz-cashier-imports/" + encoded_path, headers={"apikey": key, "Authorization": "Bearer " + bearer}, json={"expiresIn": 3600})
     if not response.is_success:
         raise BackendUnavailable("IMPORT_UPLOAD_MISSING")
     from urllib.parse import parse_qs
@@ -44,8 +71,9 @@ async def signed_download_token(client, path, bearer):
 
 async def download(client, path, token, expected_bytes):
     from parser import MAX_BYTES
+    encoded_path = import_path(path)
     root, _ = settings()
-    url = root + "/storage/v1/object/sign/agouz-cashier-imports/" + quote(path, safe="/") + "?token=" + quote(token, safe="")
+    url = root + "/storage/v1/object/sign/agouz-cashier-imports/" + encoded_path + "?token=" + quote(token, safe="")
     data = bytearray()
     async with client.stream("GET", url) as response:
         if not response.is_success:

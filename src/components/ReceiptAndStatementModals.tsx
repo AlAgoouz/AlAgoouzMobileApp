@@ -214,11 +214,12 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
           }
         </div>
         <div class="footer">شكراً لتعاملكم مع بُن العجوز — أصل المزاج ☕</div>
-        <script>window.onload = function(){ window.print(); }</script>
       </body>
       </html>
     `);
     printWin.document.close();
+    printWin.focus();
+    printWin.print();
   };
 
   return (
@@ -527,11 +528,12 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
           </thead>
           <tbody>${payRows || '<tr><td colspan="4">لا توجد دفعات منفصلة</td></tr>'}</tbody>
         </table>
-        <script>window.onload = function(){ window.print(); }</script>
       </body>
       </html>
     `);
     printWin.document.close();
+    printWin.focus();
+    printWin.print();
   };
 
   return (

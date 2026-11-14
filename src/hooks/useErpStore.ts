@@ -56,6 +56,14 @@ export function useErpStore(loadFull=true) {
             );
           return { state: cloudStoreInput(data), version: Number(data.version) };
         },
+        async discardCashierSave(operationId) {
+          const sb = getSupabaseClient();
+          if (!sb) throw new Error('إعداد الاتصال غير صالح');
+          const { data, error } = await sb.rpc('bon_erp_discard_cashier_save', {p_operation_id: operationId});
+          if (error || (data !== 'saved' && data !== 'discarded')) throw new Error('لم يصل تأكيد صالح');
+          clearRecoveryDraft(localStorage);
+          return data;
+        },
         async save(state, version, operationId, queueId, restore) {
           const sb = getSupabaseClient();
           if (!sb) throw new Error('إعداد الاتصال غير صالح');

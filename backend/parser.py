@@ -147,7 +147,7 @@ def parse_report(data: bytes, filename: str, kind: str, catalog=None, expected_d
         return {'rows':[financial],'columns':list(financial),'rowCount':1,'headerRow':financial['sourceRow'],'sha256':hashlib.sha256(data).hexdigest(),'warnings':[],'matches':[]}
     if len(matrix) < 2:
         raise InvalidReport("EMPTY_REPORT")
-    from uws_items import is_uws_items, parse_uws_items
+    from uws_items import is_uws_items, parse_uws_items, report_date
     uws=parse_uws_items(matrix,row_numbers,expected_date,InvalidReport,localized_number) if kind=='items' and is_uws_items(matrix) else None
     header_index = 0
     if uws:
@@ -167,6 +167,31 @@ def parse_report(data: bytes, filename: str, kind: str, catalog=None, expected_d
             if len(values) > len(columns):
                 raise InvalidReport(f"ROW_COLUMNS_MISMATCH:{row_numbers[offset]}")
             rows.append({key: values[index] if index < len(values) else "" for index, key in enumerate(columns)})
+    business_date = None
+    if kind == "items" and uws is None:
+        business_date = report_date(matrix[:header_index], InvalidReport, expected_date, required=False, prefix="ITEM_REPORT")
+        date_columns = [column for column in columns if normalize(column) in {"date", "saledate", "businessdate", "التاريخ", "تاريخالبيع"}]
+        if len(date_columns) > 1:
+            raise InvalidReport("ITEM_REPORT_DATE_INVALID")
+        if date_columns:
+            dated = set()
+            for row in rows:
+                raw = str(row[date_columns[0]])
+                try:
+                    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+                        dated.add(date.fromisoformat(raw).isoformat())
+                    elif re.fullmatch(r"\d{4}-\d{2}-\d{2}T00:00:00", raw):
+                        dated.add(datetime.fromisoformat(raw).date().isoformat())
+                    else:
+                        raise ValueError()
+                except ValueError:
+                    raise InvalidReport("ITEM_REPORT_DATE_INVALID") from None
+            if len(dated) > 1 or business_date and dated != {business_date}:
+                raise InvalidReport("ITEM_REPORT_DATE_INVALID")
+            if dated:
+                business_date = next(iter(dated))
+        if business_date and expected_date and business_date != expected_date:
+            raise InvalidReport("ITEM_REPORT_DATE_MISMATCH")
     if not rows or len(rows) > MAX_ROWS:
         raise InvalidReport("REPORT_SIZE_LIMIT")
     warnings, matches = list(uws['warnings']) if uws else [], []
@@ -192,6 +217,7 @@ def parse_report(data: bytes, filename: str, kind: str, catalog=None, expected_d
         warnings.append("FORMULA_TEXT_REQUIRES_REVIEW")
     result = {"rows": rows, "columns": columns, "rowCount": len(rows), "headerRow": header_index + 1, "sha256": hashlib.sha256(data).hexdigest(), "warnings": warnings, "matches": matches}
     if uws: result.update({key:uws[key] for key in ['businessDate','sourceFormat','modifiers']})
+    elif business_date: result['businessDate'] = business_date
     if kind == 'items' and catalog:
         from suggestions import suggest_rows
         result['suggestions'] = suggest_rows(rows,columns,catalog,ALIASES,normalize)
