@@ -749,11 +749,11 @@ it.skipIf(!active)('shares a bounded export quota per account and restricts back
  const viewer='22222222-2222-4222-8222-222222220195';
  const cashier='22222222-2222-4222-8222-222222220196';
  userAccessFixture(viewer,{view:true});userAccessFixture(cashier,{},'cashier');
- sql("insert into bon_erp_private.recovery_health(id,state,run_id,source_sha) values(true,'running','100','"+'a'.repeat(40)+"') on conflict(id) do nothing");
+ sql("insert into bon_erp_private.recovery_health(id,state,run_id,source_sha) values(true,'running','100','"+'a'.repeat(40)+"') on conflict(id) do update set run_id=excluded.run_id");
  expect(readJson("select public.bon_erp_operational_health()").backup.run_id).toBe('100');
  expect(JSON.parse(asUser(viewer,"select public.bon_erp_operational_health()").split('\n').at(-1)!).backup).toBeNull();
  const reserve='select public.bon_erp_reserve_export()';
- const results=asUser(viewer,Array(11).fill(reserve).join(';')).split('\n');
+ const results=asUser(viewer,'select public.bon_erp_reserve_export() from generate_series(1,11)').split('\n');
  expect(results.slice(-11)).toEqual([...Array(10).fill('t'),'f']);
  expect(asUser(owner,reserve).split('\n').at(-1)).toBe('t');
  expect(()=>asUser(cashier,reserve)).toThrow('USER_PERMISSION_DENIED');
