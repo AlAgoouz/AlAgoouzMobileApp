@@ -80,7 +80,7 @@ it('shows seven categories and saves recipe definitions separately from operatio
  await waitFor(()=>expect(define).toHaveBeenCalledWith(expect.any(String),'New blend',expect.objectContaining({category:'manufactured_blend',baseUnit:'kg'})));expect(save).not.toHaveBeenCalled();
 });
 it('requires a customer and offers only blends with a manual invoice selling price',async()=>{
- const save=vi.fn(async()=>true);render(<WholesaleInvoiceScreen items={[raw,blend]} customers={[customer]} currentPartnerName="Owner" onSaveSale={save} onBack={()=>{}}/>);
+ const save=vi.fn(async()=>true).mockRejectedValueOnce(Error('تعذر تأكيد الحفظ'));render(<WholesaleInvoiceScreen items={[raw,blend]} customers={[customer]} currentPartnerName="Owner" onSaveSale={save} onBack={()=>{}}/>);
  fireEvent.click(screen.getByRole('button',{name:'مراجعة الفاتورة'}));expect(save).not.toHaveBeenCalled();expect(screen.getByRole('alert').textContent).toContain('عميل');
  fireEvent.click(screen.getByRole('button',{name:'اختيار العميل'}));
  fireEvent.change(screen.getByRole('searchbox'),{target:{value:'٠١٠١٢٣٤٥٦٧٨'}});
@@ -89,11 +89,21 @@ it('requires a customer and offers only blends with a manual invoice selling pri
  fireEvent.change(screen.getByRole('searchbox'),{target:{value:'BL1'}});
  expect(screen.queryByRole('button',{name:/Raw bean/})).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:/Blend/}));
+ const quantity=screen.getByLabelText('الكمية بالكيلو');
+ expect(quantity.getAttribute('aria-invalid')).toBe('false');
+ fireEvent.blur(quantity);
+ expect(document.getElementById(quantity.getAttribute('aria-describedby')!)?.textContent).toBe('أدخل كمية أكبر من صفر.');
  fireEvent.change(screen.getByLabelText('الكمية بالكيلو'),{target:{value:'٢'}});
+ expect(quantity.getAttribute('aria-invalid')).toBe('false');
  fireEvent.change(screen.getByLabelText('سعر الكيلو المتفق عليه'),{target:{value:'٣٣٣'}});
  fireEvent.click(screen.getByRole('button',{name:'مراجعة الفاتورة'}));
  expect(save).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('button',{name:'اعتماد الفاتورة وخصم المخزون'}));await waitFor(()=>expect(save).toHaveBeenCalledOnce());
+ expect(await screen.findByText('تعذر تأكيد الحفظ')).toBeTruthy();
+ expect(screen.getByRole('dialog',{name:'مراجعة فاتورة الجملة'})).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'اعتماد الفاتورة وخصم المخزون'}));
+ await waitFor(()=>expect(save).toHaveBeenCalledTimes(2));
+ expect(save.mock.calls[0]).toEqual(save.mock.calls[1]);
  expect(save).toHaveBeenCalledWith(expect.objectContaining({customerId:customer.id,saleType:'wholesale',totalAmount:666,paidAmount:666,items:[expect.objectContaining({unitPrice:333})]}));
 });
 it('shows a missing day report and blocks approval until the pair is complete',()=>{

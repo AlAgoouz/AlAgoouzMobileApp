@@ -7,7 +7,7 @@ import {ImportJobsPanel} from '../src/components/ImportJobsPanel';
 import {CashierDayScreen} from '../src/components/CashierDayScreen';
 import {reviewedCashierRows} from '../src/lib/cashierRows';
 import {INITIAL_ITEMS} from '../src/data/initialData';
-import {uploadImport} from '../src/lib/importJobs';
+import {listImports,uploadImport} from '../src/lib/importJobs';
 vi.mock('../src/lib/importJobs',()=>({listImports:vi.fn(async()=>[]),readImport:vi.fn(),uploadImport:vi.fn(async()=> 'job'),cancelImport:vi.fn(),enqueueImport:vi.fn(),importError:()=> 'راجع الملف'}));
 vi.mock('../src/lib/cashierReportHeader',async original=>({...await original<typeof import('../src/lib/cashierReportHeader')>(),inspectCashierFile:vi.fn()}));
 const raw={...INITIAL_ITEMS[0],id:'raw',code:'200018',category:'raw_bean' as const,baseUnit:'kg' as const,stock:10,costPrice:100};
@@ -43,7 +43,10 @@ it('blocks an invalid file and keeps its error visible after a background list r
  render(<ImportJobsPanel/>);await screen.findByText('لا توجد ملفات مرفوعة بعد.');
  fireEvent.change(screen.getByLabelText('ملف التقرير'),{target:{files:[new File(['fixture'],'invalid.xls')]}});
  await screen.findByText('التقرير يشمل أكثر من يوم');expect((screen.getByRole('button',{name:'رفع وبدء المعالجة'}) as HTMLButtonElement).disabled).toBe(true);
- fireEvent.click(screen.getByRole('button',{name:'تحديث الحالة'}));await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain('التقرير يشمل أكثر من يوم'));expect(uploadImport).not.toHaveBeenCalled();
+ const reads = vi.mocked(listImports).mock.calls.length;
+ fireEvent(window, new Event('online'));
+ await waitFor(()=>expect(listImports).toHaveBeenCalledTimes(reads+1));
+ expect(screen.getByRole('alert').textContent).toContain('التقرير يشمل أكثر من يوم');expect(uploadImport).not.toHaveBeenCalled();
 });
 it('does not reinterpret authoritative source codes, units, or unresolved details through manual matching',()=>{
  const missing=reviewedCashierRows([source],[{...raw,code:'OTHER'}],{0:{itemId:raw.id,unit:'count'}})[0];expect(missing.matchedItem).toBeUndefined();expect(missing.error).toContain('كود الكاشير');

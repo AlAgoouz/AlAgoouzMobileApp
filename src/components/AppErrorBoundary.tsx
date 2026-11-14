@@ -1,6 +1,7 @@
 import React from "react";
 import { createBackup } from "../lib/storeState";
 import { recoveryDraftKey } from "../lib/recoveryDraft";
+import { reportBrowserIncident } from "../lib/observability";
 
 export class AppErrorBoundary extends React.Component<
   { children: React.ReactNode; onReset?: () => void },
@@ -17,6 +18,10 @@ export class AppErrorBoundary extends React.Component<
         ),
     };
   }
+  componentDidCatch() {
+    reportBrowserIncident(this.state.updateAvailable ? "stale_application" : "render_failure");
+  }
+
   exportRecovery = () => {
     try {
       const raw = localStorage.getItem(recoveryDraftKey);
