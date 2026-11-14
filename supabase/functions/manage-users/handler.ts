@@ -15,11 +15,12 @@ export function manageUsersHandler(services:(authorization:string)=>Services){
  return async(req:Request):Promise<Response>=>{
   const origin=req.headers.get('origin');
   const headers:Record<string,string>={'Content-Type':'application/json','Vary':'Origin','Access-Control-Allow-Headers':'authorization,apikey,x-client-info,content-type','Access-Control-Allow-Methods':'POST,OPTIONS','Cache-Control':'no-store'};
-  if(allowedOrigin(origin))headers['Access-Control-Allow-Origin']=origin!;
+  const permitted = allowedOrigin(origin);
+  if (origin && permitted) headers['Access-Control-Allow-Origin'] = origin;
   const respond=(status:number,value:object)=>new Response(JSON.stringify(value),{status,headers});
+  if(origin&&!permitted)return respond(403,{error:'المصدر غير مسموح'});
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
   if(req.method!=='POST')return respond(405,{error:'طريقة الطلب غير متاحة'});
-  if(origin&&!allowedOrigin(origin))return respond(403,{error:'المصدر غير مسموح'});
   const authorization=req.headers.get('authorization')??'';
   if(!/^Bearer\s+\S+$/i.test(authorization))return respond(401,{error:'سجّل الدخول أولًا'});
   try{
