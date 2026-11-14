@@ -402,7 +402,10 @@ export async function verifyDesign(){
         user_id:userId,partner_id:role==='partner'?'p1':null,username:'fixture',display_name:'حساب الاختبار',
         role,is_owner:role==='partner',permissions:{view:role==='partner'},
       }}));
-      await workflow.route('**/rest/v1/rpc/bon_erp_read_import',route=>route.fulfill({json:rows}));
+      await workflow.route('**/rest/v1/rpc/bon_erp_read_import',route=>{
+        const id=route.request().postDataJSON()?.p_id;
+        return route.fulfill({json:id?rows.find(row=>row.id===id):rows});
+      });
       await workflow.route('**/rest/v1/rpc/bon_erp_new_import',async route=>{
         const args=route.request().postDataJSON();
         if(rows.some(row=>row.kind===args.p_kind&&row.sale_date===args.p_date))
@@ -461,9 +464,14 @@ export async function verifyDesign(){
         const args=route.request().postDataJSON();
         saves.push(args);
         if(saves.length===1){ledgerState={...ledgerState,...args.p_state,version:1};return route.abort('failed');}
-        assert.equal(args.p_operation_id,saves[0].p_operation_id);
-        assert.deepEqual(args.p_state,saves[0].p_state);
-        return route.fulfill({json:{version:1}});
+        if(saves.length===2){
+          assert.equal(args.p_operation_id,saves[0].p_operation_id);
+          assert.deepEqual(args.p_state,saves[0].p_state);
+        }else{
+          assert.equal(args.p_expected_version,ledgerState.version);
+          ledgerState={...ledgerState,...args.p_state,version:ledgerState.version+1};
+        }
+        return route.fulfill({json:{version:ledgerState.version}});
       });
       let requestedPdf=false;
       await workflow.route('**/api/invoices/*/pdf',route=>{
@@ -500,7 +508,27 @@ export async function verifyDesign(){
       assert.equal(ledgerState.sales_invoices[0].totalAmount,666);
       assert.equal(ledgerState.items.find(item=>item.id===blend.id).stock,998);
       assert.equal(requestedPdf,true);
-      evidence.skillWorkflows={cashierFiles:rows.length,duplicateRejected:true,receiptCount:1,invoiceTotal:666,pdfDownload:true,isolatedBrowserRoutes:true};
+      const day='2026-11-01';
+      rows[0].result={sha256:'a'.repeat(64),rows:[{metric:'Begun',businessDate:day,amount:'120.00'}]};
+      rows[1].result={sha256:'b'.repeat(64),businessDate:day,rows:[{code:raw.code,quantity:'2',unit:'kg'}]};
+      await operator.getByRole('button',{name:'إغلاق النافذة',exact:true}).click();
+      await operator.getByRole('button',{name:'الأقسام',exact:true}).last().click();
+      await operator.locator('.section-tile').filter({has:operator.locator('.section-tile-title',{hasText:'تقارير يوم الكاشير'})}).click();
+      for(const row of rows){
+        await operator.getByRole('article').filter({hasText:row.file_name}).getByRole('button',{name:'مراجعة التقرير'}).click();
+        await operator.getByRole('heading',{name:'مراجعة '+row.file_name,exact:true}).waitFor();
+        await operator.getByRole('button',{name:'حفظ التقرير لهذا اليوم',exact:true}).click();
+        await operator.getByRole('heading',{name:'مراجعة '+row.file_name,exact:true}).waitFor({state:'hidden'});
+      }
+      await operator.getByRole('button',{name:'مراجعة واعتماد اليوم',exact:true}).click();
+      await operator.getByRole('button',{name:'تأكيد الاعتماد وخصم الأصناف',exact:true}).click();
+      await operator.getByRole('heading',{name:day+' — معتمد',exact:true}).waitFor();
+      assert.equal(ledgerState.cashier_days.length,1);
+      assert.equal(ledgerState.cashier_days[0].financialReport.totalRevenue,120);
+      assert.equal(ledgerState.cashier_days[0].consumption[0].quantity,2);
+      assert.equal(ledgerState.items.find(item=>item.id===raw.id).stock,998);
+      evidence.skillWorkflows={cashierFiles:rows.length,duplicateRejected:true,cashierApproved:true,begun:120,
+        cashierStockDeduction:2,receiptCount:1,invoiceTotal:666,pdfDownload:true,isolatedBrowserRoutes:true};
     } finally {
       await workflow.close();
     }

@@ -1,4 +1,5 @@
 import {expect,it} from 'vitest';
+import {init} from '@sentry/browser';
 import {safeSentryOptions} from '../src/lib/observability';
 
 it('emits only a fixed browser incident and strips customer, document, session and browser data',()=>{
@@ -16,4 +17,31 @@ it('emits only a fixed browser incident and strips customer, document, session a
     release:'1177ccb',environment:'test',platform:'javascript',
   });
   expect(options.beforeSend?.({...event,message:'private error'},{})).toBeNull();
+});
+
+
+it('passes a synthetic render incident through the SDK to a local transport', async()=>{
+  const sent: unknown[] = [];
+  const client = init({
+    ...safeSentryOptions('https://abc@o1.ingest.sentry.io/1','1177ccb'),
+    transport: ()=>({
+      send: async envelope => {
+        sent.push(...envelope[1].map(([, event])=>event));
+        return {statusCode:200};
+      },
+      flush: async ()=>true,
+    }),
+  });
+  if (!client) throw Error('Sentry test client was not initialized');
+
+  try {
+    client.captureMessage('render_failure','error');
+    client.captureMessage('synthetic private invoice detail','error');
+    expect(await client.flush(2000)).toBe(true);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({message:'render_failure',release:'1177ccb',environment:'test'});
+    expect(JSON.stringify(sent)).not.toContain('synthetic private invoice detail');
+  } finally {
+    await client.close(2000);
+  }
 });
