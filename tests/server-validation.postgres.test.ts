@@ -719,7 +719,7 @@ it.skipIf(!active)('dispatches at most two due jobs with per-job credentials and
 });
 
 it.skipIf(!active)('protects existing audit entries and the actor of new entries for delegated users',()=>{
- const delegate='22222222-2222-4222-8222-222222220094';
+ const delegate='22222222-2222-4222-8222-222222220194';
  userAccessFixture(delegate,{view:true,catalog:true});
  const entry={id:'audit-1',timestamp:new Date().toISOString(),partnerName:'Owner',actionType:'تعديل وصفة/صنف',description:'Original',actorId:owner};
  const newEntry={...entry,id:'audit-2',actorId:delegate};
@@ -746,8 +746,8 @@ it.skipIf(!active)('rolls back a fenced save and recognizes a previously committ
 });
 
 it.skipIf(!active)('shares a bounded export quota per account and restricts backup run details to the master',()=>{
- const viewer='22222222-2222-4222-8222-222222220095';
- const cashier='22222222-2222-4222-8222-222222220096';
+ const viewer='22222222-2222-4222-8222-222222220195';
+ const cashier='22222222-2222-4222-8222-222222220196';
  userAccessFixture(viewer,{view:true});userAccessFixture(cashier,{},'cashier');
  sql("insert into bon_erp_private.recovery_health(id,state,run_id,source_sha) values(true,'running','100','"+'a'.repeat(40)+"') on conflict(id) do nothing");
  expect(readJson("select public.bon_erp_operational_health()").backup.run_id).toBe('100');
