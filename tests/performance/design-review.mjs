@@ -446,7 +446,7 @@ export async function verifyDesign(){
 
       role = 'partner';
       const ledger = fixture(0);
-      ledger.customers=[{id:'fixture-cafe',name:'مقهى الاختبار',phone:'01012345678',area:'القاهرة',balance:0,totalSales:0,invoicesCount:0}];
+      ledger.customers=[{id:'fixture-cafe',name:'مقهى الاختبار',phone:'01012345678',area:'القاهرة',type:'جملة',balance:0,totalSales:0,invoicesCount:0}];
       const raw={...ledger.items[0],id:'fixture-bean',code:'RAW-FX',name:'بن اختبار',category:'raw_bean',baseUnit:'kg'};
       const blend={...raw,id:'fixture-blend',code:'BL-FX',name:'توليفة الاختبار',category:'manufactured_blend',hasRecipe:true,
         recipe:[{ingredientId:raw.id,ingredientName:raw.name,quantity:1,unit:'kg'}]};
@@ -481,7 +481,7 @@ export async function verifyDesign(){
       await operator.getByRole('dialog').getByRole('button',{name:/توليفة الاختبار/}).click();
       const quantity = operator.getByLabel('الكمية بالكيلو',{exact:true});
       await operator.getByRole('button',{name:'مراجعة الفاتورة',exact:true}).click();
-      await quantity.evaluate(input=>new Promise(resolve=>requestAnimationFrame(()=>resolve(input===document.activeElement)))).then(focused=>assert.equal(focused,true));
+      await operator.waitForFunction(()=>document.activeElement?.id.endsWith('-quantity'));
       assert.equal(await quantity.getAttribute('aria-invalid'),'true');
       await quantity.fill('٢');
       await operator.getByLabel('سعر الكيلو المتفق عليه',{exact:true}).fill('٣٣٣');
