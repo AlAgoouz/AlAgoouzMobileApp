@@ -5,3 +5,6 @@ cashier-watcher/
 .env.local
 *.local.sql
 *.local.json
+
+.agents/
+skills-lock.json

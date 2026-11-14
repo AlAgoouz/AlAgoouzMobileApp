@@ -258,6 +258,11 @@ export async function verifyDesign(){
         await page.setViewportSize({width:360,height:800});
       }
       if(title==='تقارير يوم الكاشير'){
+        const input = page.getByLabel('ملف التقرير',{exact:true});
+        await input.setInputFiles({name:'invalid.txt',mimeType:'text/plain',buffer:Buffer.from('fixture')});
+        await page.getByText('الصيغ المقبولة: CSV وXLS وXLSX.',{exact:true}).waitFor();
+        assert.equal(await input.getAttribute('aria-invalid'),'true');
+        assert.equal(await input.inputValue(),'');
         const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Menu Item Sales Report (UWS)\nDate Range 01 11 26 - 01 11 26\nPrinted on 04/11/26 20:00:00'],['100010 Fixture Drink 2 100.00%\n100010 Fixture Drink 2 100.00%'],['20.00 100.00%\n20.00 100.00%'],['TOTAL SLS 2 20.00\nTOTAL SLS 2 20.00']]),'Report');
         await page.getByLabel('ملف التقرير',{exact:true}).setInputFiles({name:'synthetic-2030-wrong-filename.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:XLSX.write(book,{type:'buffer',bookType:'xlsx'})});
         await page.getByText('يوم البيع 2026-11-01 مقروء من داخل التقرير؛ تاريخ الطباعة واسم الملف لا يغيّرانه.',{exact:true}).waitFor();
@@ -266,6 +271,7 @@ export async function verifyDesign(){
         // Chromium; scope the assertion to the upload form's unique select.
         assert.equal(await page.locator('section[aria-label="رفع ومعالجة التقارير"] form select').inputValue(),'items');
         assert.equal(await page.getByLabel('يوم العمل',{exact:true}).evaluate(e=>e.readOnly),true);
+        assert.equal(await input.getAttribute('aria-invalid'),'false','Valid replacement clears the file error');
         await limit(page,'uws-detected-day');await page.screenshot({path:'design-uws-detected-day-mobile.png',fullPage:false});
       }
       if(title==='المنتجات والتسعير'){
@@ -379,6 +385,125 @@ export async function verifyDesign(){
     await page.unroute('**/rest/v1/bon_elagouz_store?*');await page.unroute('**/rest/v1/rpc/bon_erp_save_store');
     await page.setViewportSize({width:360,height:800});
     // Financial acceptance uses a disposable response, never hosted business data.
+    const workflow = await browser.newContext({viewport:{width:360,height:800},acceptDownloads:true});
+    try {
+      await workflow.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+      const operator = await workflow.newPage();
+      const userId = '11111111-1111-4111-8111-111111111111';
+      const rows = [];
+      let role = 'cashier';
+      await workflow.addInitScript(id=>{
+        const b64 = value=>btoa(JSON.stringify(value));
+        const user={id,aud:'authenticated',role:'authenticated',email:'workflows@example.test',created_at:'2026-01-01T00:00:00Z',app_metadata:{},user_metadata:{}};
+        const now=Math.floor(Date.now()/1000);
+        localStorage.setItem('sb-127-auth-token',JSON.stringify({access_token:b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub:id,role:'authenticated',aud:'authenticated',iat:now,exp:now+3600})+'.fixture',refresh_token:'fixture',expires_at:now+3600,token_type:'bearer',user}));
+      },userId);
+      await workflow.route('**/rest/v1/rpc/bon_erp_my_access',route=>route.fulfill({json:{
+        user_id:userId,partner_id:role==='partner'?'p1':null,username:'fixture',display_name:'حساب الاختبار',
+        role,is_owner:role==='partner',permissions:{view:role==='partner'},
+      }}));
+      await workflow.route('**/rest/v1/rpc/bon_erp_read_import',route=>route.fulfill({json:rows}));
+      await workflow.route('**/rest/v1/rpc/bon_erp_new_import',async route=>{
+        const args=route.request().postDataJSON();
+        if(rows.some(row=>row.kind===args.p_kind&&row.sale_date===args.p_date))
+          return route.fulfill({status:400,json:{message:'CASHIER_IMPORT_ALREADY_PENDING'}});
+        const id='11111111-1111-4111-8111-11111111111'+(rows.length+2);
+        rows.push({id,file_name:args.p_name,sale_date:args.p_date,kind:args.p_kind,status:'uploading',
+          created_at:'2026-11-01T12:00:00Z',updated_at:'2026-11-01T12:00:00Z',error_code:null,reviewed:false,queue_id:null});
+        return route.fulfill({json:{id,path:userId+'/'+id+'/report.xlsx'}});
+      });
+      await workflow.route('**/storage/v1/object/agouz-cashier-imports/**',route=>route.fulfill({json:{Key:'loopback-report'}}));
+      await workflow.route('**/api/imports/*/enqueue',route=>{
+        const id=new URL(route.request().url()).pathname.split('/')[3];
+        const row=rows.find(entry=>entry.id===id);
+        assert.ok(row);
+        row.status='ready';
+        return route.fulfill({status:202,json:{id,status:row.status}});
+      });
+      await operator.goto(origin);
+      await operator.getByRole('heading',{name:'رفع تقارير الكاشير',exact:true}).waitFor();
+      assert.equal(await operator.getByRole('button',{name:'الأقسام',exact:true}).count(),0);
+      const file = operator.getByLabel('ملف التقرير',{exact:true});
+      const submit = operator.getByRole('button',{name:'رفع وبدء المعالجة'});
+      const reports = [
+        ['financial','System Sales Report (UWS)','Begun 120.00'],
+        ['items','Menu Item Sales Report (UWS)','100010 Fixture Drink 2 100.00%'],
+      ].map(([kind,title,value])=>{
+        const book=XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([[title+'\nDate Range 01 11 26 - 01 11 26'],[value]]),'Report');
+        return {name:kind+'.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:XLSX.write(book,{type:'buffer',bookType:'xlsx'})};
+      });
+      for (const report of reports) {
+        await file.setInputFiles(report);
+        await submit.click();
+        await operator.getByRole('article').filter({hasText:report.name}).getByText('جاهز للمراجعة').waitFor();
+      }
+      assert.deepEqual(rows.map(({kind,sale_date})=>[kind,sale_date]),[['financial','2026-11-01'],['items','2026-11-01']]);
+      await file.setInputFiles(reports[0]);
+      await submit.click();
+      await operator.getByText('يوجد ملف من نفس النوع لهذا اليوم؛ راجعه أو ألغِ الملف الخطأ أولًا.',{exact:true}).waitFor();
+      assert.equal(rows.length,2);
+
+      role = 'partner';
+      const ledger = fixture(0);
+      ledger.customers=[{id:'fixture-cafe',name:'مقهى الاختبار',phone:'01012345678',area:'القاهرة',balance:0,totalSales:0,invoicesCount:0}];
+      const raw={...ledger.items[0],id:'fixture-bean',code:'RAW-FX',name:'بن اختبار',category:'raw_bean',baseUnit:'kg'};
+      const blend={...raw,id:'fixture-blend',code:'BL-FX',name:'توليفة الاختبار',category:'manufactured_blend',hasRecipe:true,
+        recipe:[{ingredientId:raw.id,ingredientName:raw.name,quantity:1,unit:'kg'}]};
+      ledger.items=[raw,blend];
+      let ledgerState=ledger;
+      const saves=[];
+      await workflow.route('**/rest/v1/bon_elagouz_store?*',route=>{
+        const fields=new URL(route.request().url()).searchParams.get('select');
+        return route.fulfill({json:fields==='version'?{version:ledgerState.version}:ledgerState});
+      });
+      await workflow.route('**/rest/v1/rpc/bon_erp_save_store',route=>{
+        const args=route.request().postDataJSON();
+        saves.push(args);
+        if(saves.length===1){ledgerState={...ledgerState,...args.p_state,version:1};return route.abort('failed');}
+        assert.equal(args.p_operation_id,saves[0].p_operation_id);
+        assert.deepEqual(args.p_state,saves[0].p_state);
+        return route.fulfill({json:{version:1}});
+      });
+      let requestedPdf=false;
+      await workflow.route('**/api/invoices/*/pdf',route=>{
+        assert.equal(new URL(route.request().url()).pathname,'/api/invoices/'+ledgerState.sales_invoices[0].id+'/pdf');
+        assert.ok(route.request().headers().authorization?.startsWith('Bearer '));
+        requestedPdf=true;
+        return route.fulfill({contentType:'application/pdf',body:'%PDF-1.4\n% Synthetic transport response'});
+      });
+      await operator.reload();
+      await operator.getByRole('button',{name:'الأقسام',exact:true}).last().click();
+      await operator.locator('.section-tile').filter({has:operator.locator('.section-tile-title',{hasText:'فواتير الجملة'})}).click();
+      await operator.getByRole('button',{name:'اختيار العميل',exact:true}).click();
+      await operator.getByRole('dialog').getByRole('button',{name:/مقهى الاختبار/}).click();
+      await operator.getByRole('button',{name:'إضافة توليفة',exact:true}).click();
+      await operator.getByRole('dialog').getByRole('button',{name:/توليفة الاختبار/}).click();
+      const quantity = operator.getByLabel('الكمية بالكيلو',{exact:true});
+      await operator.getByRole('button',{name:'مراجعة الفاتورة',exact:true}).click();
+      await quantity.evaluate(input=>new Promise(resolve=>requestAnimationFrame(()=>resolve(input===document.activeElement)))).then(focused=>assert.equal(focused,true));
+      assert.equal(await quantity.getAttribute('aria-invalid'),'true');
+      await quantity.fill('٢');
+      await operator.getByLabel('سعر الكيلو المتفق عليه',{exact:true}).fill('٣٣٣');
+      await operator.getByRole('button',{name:'مراجعة الفاتورة',exact:true}).click();
+      await operator.getByRole('button',{name:'اعتماد الفاتورة وخصم المخزون',exact:true}).click();
+      const retry = operator.getByRole('button',{name:'إعادة محاولة الحفظ',exact:true});
+      const confirm = operator.getByRole('button',{name:'اعتماد الفاتورة وخصم المخزون',exact:true});
+      await retry.waitFor({state:'visible'});
+      await retry.click();
+      await confirm.click();
+      const downloadPromise=operator.waitForEvent('download');
+      await operator.getByRole('button',{name:'تنزيل الفاتورة PDF',exact:true}).click();
+      assert.ok((await downloadPromise).suggestedFilename().endsWith('.pdf'));
+      assert.equal(saves.length,2);
+      assert.equal(ledgerState.sales_invoices.length,1);
+      assert.equal(ledgerState.sales_invoices[0].totalAmount,666);
+      assert.equal(ledgerState.items.find(item=>item.id===blend.id).stock,998);
+      assert.equal(requestedPdf,true);
+      evidence.skillWorkflows={cashierFiles:rows.length,duplicateRejected:true,receiptCount:1,invoiceTotal:666,pdfDownload:true,isolatedBrowserRoutes:true};
+    } finally {
+      await workflow.close();
+    }
     const moneyFixture=fixture(0);
     moneyFixture.financial_openings=[{id:'opening',date:'2026-11-01',account:'treasury',amount:1000,priorPeriodSettled:true,history:[]}];
     moneyFixture.cashier_days=Array.from({length:4},(_,i)=>({id:'money-'+i,date:`2026-11-0${i+1}`,status:'pending',financialReport:{fileName:`day-${i}.csv`,sha256:String(i+1).repeat(64),uploadedAt:'2026-11-05T10:00:00Z',totalRevenue:(i+1)*100}}));

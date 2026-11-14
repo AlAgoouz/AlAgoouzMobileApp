@@ -612,6 +612,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
                   const unitArabic =
                     displayUnit(item.baseUnit);
+                  const controlId = 'purchase-' + item.id;
 
                   return (
                     <div
@@ -625,6 +626,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                         <button
                           onClick={() => removeCartItem(item.id)}
                           className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
+                          aria-label={"حذف " + item.name + " من الفاتورة"}
                           title="حذف الصنف من الفاتورة"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -634,13 +636,18 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                       {/* السعر والكمية والإجمالي */}
                       <div className="grid grid-cols-2 gap-2.5">
                         <div className="bg-white border border-[#DED6C6] rounded-xl px-3 py-2">
-                          <label className="text-[10px] font-bold text-[#8C7A6B] block">
+                          <label htmlFor={controlId + "-price"} className="purchase-field-label">
                             سعر الشراء قبل الضريبة للـ {unitArabic}
                           </label>
                           <div className="flex items-center gap-1 mt-0.5">
                             <Edit3 className="w-3.5 h-3.5 text-[#9E7918] shrink-0" />
                             <input
+                              id={controlId + "-price"}
+                              name="purchase-price"
                               type="number"
+                              inputMode="decimal"
+                              min="0"
+                              step="any"
                               value={purchasePrice}
                               onChange={(e) =>
                                 updateCartItem(item.id, {
@@ -650,7 +657,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                                   ),
                                 })
                               }
-                              className="w-full text-sm font-black text-[#1E1612] bg-transparent focus:outline-none"
+                              className="w-full text-sm font-black text-[#1E1612] bg-transparent"
                             />
                             <span className="text-[10px] text-[#7A6855] font-bold">
                               ج.م
@@ -659,12 +666,13 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                         </div>
 
                         <div className="bg-white border border-[#DED6C6] rounded-xl px-3 py-2">
-                          <label className="text-[10px] font-bold text-[#8C7A6B] block">
+                          <label htmlFor={controlId + "-quantity"} className="purchase-field-label">
                             الكمية المشتراة ({unitArabic})
                           </label>
                           <div className="flex items-center justify-between gap-1 mt-0.5">
                             <button
                               type="button"
+                              aria-label={"تقليل كمية " + item.name}
                               onClick={() =>
                                 updateCartItem(item.id, {
                                   quantity: Math.max(
@@ -675,11 +683,15 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                               }
                               className="w-6 h-6 rounded-lg bg-[#FAF8F4] border border-[#E6DEC8] text-[#1E1612] flex items-center justify-center"
                             >
-                              <Minus className="w-3.5 h-3.5" />
+                              <Minus className="w-3.5 h-3.5" aria-hidden="true" />
                             </button>
                             <input
+                              id={controlId + "-quantity"}
+                              name="purchase-quantity"
                               type="number"
-                              step="0.5"
+                              inputMode="decimal"
+                              step="any"
+                              min="0.1"
                               value={quantity}
                               onChange={(e) =>
                                 updateCartItem(item.id, {
@@ -689,10 +701,11 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                                   ),
                                 })
                               }
-                              className="w-14 text-center font-black text-sm text-[#1E1612] bg-transparent focus:outline-none"
+                              className="w-14 text-center font-black text-sm text-[#1E1612] bg-transparent"
                             />
                             <button
                               type="button"
+                              aria-label={"زيادة كمية " + item.name}
                               onClick={() =>
                                 updateCartItem(item.id, {
                                   quantity: Number((quantity + 1).toFixed(2)),
@@ -700,7 +713,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                               }
                               className="w-6 h-6 rounded-lg bg-[#1E1612] text-[#FBF5B7] flex items-center justify-center"
                             >
-                              <Plus className="w-3.5 h-3.5" />
+                              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                             </button>
                           </div>
                         </div>

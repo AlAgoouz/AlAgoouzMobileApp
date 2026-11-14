@@ -101,3 +101,16 @@
 .contact-records { display:grid; gap:.65rem; min-width:0; }
 .contact-records > article, .contact-records > div { min-width:0; overflow-wrap:anywhere; }
 @media (min-width: 768px) { .contact-records { grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; } }
+.invoice-field { display: grid; align-content: start; gap: .35rem; min-width: 0; }
+.invoice-field small { color: #604d40; }
+.invoice-field [aria-invalid=true], .record-workspace .invoice-field [aria-invalid=true] { border-color: #a73434; }
+.field-error { margin: 0; color: #9b2424; font-size: .78rem; font-weight: 700; overflow-wrap: anywhere; }
+.cashier-upload-form { padding: .85rem; background: var(--paper); border: 1px solid var(--line); border-radius: var(--surface-radius); }
+.cashier-file-field { grid-column: 1 / -1; }
+.cashier-upload-submit { justify-self: start; min-height: 44px; }
+@media (max-width: 400px) {
+  .invoice-line .operation-fields { grid-template-columns: 1fr; }
+  .cashier-upload-submit { width: 100%; }
+}
+
+.purchase-field-label { display: block; color: #695443; font-size: .75rem; font-weight: 700; }

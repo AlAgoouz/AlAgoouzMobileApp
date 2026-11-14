@@ -1,4 +1,4 @@
-import React,{useCallback,useEffect,useRef,useState} from 'react';
+import React,{useCallback,useEffect,useId,useRef,useState} from 'react';
 import {businessDate} from '../lib/dates';
 import {inspectCashierFile} from '../lib/cashierReportHeader';
 import {cancelImport,enqueueImport,importError,listImports,readImport,uploadImport,type ImportJob,type ImportKind} from '../lib/importJobs';
@@ -7,6 +7,8 @@ export function ImportJobsPanel({onReview,defaultDate,defaultKind}:{onReview?:(j
  const [date,setDate]=useState(defaultDate??businessDate()),[kind,setKind]=useState<ImportKind>(defaultKind??'financial'),[file,setFile]=useState<File|null>(null);
  const [jobs,setJobs]=useState<ImportJob[]|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [refreshError,setRefreshError]=useState('');
+ const [fileError,setFileError]=useState('');
+ const uploadId=useId();
  const [inspecting,setInspecting]=useState(false),[sourceDate,setSourceDate]=useState<string|null>(null),[sourceKind,setSourceKind]=useState<ImportKind|null>(null);
  const selection=useRef(0);
  const input=useRef<HTMLInputElement>(null),mounted=useRef(true),reading=useRef(false);
@@ -22,19 +24,27 @@ export function ImportJobsPanel({onReview,defaultDate,defaultKind}:{onReview?:(j
   finally{if(mounted.current){await refresh();if(mounted.current)setBusy(false);}}
  };
  const selectFile=async(next:File|null)=>{
-  const token=++selection.current;setFile(null);setSourceDate(null);setSourceKind(null);setError('');setNotice('');setInspecting(!!next);
+  const token=++selection.current;setFile(null);setSourceDate(null);setSourceKind(null);setError('');setNotice('');setFileError('');setInspecting(!!next);
   if(!next)return;
   try{const header=await inspectCashierFile(next);if(!mounted.current||token!==selection.current)return;setFile(next);setSourceDate(header.date);setSourceKind(header.kind);if(header.date)setDate(header.date);if(header.kind)setKind(header.kind);}
-  catch(e){if(mounted.current&&token===selection.current)setError(e instanceof Error?e.message:'تعذر قراءة تاريخ التقرير.');}
+  catch(e){if(mounted.current&&token===selection.current){
+   if(input.current)input.current.value='';
+   setFileError(e instanceof Error?e.message:'تعذر قراءة تاريخ التقرير.');
+  }}
   finally{if(mounted.current&&token===selection.current)setInspecting(false);}
  };
  return <section className="record-workspace space-y-3" aria-label="رفع ومعالجة التقارير">
-  <h2 className="font-bold">رفع تقرير جديد</h2><p className="operation-note">ارفع كل تقرير على حدة. بعد تأكيد بدء المعالجة، تقدر تقفل الصفحة وترجع تتابع النتيجة. الرفع وحده لا يعتمد المبيعات أو يخصم المخزون.</p>
-  <form className="grid gap-3 sm:grid-cols-2" onSubmit={e=>{e.preventDefault();if(file&&!inspecting)void act(async()=>{await uploadImport(file,kind,date);setFile(null);setSourceDate(null);setSourceKind(null);if(input.current)input.current.value='';setNotice('تم إرسال الملف للمعالجة؛ تابع حالته أدناه.');});}}>
-   <label>يوم العمل<input required disabled={busy||inspecting} readOnly={!!sourceDate} type="date" className="operation-input w-full" value={date} onChange={e=>setDate(e.target.value)}/></label>
-   <label>نوع التقرير<select disabled={busy||inspecting||!!sourceKind} className="operation-input w-full" value={kind} onChange={e=>setKind(e.target.value as ImportKind)}><option value="financial">المبيعات — قيمة Begun</option><option value="items">الأصناف المباعة — الكميات</option></select></label>
-   <label className="min-w-0">ملف التقرير<input ref={input} disabled={busy} type="file" accept=".csv,.xls,.xlsx" className="block w-full min-w-0 max-w-full" onChange={e=>void selectFile(e.target.files?.[0]??null)}/></label>
-   <button type="submit" disabled={busy||inspecting||!file} className="record-action">{busy?'جارٍ تنفيذ الطلب…':'رفع وبدء المعالجة'}</button>
+  <h2 className="font-bold" id={uploadId}>رفع تقرير جديد</h2><p className="operation-note">ارفع كل تقرير على حدة. بعد بدء المعالجة، المالك يقدر يراجع التقريرين ويعتمد اليوم.</p>
+  <form method="post" aria-labelledby={uploadId} aria-busy={busy||inspecting} className="cashier-upload-form operation-fields" onSubmit={e=>{e.preventDefault();if(file&&!inspecting)void act(async()=>{await uploadImport(file,kind,date);setFile(null);setSourceDate(null);setSourceKind(null);if(input.current)input.current.value='';setNotice('تم إرسال الملف للمعالجة؛ تابع حالته أدناه.');});}}>
+   <label>يوم العمل<input required disabled={busy||inspecting} readOnly={!!sourceDate} type="date" name="business-date" className="operation-input w-full" value={date} onChange={e=>setDate(e.target.value)}/></label>
+   <label>نوع التقرير<select name="report-kind" disabled={busy||inspecting||!!sourceKind} className="operation-input w-full" value={kind} onChange={e=>setKind(e.target.value as ImportKind)}><option value="financial">المبيعات — قيمة Begun</option><option value="items">الأصناف المباعة — الكميات</option></select></label>
+   <div className="invoice-field cashier-file-field">
+    <label htmlFor={uploadId+'-file'}>ملف التقرير</label>
+    <input id={uploadId+'-file'} name="report-file" ref={input} disabled={busy} type="file" accept=".csv,.xls,.xlsx" aria-invalid={Boolean(fileError)} aria-describedby={uploadId+'-file-hint'+(fileError?' '+uploadId+'-file-error':'')} className="block w-full min-w-0 max-w-full" onChange={e=>void selectFile(e.target.files?.[0]??null)}/>
+    <small id={uploadId+'-file-hint'}>CSV أو XLS أو XLSX، بحد أقصى 10 ميجابايت.</small>
+    {fileError&&<p id={uploadId+'-file-error'} className="field-error" role="alert">{fileError}</p>}
+   </div>
+   <button type="submit" disabled={busy||inspecting||!file} className="operation-primary cashier-upload-submit">{busy?'جارٍ تنفيذ الطلب…':'رفع وبدء المعالجة'}</button>
   </form>
   {inspecting&&<p role="status">جارٍ قراءة تاريخ التقرير…</p>}
   {file&&<p className="operation-note">{sourceDate?`يوم البيع ${sourceDate} مقروء من داخل التقرير؛ تاريخ الطباعة واسم الملف لا يغيّرانه.`:'التقرير لا يحمل تاريخًا داخليًا واضحًا؛ راجع يوم العمل ونوع التقرير قبل الرفع.'}</p>}
