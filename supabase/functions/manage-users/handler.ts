@@ -4,7 +4,11 @@ const configuredOrigins=():string[]=>{
  const raw=(globalThis as any).Deno?.env?.get?.('AGOUZ_ALLOWED_ORIGINS')??(globalThis as any).process?.env?.AGOUZ_ALLOWED_ORIGINS??'';
  return typeof raw==='string'?raw.split(',').map(s=>s.trim()).filter(Boolean):[];
 };
-const allowedOrigin=(origin:string|null)=>!!origin&&(origin==='https://agouz.vercel.app'||origin==='https://agouz-alagoouz.vercel.app'||/^https:\/\/agouz-[a-z0-9-]+-alagoouz\.vercel\.app$/.test(origin)||/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(origin)||configuredOrigins().includes(origin));
+const allowedOrigin = (origin: string | null) => Boolean(origin && (
+  origin === 'https://agouz.vercel.app' ||
+  origin === 'https://agouz-alagoouz.vercel.app' ||
+  configuredOrigins().includes(origin)
+));
 type Services={user:any;admin:any};
 
 export function manageUsersHandler(services:(authorization:string)=>Services){

@@ -417,6 +417,7 @@ export function validateStore(value: unknown): StoreState {
     );
   }
   const parsed = result.data;
+  const itemsById = new Map(parsed.items.map(item => [item.id, item]));
   if(new Set(parsed.catalogNameDrafts.map(d=>d.name.normalize('NFC').trim().replace(/\s+/g,' ').toLocaleLowerCase())).size!==parsed.catalogNameDrafts.length)throw Error('أسماء مستوردة مكررة؛ راجع قائمة الاستكمال');
   for(const opening of parsed.financialOpenings){
     if(new Set(opening.history.map(h=>h.id)).size!==opening.history.length)throw Error('سجل رصيد البداية يحتوي على تعديلات مكررة');
@@ -426,41 +427,46 @@ export function validateStore(value: unknown): StoreState {
   for(const day of parsed.cashierDays){
     if(!day.financialReport&&!day.itemsReport)throw Error('يوم الكاشير بلا تقارير');
     if(day.status==='approved'&&(!day.financialReport||!day.itemsReport||!day.consumption?.length||day.totalCost===undefined||!day.approvedAt||!day.partnerName))throw Error('لا يعتمد يوم الكاشير قبل اكتمال التقريرين وتكلفة المخزون');
-    for(const line of day.itemsReport?.lines??[]){const raw=parsed.items.find(i=>i.id===line.itemId);if(!raw||Math.abs(convertToBaseUnit(line.quantity,line.unitLabel as import('../types/erp').UnitType,raw.baseUnit)-line.normalizedQtyInBaseUnit)>0.000001)throw Error('كمية تقرير الكاشير أو وحدته غير صحيحة');}
+    for(const line of day.itemsReport?.lines??[]){const raw=itemsById.get(line.itemId);if(!raw||Math.abs(convertToBaseUnit(line.quantity,line.unitLabel as import('../types/erp').UnitType,raw.baseUnit)-line.normalizedQtyInBaseUnit)>0.000001)throw Error('كمية تقرير الكاشير أو وحدته غير صحيحة');}
     if(day.status==='approved'){
       const costs=day.consumption!;
-      if(new Set(costs.map(l=>l.itemId)).size!==costs.length||costs.some(l=>!parsed.items.some(i=>i.id===l.itemId)||Math.abs(Number((l.quantity*l.unitCost).toFixed(2))-l.totalCost)>0.011)||Math.abs(costs.reduce((sum,l)=>sum+l.totalCost,0)-day.totalCost!)>0.011)throw Error('تكلفة يوم الكاشير لا تطابق المكونات المستهلكة');
+      if(new Set(costs.map(l=>l.itemId)).size!==costs.length||costs.some(l=>!itemsById.has(l.itemId)||Math.abs(Number((l.quantity*l.unitCost).toFixed(2))-l.totalCost)>0.011)||Math.abs(costs.reduce((sum,l)=>sum+l.totalCost,0)-day.totalCost!)>0.011)throw Error('تكلفة يوم الكاشير لا تطابق المكونات المستهلكة');
     }else if(day.totalCost!==undefined||day.consumption||day.approvedAt||day.shortages)throw Error('يوم الكاشير لم يعتمد؛ لا يمكن تسجيل تكلفته بعد');
   }
   for (const [key, rows] of Object.entries(parsed)) {
     if (new Set(rows.map((row) => row.id)).size !== rows.length)
       throw new Error(`معرفات مكررة في ${key}`);
   }
-  const itemsById=new Map(parsed.items.map(item=>[item.id,item]));
+  const itemCodes = new Set(parsed.items.map(item => item.code.trim().toUpperCase()));
+  const barcodes = new Set(parsed.items.map(item => item.barcode));
+  const employeeIds = new Set(parsed.employees.map(employee => employee.id));
+  const partnerIds = new Set(parsed.partners.map(partner => partner.id));
+  const expensesById = new Map(parsed.expenses.map(expense => [expense.id, expense]));
+  const employeeTransactionsById = new Map(parsed.employeeTransactions.map(transaction => [transaction.id, transaction]));
   const reserved=new Set<string>();
   for(const draft of parsed.catalogNameDrafts){
     const d=draft.definition;if(!d)continue;
     const code=d.code.trim().toUpperCase();
-    if(!code||reserved.has(code)||parsed.items.some(i=>i.code.trim().toUpperCase()===code||i.barcode===d.code))throw Error('كود منتج تحت الاستكمال مستخدم أو محجوز');
+    if(!code||reserved.has(code)||(itemCodes.has(code)||barcodes.has(d.code)))throw Error('كود منتج تحت الاستكمال مستخدم أو محجوز');
     if(d.category==='manufactured_blend'&&d.baseUnit!=='kg'||d.category==='drink_recipe'&&d.baseUnit!=='piece'||d.category!=='manufactured_blend'&&(d.openingStock!==0||d.minStock!==0))throw Error('وحدة أو رصيد تعريف المنتج ذي الوصفة غير صالح');
     reserved.add(code);
   }
   for (const transaction of parsed.employeeTransactions) {
     if (transaction.accountingVersion !== 1) continue;
-    if (!parsed.employees.some((e)=>e.id===transaction.employeeId) || !parsed.partners.some((p)=>p.id===transaction.partnerId))
+    if (!employeeIds.has(transaction.employeeId) || (!transaction.partnerId || !partnerIds.has(transaction.partnerId)))
       throw new Error('حركة العامل مرتبطة بعامل أو شريك غير موجود');
     if (transaction.type==='صرف راتب' || transaction.type==='سلفة') {
-      const expense=parsed.expenses.find((e)=>e.id===transaction.expenseId);
+      const expense=transaction.expenseId ? expensesById.get(transaction.expenseId) : undefined;
       if(!expense || expense.sourceEmployeeTransactionId!==transaction.id || expense.category!=='رواتب ويوميات' || expense.amount!==transaction.amount || expense.paidFrom!==transaction.paidFrom || expense.partnerId!==transaction.partnerId || Boolean(expense.isCancelled)!==Boolean(transaction.reversedAt))
         throw new Error('مصروف الراتب أو السلفة لا يطابق حركة العامل');
     } else if (transaction.expenseId) throw new Error('هذه الحركة ليست صرفًا نقديًا للعامل');
   }
   for(const expense of parsed.expenses) {
-    if(expense.sourceEmployeeTransactionId && !parsed.employeeTransactions.some((t)=>t.id===expense.sourceEmployeeTransactionId && t.expenseId===expense.id))
+    if(expense.sourceEmployeeTransactionId && employeeTransactionsById.get(expense.sourceEmployeeTransactionId)?.expenseId !== expense.id)
       throw new Error('مصروف العامل غير مرتبط بحركة صحيحة');
   }
   if (
-    new Set(parsed.items.map((i) => i.code.trim().toUpperCase())).size !==
+    itemCodes.size !==
     parsed.items.length
   )
     throw new Error("أكواد أصناف مكررة؛ يجب أن يكون لكل صنف كود مستقل");
@@ -517,6 +523,18 @@ export function cloudStoreInput(row: Record<string, unknown>): unknown {
 export function fromCloud(row: Record<string, unknown>): StoreState {
   return validateStore(cloudStoreInput(row));
 }
+// Historical values stay readable and restorable; enforce these bounds on new invoices.
+export function validateNewInvoiceQuantities(previous: StoreState, next: StoreState) {
+  const purchases = new Set(previous.purchaseInvoices.map(invoice => invoice.id));
+  const sales = new Set(previous.salesInvoices.map(invoice => invoice.id));
+  if (next.purchaseInvoices.some(invoice => !purchases.has(invoice.id) &&
+      invoice.items.some(line => !(line.quantity > 0))))
+    throw new Error('كمية الشراء لازم تكون أكبر من صفر.');
+  if (next.salesInvoices.some(invoice => !sales.has(invoice.id) &&
+      invoice.items.some(line => !(line.quantity > 0) || !(line.normalizedQtyInBaseUnit > 0))))
+    throw new Error('كمية البيع لازم تكون أكبر من صفر.');
+}
+
 export function invoiceDetail(value:unknown):SalesInvoice {
  const invoice=schema.shape.salesInvoices.element.parse(value);
  if(Math.abs(invoice.totalAmount-invoice.paidAmount-invoice.remainingAmount)>0.011)throw Error('إجمالي الفاتورة لا يطابق المدفوع والمتبقي');

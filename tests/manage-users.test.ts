@@ -49,3 +49,12 @@ it('accepts origins configured via AGOUZ_ALLOWED_ORIGINS environment variable',a
   delete process.env.AGOUZ_ALLOWED_ORIGINS;
  }
 });
+
+it('requires an exact approved origin', async () => {
+ const s = setup();
+ for (const [origin, status] of [['https://agouz.vercel.app', 204], ['https://agouz-branch-alagoouz.vercel.app', 403], ['http://localhost:5173', 403]] as const) {
+  const response = await s.handle(new Request('https://test.invalid/functions/v1/manage-users', {method:'OPTIONS',headers:{Origin:origin}}));
+  expect(response.status).toBe(status);
+  expect(response.headers.get('Access-Control-Allow-Origin')).toBe(status === 204 ? origin : null);
+ }
+});

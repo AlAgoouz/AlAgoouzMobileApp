@@ -3,10 +3,14 @@ async function exportFile(path:string,name:string,mime:string){
  const sb=getSupabaseClient();if(!sb)throw Error('تعذر الاتصال بخدمة التصدير.');
  const {data,error}=await sb.auth.getSession();if(error||!data.session)throw Error('انتهت الجلسة؛ سجّل الدخول مجددًا.');
  const response=await fetch(path,{headers:{Authorization:`Bearer ${data.session.access_token}`},cache:'no-store'});
+ if(response.status===429)throw Error('وصلت لحد التصدير المؤقت؛ جرّب مرة أخرى بعد خمس دقائق.');
+ if(response.status===403)throw Error('حسابك غير مصرح له بالتصدير.');
+ if(response.status===404)throw Error('الفاتورة غير موجودة؛ حدّث سجل المبيعات.');
  if(response.status===422){
   const error=await response.json().catch(()=>null);
   if(error?.detail==='INVOICE_TOTAL_MISMATCH')throw Error('مبالغ الفاتورة غير متطابقة؛ راجعها قبل التصدير.');
   if(error?.detail==='PDF_ROW_LIMIT'||error?.detail==='EXPORT_ROW_LIMIT')throw Error('عدد السجلات أكبر من حد التصدير.');
+  if(error?.detail==='EXPORT_SIZE_LIMIT')throw Error('البيانات أكبر من حد التصدير؛ اختر نطاقًا أصغر.');
   throw Error('راجع البيانات قبل إعادة التصدير.');
  }
  if(!response.ok||!response.headers.get('content-type')?.startsWith(mime))throw Error('تعذر تجهيز التقرير؛ راجع الاتصال أو اختر نطاقًا أصغر وأعد المحاولة.');

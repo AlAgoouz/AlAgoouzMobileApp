@@ -1005,7 +1005,22 @@ export default function App() {
                     إعادة محاولة الحفظ
                   </button>
                 )}
-                <button
+                {engine.hasPendingCashierAttachment ? (
+                  <button className="border rounded p-2 m-1" onClick={() => {
+                    if (!window.confirm('يلغي الخادم محاولة الإرفاق إذا لم تكن محفوظة. هل تريد المتابعة؟')) return;
+                    void engine.discardCashierAttachment().then(result => {
+                      if (result) {
+                        if (result === 'saved') {
+                          const attached = new Set(engine.state.cashierDays.flatMap(day => [day.financialReport?.sourceQueueId, day.itemsReport?.sourceQueueId]));
+                          setQueuedReports(rows => rows.filter(row => !attached.has(row.id)));
+                        }
+                        showToast(result === 'saved' ? 'التقرير محفوظ بالفعل على الخادم.' : 'أُلغيت محاولة الإرفاق. اختر التقرير من جديد.');
+                      }
+                    }).catch(() => {});
+                  }}>
+                    التحقق من الإرفاق وإلغاء المحاولة
+                  </button>
+                ) : <button
                   className="border rounded p-2 m-1"
                   onClick={() => {
                     if (
@@ -1018,7 +1033,7 @@ export default function App() {
                   }}
                 >
                   تحميل بيانات السحابة
-                </button>
+                </button>}
                 {!engine.hasPending && (
                   <button
                     className="border rounded p-2 m-1"
@@ -1045,7 +1060,7 @@ export default function App() {
         <div className="screen-stage" key={activeScreen+':'+moreInitialTab}>
         <AppErrorBoundary key={activeScreen+':'+moreInitialTab} onReset={()=>setActiveScreen('home')}>
         {/* ================= 1. الشاشة الرئيسية: لوحة الإحصائيات والرسوم البيانية الاحترافية ================= */}
-        {activeScreen === 'home'&&<DashboardScreen model={dashboard.data} error={dashboard.error} onRetry={dashboard.retry} period={reportPeriod} onPeriod={setReportPeriod} name={currentPartner.name} onNavigate={navigateScreen}/>}
+        {activeScreen === 'home'&&<DashboardScreen model={dashboard.data} error={dashboard.error} onRetry={dashboard.retry} period={reportPeriod} onPeriod={setReportPeriod} name={currentPartner.name} isOwner={member?.isOwner} onNavigate={navigateScreen}/>}
 
         {/* ================= 2. قسم الأقسام (بالتصميم الاحترافي الأول الفخم بالإسبريسو والذهبي) ================= */}
         {activeScreen === "sections" && <SectionsHub
@@ -1146,7 +1161,7 @@ export default function App() {
           setActiveScreen('home');
           return true;
         }}/>}
-        {activeScreen === 'cashier_sync' && <CashierDayScreen items={items} days={cashierDaysForDisplay} queued={queuedReports} onBack={()=>setActiveScreen('home')} onAttach={async(date,report)=>{engine.replace(attachCashierReport(engine.state,date,report),report.file.sourceQueueId);await confirmSave();if(report.file.sourceQueueId)setQueuedReports(rows=>rows.filter(r=>r.id!==report.file.sourceQueueId));}} onApprove={async(id)=>{engine.replace(approveCashierDay(engine.state,id,currentPartner.name));await confirmSave();}}/>}
+        {activeScreen === 'cashier_sync' && <CashierDayScreen items={items} days={cashierDaysForDisplay} queued={queuedReports} onBack={()=>setActiveScreen('home')} onAttach={async(date,report)=>{if(engine.hasPending)await confirmSave();engine.attachCashier(attachCashierReport(engine.state,date,report),report.file.sourceQueueId);await confirmSave();if(report.file.sourceQueueId)setQueuedReports(rows=>rows.filter(r=>r.id!==report.file.sourceQueueId));}} onApprove={async(id)=>{engine.replace(approveCashierDay(engine.state,id,currentPartner.name));await confirmSave();}}/>}
 
         {activeScreen === "products" && (
           <ProductsCatalogScreen onOpenMovement={setMovementId}
@@ -1621,7 +1636,7 @@ export default function App() {
             onSavePartners={(next)=>safeAction(()=>{engine.field('partners',next);})}
             selectedFinancialPartnerId={financialPartner?.id??''}
             onSelectFinancialPartnerId={setSelectedFinancialPartnerId}
-            initialSubPage={moreInitialTab} onOpenCashier={()=>navigateScreen("cashier_sync")}
+            initialSubPage={moreInitialTab} showBackupHealth={member?.isOwner} onOpenCashier={()=>navigateScreen("cashier_sync")}
             showDemoTools={getSupabaseCredentials().url.startsWith("http://127.0.0.1:")}
             onAddExpense={(exp) =>
               safeAction(() => {

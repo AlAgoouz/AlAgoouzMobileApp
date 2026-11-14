@@ -717,3 +717,47 @@ it.skipIf(!active)('dispatches at most two due jobs with per-job credentials and
  sql(`update bon_erp_private.import_jobs set attempt=3 where id='${jobs[0].id}';update bon_erp_private.import_jobs set updated_at=now()-interval '51 minutes' where id='${jobs[1].id}'`);
  expect(sql(`begin;select bon_erp_private.dispatch_imports();select count(*) from bon_erp_private.import_jobs where status='failed';rollback;`)).toBe('0\n2');
 });
+
+it.skipIf(!active)('protects existing audit entries and the actor of new entries for delegated users',()=>{
+ const delegate='22222222-2222-4222-8222-222222220094';
+ userAccessFixture(delegate,{view:true,catalog:true});
+ const entry={id:'audit-1',timestamp:new Date().toISOString(),partnerName:'Owner',actionType:'تعديل وصفة/صنف',description:'Original',actorId:owner};
+ const newEntry={...entry,id:'audit-2',actorId:delegate};
+ seed({...state,auditLogs:[entry]});
+ const save=(auditLogs:StoreState['auditLogs'])=>asUser(delegate,
+  'select public.bon_erp_save_store(0,'+literal(toCloud({...state,auditLogs}))+",'"+crypto.randomUUID()+"')");
+ expect(()=>save([])).toThrow('AUDIT_LOG_IMMUTABLE');
+ expect(()=>save([{...entry,description:'Rewritten'}])).toThrow('AUDIT_LOG_IMMUTABLE');
+ expect(()=>save([entry,{...newEntry,actorId:owner}])).toThrow('AUDIT_ACTOR_MISMATCH');
+ expect(()=>save([newEntry,entry])).not.toThrow();
+});
+
+it.skipIf(!active)('rolls back a fenced save and recognizes a previously committed receipt',()=>{
+ const discarded=crypto.randomUUID(), saved=crypto.randomUUID();
+ const withOwner=(query:string)=>sql("begin;set local request.jwt.claim.sub='"+owner+"';set local role authenticated;"+query+";commit;");
+ const cancel=(id:string)=>"select public.bon_erp_discard_cashier_save('"+id+"')";
+ const save=(id:string)=>"select public.bon_erp_save_store(0,"+literal(toCloud(state))+",'"+id+"')";
+ expect(withOwner(cancel(discarded))).toBe('discarded');
+ expect(()=>withOwner(save(discarded))).toThrow('CASHIER_SAVE_DISCARDED');
+ expect(sql("select version from public.bon_elagouz_store where id='main_store'")).toBe('0');
+ expect(withOwner(save(saved))).toContain('"version": 1');
+ expect(withOwner(cancel(saved))).toBe('saved');
+ expect(()=>sql("begin;set local role anon;"+cancel(saved)+";rollback;")).toThrow('permission denied');
+});
+
+it.skipIf(!active)('shares a bounded export quota per account and restricts backup run details to the master',()=>{
+ const viewer='22222222-2222-4222-8222-222222220095';
+ const cashier='22222222-2222-4222-8222-222222220096';
+ userAccessFixture(viewer,{view:true});userAccessFixture(cashier,{},'cashier');
+ sql("insert into bon_erp_private.recovery_health(id,state,run_id,source_sha) values(true,'running','100','"+'a'.repeat(40)+"') on conflict(id) do nothing");
+ expect(readJson("select public.bon_erp_operational_health()").backup.run_id).toBe('100');
+ expect(JSON.parse(asUser(viewer,"select public.bon_erp_operational_health()").split('
+').at(-1)!).backup).toBeNull();
+ const reserve='select public.bon_erp_reserve_export()';
+ const results=asUser(viewer,Array(11).fill(reserve).join(';')).split('
+');
+ expect(results.slice(-11)).toEqual([...Array(10).fill('t'),'f']);
+ expect(asUser(owner,reserve).split('
+').at(-1)).toBe('t');
+ expect(()=>asUser(cashier,reserve)).toThrow('USER_PERMISSION_DENIED');
+});

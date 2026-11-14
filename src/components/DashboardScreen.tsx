@@ -9,8 +9,8 @@ import {QuickItemSearch} from './QuickItemSearch';
 import {PeriodSelector} from './PeriodSelector';
 import {ComparisonChart,TrendChart,EmptyChart} from './FinancialCharts';
 
-interface Props {model:DashboardModel|null;error?:string;onRetry?:()=>void;period:PeriodSelection;onPeriod:(p:PeriodSelection)=>void;name:string;onNavigate:(screen:string)=>void;}
-export function DashboardScreen({model,error,onRetry,period,onPeriod,name,onNavigate}:Props){
+interface Props {model:DashboardModel|null;error?:string;onRetry?:()=>void;period:PeriodSelection;onPeriod:(p:PeriodSelection)=>void;name:string;isOwner?:boolean;onNavigate:(screen:string)=>void;}
+export function DashboardScreen({model,error,onRetry,period,onPeriod,name,isOwner,onNavigate}:Props){
  const [hide,setHide]=useState(false);
  const range=reportRange(period);
  const report=useMemo(()=>model?({...model.report,points:reportPoints(model.report.entries,range,model.report.firstDate,model.report.lastDate)}):null,[model,range.from,range.to]);
@@ -38,7 +38,7 @@ export function DashboardScreen({model,error,onRetry,period,onPeriod,name,onNavi
   <div className={`coverage-note ${approved?'coverage-confirmed':''}`}><CheckCircle2 size={18}/><p>{report.pendingCostDays?`${report.pendingCostDays} أيام مبيعات مسجلة ماليًا وتنتظر تكلفة الأصناف؛ الإيراد ظاهر والربح غير مكتمل.`:`${approved} يوم كاشير مكتمل التكلفة داخل الفترة.`} خصم المخزون ينتظر اعتماد تقرير الأصناف؛ لا يُسجّل الإيراد مرة ثانية.</p></div>
   <div className="dashboard-main-panels">
    <TrendChart points={report.points} hide={hide}/>
-   <OperationalHealth onCashier={()=>onNavigate('cashier_sync')}/>
+   <OperationalHealth showBackup={isOwner} onCashier={()=>onNavigate('cashier_sync')}/>
   </div>
   <details className="dashboard-extra">
    <summary>تفاصيل المبيعات وآخر الحركات</summary>

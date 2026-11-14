@@ -1360,6 +1360,7 @@ interface MoreMenuProps {
   auditLogs: AuditLogEntry[];
   currentPartner: Partner;
   onOpenCashier?:()=>void;
+  showBackupHealth?:boolean;
   initialSubPage?:
     | "menu"
     | "data_control"
@@ -1396,6 +1397,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   currentPartner,
   initialSubPage = "menu",
   onOpenCashier,
+  showBackupHealth,
   showDemoTools = false,
   accountPermissions=[],
   canManageData=true,canEditPartners=false,onSavePartners,
@@ -1445,7 +1447,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
         <OperationHeader title={<>النسخ الاحتياطي واسترجاع البيانات</>} description={<>تصدير بيانات المحل واسترجاع نسخة محفوظة.</>} icon={HeaderDatabaseBackup} onBack={onBack}></OperationHeader>
 
         <div className="p-4 space-y-3.5">
-          {onOpenCashier&&<OperationalHealth onCashier={onOpenCashier}/> }
+          {onOpenCashier&&<OperationalHealth showBackup={showBackupHealth} onCashier={onOpenCashier}/> }
           <div className="bg-gradient-to-br from-[#1E1612] via-[#2B201A] to-[#1A130F] text-white rounded-3xl p-4 border-2 border-[#C59B27] shadow-md space-y-3">
             <div className="flex items-center gap-2 text-sm font-black text-[#FBF5B7]">
               <Download className="w-5 h-5 text-[#D4AF37]" />
