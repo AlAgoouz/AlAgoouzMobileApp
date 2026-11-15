@@ -6,12 +6,19 @@ type Incident = 'render_failure' | 'stale_application';
 
 const reported = new Set<Incident>();
 
-export function safeSentryOptions(dsn: string, release: string): BrowserOptions {
+export function safeSentryOptions(
+  dsn: string,
+  release: string,
+  deploymentEnvironment = import.meta.env.VITE_AGOUZ_ENVIRONMENT,
+): BrowserOptions {
   const safeRelease = /^[a-f0-9]{7,40}$/i.test(release) ? release : undefined;
+  const environment = deploymentEnvironment === 'preview' || deploymentEnvironment === 'production'
+    ? deploymentEnvironment
+    : import.meta.env.MODE;
   return {
     dsn,
     release: safeRelease,
-    environment: import.meta.env.MODE,
+    environment,
     defaultIntegrations: false,
     sendClientReports: false,
     beforeSend(event) {
@@ -23,7 +30,7 @@ export function safeSentryOptions(dsn: string, release: string): BrowserOptions 
         level: 'error',
         message: event.message,
         release: safeRelease,
-        environment: import.meta.env.MODE,
+        environment,
         platform: 'javascript',
       };
     },
