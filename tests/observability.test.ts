@@ -2,6 +2,17 @@ import {expect,it} from 'vitest';
 import {init} from '@sentry/browser';
 import {safeSentryOptions} from '../src/lib/observability';
 
+it('labels hosted preview events as preview and discards unexpected environment names', () => {
+  const dsn = 'https://abc@o1.ingest.sentry.io/1';
+  const event = {type: undefined, message: 'stale_application'};
+  const options = safeSentryOptions(dsn, '1177ccb', 'preview');
+
+  expect(options.environment).toBe('preview');
+  expect(options.beforeSend?.(event, {})).toMatchObject({environment: 'preview'});
+  expect(safeSentryOptions(dsn, '1177ccb', 'production').environment).toBe('production');
+  expect(safeSentryOptions(dsn, '1177ccb', 'unexpected-value').environment).toBe('test');
+});
+
 it('emits only a fixed browser incident and strips customer, document, session and browser data',()=>{
   const options=safeSentryOptions('https://abc@o1.ingest.sentry.io/1','1177ccb');
   expect(options.defaultIntegrations).toBe(false);
