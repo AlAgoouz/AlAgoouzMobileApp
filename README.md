@@ -23,6 +23,19 @@ npm test
 npm run build
 ```
 
+### تشغيل الواجهة وواجهة Python على Windows
+
+بعد ضبط `.env.local` بعنوان مشروع Supabase والمفتاح العام، جهّز بيئة Python مرة واحدة:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements-local.txt
+```
+
+شغّل `OPEN_APP.bat`. ينتظر المشغّل جاهزية Python ثم يفتح Vite، الذي يوجّه طلبات `/api` إلى الخادم المحلي. استخدم Python من 3.12 إلى 3.14. قاعدة البيانات هي مشروع Supabase المحدد في الإعدادات.
+
+لتوليد PDF على Windows، ثبّت Pango عبر MSYS2 واضبط `WEASYPRINT_DLL_DIRECTORIES` بمسار مجلد DLL، مثل `C:\msys64\ucrt64\bin`. [تعليمات WeasyPrint](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#windows)
+
 تعمل الاختبارات ببيانات معزولة دون كتابة على قاعدة الإنتاج. `npm run build` يفحص TypeScript ويبني نسخة Vite.
 
 انسخ `.env.example` إلى `.env.local` وحدد مشروع الاختبار الصحيح قبل `npm run dev`. تشغيل الواجهة محليًا لا يعني أن قاعدة بياناتها تجريبية؛ العنوان المضبوط هو الذي يحدد الوجهة.

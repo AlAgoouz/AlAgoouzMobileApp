@@ -1,6 +1,7 @@
 import React,{useMemo,useState} from 'react';
 import type {InventoryItem} from '../types/erp';
 import type {CashierReview} from '../lib/cashierRows';
+import {ActionButton} from './ActionButton';
 const normalize=(value:string)=>value.toLocaleLowerCase().replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/[^\p{L}\p{N}]/gu,'');
 export function CashierRowReview({index,choice,items,suggestions,busy,onChange}:{index:number;choice?:CashierReview[number];items:InventoryItem[];suggestions:{itemId:string;name:string;code:string;score:number}[];busy:boolean;onChange:(change:Partial<CashierReview[number]>)=>void}){
  const [query,setQuery]=useState('');
@@ -8,7 +9,13 @@ export function CashierRowReview({index,choice,items,suggestions,busy,onChange}:
   const q=normalize(query),found=q?items.filter(item=>normalize(item.name+' '+item.code).includes(q)).slice(0,30):[...suggestions.map(s=>items.find(item=>item.id===s.itemId)).filter((item):item is InventoryItem=>!!item),...items.slice(0,30)];
   const selected=items.find(item=>item.id===choice?.itemId);return [...new Map([...(selected?[selected]:[]),...found].map(item=>[item.id,item])).values()].slice(0,31);
  },[items,suggestions,query,choice?.itemId]);
- return <div className="space-y-2"><p>{suggestions.length?'اقتراحات تحتاج تأكيدك: '+suggestions.map(s=>`${s.name} (${s.score}%)`).join(' — '):'اختر الصنف الصحيح من الكتالوج.'}</p>
+ const candidates = suggestions.filter(suggestion => items.some(item => item.id === suggestion.itemId));
+ return <div className="space-y-2">{candidates.length > 0 && <fieldset>
+    <legend>اقتراحات تحتاج تأكيدك</legend>
+    <div className="cashier-suggestions">{candidates.map(({itemId,name,code,score}) => <ActionButton key={itemId} disabled={busy} aria-pressed={choice?.itemId === itemId} onClick={() => { if (choice?.itemId !== itemId) onChange({itemId,unit:''}); }}>
+     <span>{name} · {code} ({score}%)</span>
+    </ActionButton>)}</div>
+  </fieldset>}
   <label>بحث لصنف الصف {index+1}<input className="operation-input" maxLength={150} disabled={busy} value={query} onChange={e=>setQuery(e.target.value)} placeholder="اسم الصنف أو الكود"/></label>
   <label>مطابقة الصف {index+1}<select disabled={busy} className="operation-input" value={choice?.itemId??''} onChange={e=>onChange({itemId:e.target.value,unit:''})}><option value="">اختر الصنف لتأكيد المطابقة</option>{options.map(item=><option value={item.id} key={item.id}>{item.name} — {item.code}</option>)}</select></label>
   <p className="text-xs">معروض حتى 30 نتيجة؛ اكتب الاسم أو الكود للوصول لباقي الأصناف.</p>

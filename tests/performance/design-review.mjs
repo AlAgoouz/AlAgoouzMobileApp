@@ -99,8 +99,10 @@ export async function verifyDesign(){
     await page.getByLabel('بداية الفترة').fill('2026-11-01');await page.getByRole('button',{name:'تطبيق',exact:true}).click();
     await page.getByRole('button',{name:'كل السجل',exact:true}).click();evidence.periods=true;
     assert.equal(await page.locator('.screen-stage').evaluate(e=>getComputedStyle(e).animationName),'none');evidence.reducedMotion=true;
-    for(const width of [320,360,430,768,1024,1440]){
+    for(const width of [320,360,430,768,950,1024,1099,1100,1199,1200,1440]){
       await page.setViewportSize({width,height:900});await limit(page,`home-${width}`);
+      const panels=await page.locator('.dashboard-main-panels').evaluate(element=>getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length);
+      assert.equal(panels,width>=950?2:1,'Dashboard columns must remain stable when the sidebar appears');
       const used=await page.locator('.app-workspace').evaluate(e=>e.getBoundingClientRect().width);evidence.workspaceWidths.push({viewport:width,used});
       if(width>=768)assert.ok(used>=Math.min(width-(width>=1100?252:0),1440)-2,'Workspace must use the available desktop/tablet width');
       assert.equal(await page.locator('.agouz-app').evaluate(e=>getComputedStyle(e).paddingInlineStart),width>=1100?'252px':'0px','Sidebar space must reset after changing viewport');

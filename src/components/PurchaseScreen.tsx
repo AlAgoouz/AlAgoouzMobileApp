@@ -13,6 +13,8 @@ import {money} from '../lib/reporting';
 import {latestSupplierPrices,supplierPurchaseHistory} from '../lib/supplierPurchases';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
 import React, { useState, useMemo, useRef } from "react";
+import {ActionButton} from './ActionButton';
+import {Money} from './Money';
 import {Truck, Search, AlertTriangle, Plus, Minus, Trash2, Edit3, Clock, Package, Tag, Check, FileText, X, ShoppingBag, Eye, UserPlus} from 'lucide-react';
 import {
   InventoryItem,
@@ -25,6 +27,8 @@ import {isPurchasable,itemCategories} from '../lib/itemPolicy';
 import {movingAverageCost} from '../lib/costing';
 import {checkSupplierDetails} from '../lib/contactDetails';
 import { businessDate } from "../lib/dates";
+import { outstandingPurchaseRefund } from '../lib/ledger';
+import { parseLocalizedNumber } from '../lib/cashierRows';
 
 interface PurchaseScreenProps {
   items: InventoryItem[];
@@ -36,6 +40,7 @@ interface PurchaseScreenProps {
     invoice: Omit<PurchaseInvoice, "id" | "invoiceNumber">,
   ) => boolean | Promise<boolean>;
   onDeletePurchaseInvoice?: (invoiceId: string) => void;
+  onReceiveRefund?: (invoiceId: string, amount: number, date: string) => Promise<void>;
   onQuickAddSupplier?: (supplier: Omit<Supplier, "id">) => void;
   onQuickAddItem?: (item: Omit<InventoryItem, "id">) => void;
   onBack: () => void;
@@ -49,6 +54,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   currentPartnerName,
   onSavePurchase,
   onDeletePurchaseInvoice,
+  onReceiveRefund,
   onQuickAddSupplier,
   onQuickAddItem,
   onBack,
@@ -68,6 +74,33 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   const [selectedInvoiceDetails, setSelectedInvoiceDetails] =
     useState<PurchaseInvoice | null>(() => purchaseInvoices.find(invoice => invoice.id === initialInvoiceId) ?? null);
   const [invoiceToCancel, setInvoiceToCancel] = useState<PurchaseInvoice>();
+  const [refundInvoiceId, setRefundInvoiceId] = useState<string>();
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundDate, setRefundDate] = useState('');
+  const [refundError, setRefundError] = useState('');
+  const [receivingRefund, setReceivingRefund] = useState(false);
+  const refundInvoice = purchaseInvoices.find(invoice => invoice.id === refundInvoiceId);
+  const refundBalance = refundInvoice ? outstandingPurchaseRefund(refundInvoice) : 0;
+
+  const receiveRefund = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!refundInvoice || !onReceiveRefund || receivingRefund) return;
+    const amount = parseLocalizedNumber(refundAmount);
+    if (amount === undefined || amount <= 0 || amount > refundBalance) {
+      setRefundError('أدخل مبلغًا موجبًا لا يتجاوز المتبقي للاسترداد.');
+      return;
+    }
+    setReceivingRefund(true);
+    setRefundError('');
+    try {
+      await onReceiveRefund(refundInvoice.id, amount, refundDate);
+      setRefundInvoiceId(undefined);
+    } catch (error) {
+      setRefundError(error instanceof Error ? error.message : 'تعذر تأكيد الاستلام.');
+    } finally {
+      setReceivingRefund(false);
+    }
+  };
 
   // بيانات إنشاء فاتورة مشتريات جديدة
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>(
@@ -407,10 +440,21 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
           {title:'المورد',render:inv=>inv.supplierName},
           {title:'التاريخ',render:inv=><time dateTime={inv.date}>{inv.date}</time>},
           {title:'الإجمالي',render:inv=><b>{money(inv.totalAmount)} ج.م</b>},
-          {title:'الحالة',render:inv=>inv.isCancelled?<>ملغاة · استرداد {money(inv.refundDue??0)} ج.م</>:inv.remainingAmount>0?<>متبقي {money(inv.remainingAmount)} ج.م</>:'مدفوعة بالكامل'},
+          {title:'الحالة',render:inv=>inv.isCancelled
+            ? outstandingPurchaseRefund(inv)>0
+              ? <>ملغاة · متبقي للاسترداد {money(outstandingPurchaseRefund(inv))} ج.م</>
+              : inv.refundDue ? 'ملغاة · استُردّ المبلغ' : 'ملغاة'
+            : inv.remainingAmount>0?<>متبقي {money(inv.remainingAmount)} ج.م</>:'مدفوعة بالكامل'},
           {title:'الإجراءات',render:inv=><div className="register-actions">
             <button type="button" className="record-action" onClick={()=>setSelectedInvoiceDetails(inv)}>عرض تفاصيل الفاتورة</button>
             {onDeletePurchaseInvoice&&!inv.isCancelled&&<button type="button" className="record-action text-red-700" onClick={()=>setInvoiceToCancel(inv)}>إلغاء</button>}
+            {onReceiveRefund&&inv.isCancelled&&outstandingPurchaseRefund(inv)>0&&
+              <button type="button" className="record-action" onClick={()=>{
+                setRefundInvoiceId(inv.id);
+                setRefundAmount(String(outstandingPurchaseRefund(inv)));
+                setRefundDate(businessDate());
+                setRefundError('');
+              }}>تسجيل استرداد</button>}
           </div>},
         ]}/> : <p className="record-state">{purchaseInvoices.length?'لا توجد فواتير مطابقة.':'لا توجد فواتير مشتريات مسجلة.'}</p>}
         </>}
@@ -423,6 +467,23 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
           setInvoiceToCancel(undefined);
         }}>تأكيد الإلغاء</button>}>
         <p>هيتم عكس أثر الفاتورة على المخزون وحساب المورد حسب حالة الشراء.</p>
+      </Modal>}
+
+      {refundInvoice && <Modal title="استلام استرداد من المورد" description={refundInvoice.invoiceNumber}
+        busy={receivingRefund} onClose={()=>setRefundInvoiceId(undefined)}>
+        <form className="operation-fields" onSubmit={receiveRefund}>
+          <p>المتبقي للاسترداد <Money value={refundBalance}/></p>
+          <label>المبلغ المستلم
+            <input className="operation-input" required inputMode="decimal" value={refundAmount}
+              disabled={receivingRefund} onChange={event=>setRefundAmount(event.target.value)}/>
+          </label>
+          <label>تاريخ الاستلام
+            <input className="operation-input" required type="date" value={refundDate} max={businessDate()}
+              disabled={receivingRefund} onChange={event=>setRefundDate(event.target.value)}/>
+          </label>
+          {refundError&&<p role="alert">{refundError}</p>}
+          <ActionButton type="submit" disabled={receivingRefund||refundBalance<=0}>تأكيد الاستلام</ActionButton>
+        </form>
       </Modal>}
 
       {/* ================= الوضع الثاني: إنشاء فاتورة مشتريات جديدة واختيار الأصناف ================= */}
@@ -826,26 +887,13 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
             <p>مدفوعة بالكامل — لا تُضاف مديونية جديدة للمورد.</p>
           </section>
 
-          {/* شريط حفظ الفاتورة السفلي */}
-          <div className="workspace-actions fixed left-0 right-0 bg-white border-t border-[#E6DEC8] p-3 flex items-center gap-2.5 z-30 mx-auto shadow-md">
-            <button
-              onClick={handleSave}
-              disabled={cart.length === 0}
-              className="flex-[2] bg-[#1E1612] hover:bg-[#2E221A] disabled:opacity-50 text-[#FBF5B7] border border-[#C59B27] font-black py-3 rounded-xl shadow-md flex items-center justify-center gap-2 transition text-xs"
-            >
-              <Check className="w-4 h-4 text-[#D4AF37]" />
-              <span>
-                مراجعة الفاتورة (
-                {totalInvoiceAmount.toLocaleString("ar-EG")} ج.م)
-              </span>
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className="flex-1 bg-white border border-[#DED6C6] text-[#5C4B3E] font-bold py-3 rounded-xl hover:bg-[#FAF8F4] transition text-xs"
-            >
-              رجوع للفواتير
-            </button>
-          </div>
+          <footer className="operation-surface operation-form-footer action-bar">
+            <ActionButton onClick={handleSave} disabled={cart.length === 0} variant="primary">
+              <Check size={16} aria-hidden="true"/>
+              <span>مراجعة الفاتورة (<Money value={totalInvoiceAmount}/>)</span>
+            </ActionButton>
+            <ActionButton onClick={() => setViewMode('list')}>رجوع للفواتير</ActionButton>
+          </footer>
         </div>
       )}
 

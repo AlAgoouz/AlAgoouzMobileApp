@@ -3,7 +3,7 @@ import {setup,dispose,sql,literal} from './integration/postgres.mjs';
 import {emptyStore,toCloud} from '../src/lib/storeState';
 import {INITIAL_PARTNERS,INITIAL_ITEMS,INITIAL_CUSTOMERS,INITIAL_EMPLOYEES} from '../src/data/initialData';
 import {recordEmployeeAction,reverseEmployeeAction,closePayrollPeriod,currentPayrollPeriod} from '../src/lib/payroll';
-import {recordPayment,returnSale,recordExpense} from '../src/lib/ledger';
+import {recordPayment,returnSale,recordExpense,receivePurchaseRefund} from '../src/lib/ledger';
 import {deductInventory} from '../src/lib/inventory';
 import {adjustCatalogItem} from '../src/lib/catalogAdjustments';
 import {businessDate} from '../src/lib/dates';
@@ -15,6 +15,7 @@ import {attachCashierReport,approveCashierDay} from '../src/lib/cashierDays';
 import {salesForReports} from '../src/lib/cashierDays';
 import {buildReport,reportRange,reportPoints} from '../src/lib/reporting';
 import {dashboardSchema,salesPageSchema} from '../src/lib/readModels';
+import {storeChanges} from '../src/lib/storeChanges';
 import type {StoreState} from '../src/lib/storeState';
 import type {SalesInvoice,InventoryItem} from '../src/types/erp';
 const active=!!process.env.AGOUZ_TEST_PG_CONTAINER;
@@ -333,6 +334,41 @@ function sale(quantity=2,item=bean):SalesInvoice{
   return {id:'sale',invoiceNumber:'SALE-1',date:businessDate(),saleType:'retail',customerName:'Shop',items:[{itemId:item.id,itemName:item.name,category:item.category,quantity,unitLabel:item.baseUnit,normalizedQtyInBaseUnit:quantity,unitPrice:2,unitCost:item.costPrice,totalPrice:total,totalCost:cost,profit:Number((total-cost).toFixed(2))}],subtotal:total,discount:0,totalAmount:total,totalCost:cost,netProfit:Number((total-cost).toFixed(2)),paidAmount:total,remainingAmount:0,paymentMethod:'نقدي',partnerName:'Owner'};
 }
 function stockState():StoreState{return {...state,items:[{...bean}]};}
+it.skipIf(!active)('settles supplier refunds once, preserves them through older full saves and rejects editing the receipt',()=>{
+ const supplier={id:'supplier-refund',name:'Supplier',category:'Raw',address:'Cairo',representativeName:'Agent',
+  phone:'01012345678',balance:0,totalPurchases:0,invoicesCount:0};
+ const initial=recordFinancialOpening({...stockState(),suppliers:[supplier]},'2026-11-01',1000,
+  'Initial balance',{id:owner,name:'Owner'});
+ const source:StoreState={...initial,purchaseInvoices:[{
+  id:'cancelled-purchase',invoiceNumber:'PUR-REFUND',date:'2026-11-01',supplierId:supplier.id,supplierName:supplier.name,
+  items:[{itemId:bean.id,itemName:bean.name,quantity:2,unit:'kg',purchasePrice:100,previousLastPrice:1,
+   previousWacCost:1,cheapestSupplierPrice:1,cheapestSupplierName:supplier.name,updateProductCost:true}],
+  totalAmount:200,paidAmount:200,remainingAmount:0,paymentMethod:'نقدي',partnerName:'Owner',
+  isCancelled:true,cancelledAt:'2026-11-02T10:00:00.000Z',cancelledBy:'Owner',refundDue:200,
+ }]};
+ seed(source);
+ const after=receivePurchaseRefund(source,'cancelled-purchase',75.25,'2026-11-03',{id:owner,name:'Owner'});
+ const operation=crypto.randomUUID();
+ const delta=(version:number,id:string,store:StoreState,previous=source)=>
+  `select public.bon_erp_save_store_changes(${version},${literal(storeChanges(toCloud(previous),toCloud(store)))},'${id}')`;
+ const saveOnce=delta(0,operation,after);
+ expect(readJson(`${saveOnce};${saveOnce};select public.bon_erp_cash_summary('2026-11-01','2026-11-03')`))
+  .toMatchObject({inflow:75.25,closing:875.25,pendingRefunds:124.75});
+ expect(readJson(`${saveOnce};select public.bon_erp_cash_summary('2026-11-01','2026-11-02')`))
+  .toMatchObject({inflow:0,closing:800,pendingRefunds:200});
+ const afterWithLegacyInvoice={...after,purchaseInvoices:source.purchaseInvoices};
+ expect(readJson(`${saveOnce};select public.bon_erp_save_store(1,${literal(toCloud(afterWithLegacyInvoice))},gen_random_uuid());
+  select purchase_invoices->0->'refundReceipts' from public.bon_elagouz_store where id='main_store'`))
+  .toEqual(after.purchaseInvoices[0].refundReceipts);
+ const damaged={...after,purchaseInvoices:[{...after.purchaseInvoices[0],refundReceipts:[]}]};
+ expect(()=>asUser(owner,`${saveOnce};${delta(1,crypto.randomUUID(),damaged,after)}`)).toThrow('INVALID_SUPPLIER_REFUND_HISTORY');
+ const first=after.purchaseInvoices[0].refundReceipts![0];
+ const excessive={...after,purchaseInvoices:[{
+  ...after.purchaseInvoices[0],refundReceipts:[first,{...first,id:crypto.randomUUID(),amount:125}],
+ }]};
+ expect(()=>asUser(owner,`${saveOnce};${delta(1,crypto.randomUUID(),excessive,after)}`)).toThrow('INVALID_SUPPLIER_REFUND');
+ expect(()=>asUser(owner,`${saveOnce};${delta(0,crypto.randomUUID(),after)}`)).toThrow('STORE_CONFLICT');
+});
 it.skipIf(!active)('accepts count products and one-to-one count recipes while rejecting cross-dimension units',()=>{
  const counted:InventoryItem={...bean,id:'counted',code:'C1',category:'direct_product',baseUnit:'count',hasRecipe:false,recipe:[]};
  expect(()=>save(toCloud({...state,items:[counted]}))).not.toThrow();

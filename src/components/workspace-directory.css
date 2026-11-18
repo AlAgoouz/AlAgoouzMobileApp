@@ -1,6 +1,6 @@
 .sections-hub { gap: 1rem; }
 .directory-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .65rem 1rem; }
-.directory-heading h1 { font-size: clamp(1.35rem, 3vw, 1.85rem); font-weight: 850; }
+.directory-heading h1 { font-size: clamp(1.35rem, 3vw, 1.85rem); font-weight:800; }
 .directory-quick-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
 .directory-quick-actions button {
   display: inline-flex; align-items: center; gap: .4rem; min-height: 44px; padding-inline: .65rem;
@@ -28,7 +28,7 @@
 .directory-link-copy .section-tile-description { font-size: .69rem; line-height: 1.65; color: #65584d; }
 .sections-hub .section-count { flex: none; }
 .sections-hub .section-tile-arrow { position: static; flex: none; width: 1rem; height: 1rem; border: 0; padding: 0; }
-@media (min-width: 640px) { .section-group .section-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (min-width: 768px) { .section-group .section-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (hover:hover) {
   .directory-quick-actions button:hover { border-color: #8d6a39; background: #ecdbb9; }
 }

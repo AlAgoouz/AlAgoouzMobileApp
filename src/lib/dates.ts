@@ -7,6 +7,12 @@ export function businessDate(date = new Date()): string {
   }).format(date);
 }
 
+export function validCalendarDate(value: string) {
+  const timestamp = value + 'T12:00:00Z';
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(timestamp)) && new Date(timestamp).toISOString().slice(0, 10) === value;
+}
+
 export type ReportPeriod = 'today' | '7days' | '30days' | 'all';
 export function isInPeriod(
   value: string,

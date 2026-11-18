@@ -1,4 +1,5 @@
-import {businessDate} from './dates';
+import {businessDate, validCalendarDate} from './dates';
+export {validCalendarDate} from './dates';
 import {operatingExpenses} from './ledger';
 import type {Expense} from '../types/erp';
 import type {ReportSale} from './cashierDays';
@@ -7,7 +8,6 @@ export type PeriodKind='today'|'week'|'month'|'custom'|'all';
 export interface PeriodSelection {kind:PeriodKind;from:string;to:string;}
 export interface ReportRange {from:string;to:string;label:string;valid:boolean;}
 export const initialPeriod=():PeriodSelection=>({kind:'month',from:businessDate().slice(0,7)+'-01',to:businessDate()});
-export function validCalendarDate(value:string){return /^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value+'T12:00:00Z'))&&new Date(value+'T12:00:00Z').toISOString().slice(0,10)===value;}
 export function reportRange(period:PeriodSelection,today=businessDate()):ReportRange{
  let from=today,to=today,label='اليوم';
  if(period.kind==='week'){const d=new Date(today+'T12:00:00Z');d.setUTCDate(d.getUTCDate()-6);from=d.toISOString().slice(0,10);label='آخر 7 أيام';}
@@ -39,7 +39,8 @@ export function buildReport(sales:ReportSale[],expenses:Expense[],range:ReportRa
  const points=reportPoints([...entries].map(([date,value])=>({date,...value})),range);
  return {invoices,active,expenses:periodExpenses,revenue,cost,gross,spent,net:gross===null?null:gross-spent,margin:gross===null?null:revenue?((gross-spent)/revenue)*100:0,points,pendingCostDays};
 }
-export const money=(value:number|null)=>value===null?'غير مكتمل':new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(Object.is(value,-0)?0:value);
+const moneyFormat = new Intl.NumberFormat('ar-EG', {maximumFractionDigits: 2});
+export const money = (value: number | null) => value === null ? 'غير مكتمل' : moneyFormat.format(Object.is(value, -0) ? 0 : value);
 
 export function reportPoints(rows:{date:string;sales:number;profit:number|null}[],range:ReportRange,firstDate?:string|null,lastDate?:string|null){
  const entries=new Map(rows.map(row=>[row.date,{sales:row.sales,profit:row.profit}]));

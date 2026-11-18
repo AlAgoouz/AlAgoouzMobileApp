@@ -4,6 +4,7 @@ import {recordFinancialOpening,saveFinancialOpening,financialPosition} from '../
 import {StoreEngine} from '../src/lib/storeEngine';
 import {buildReport} from '../src/lib/reporting';
 import {salesForReports} from '../src/lib/cashierDays';
+import {receivePurchaseRefund} from '../src/lib/ledger';
 import type {SalesInvoice,PurchaseInvoice,Expense,CashierDay} from '../src/types/erp';
 const actor={id:'11111111-1111-4111-8111-111111111111',name:'Owner'};
 const base=(amount=1000)=>recordFinancialOpening(emptyStore,'2026-11-01',amount,'ترحيل أكتوبر بعد تسوية الشركاء',actor);
@@ -56,6 +57,21 @@ it('includes collections against old debt without reintroducing October sales',(
 it('keeps supplier refund claims out of cash until a receipt is recorded',()=>{
  const state={...base(),purchaseInvoices:[purchase({isCancelled:true,cancelledAt:'2026-11-03T10:00:00Z',refundDue:200})]};
  expect(position(state)).toMatchObject({inflow:0,outflow:200,pendingRefunds:200,closing:800});
+});
+
+it('records partial supplier refunds on receipt dates without duplicating purchases or profit',()=>{
+ const before={...base(),purchaseInvoices:[purchase({isCancelled:true,cancelledAt:'2026-11-03T10:00:00Z',refundDue:200})]};
+ const first=receivePurchaseRefund(before,'purchase',75.25,'2026-11-04',actor);
+ expect(position(first,'2026-11-01','2026-11-03')).toMatchObject({inflow:0,pendingRefunds:200});
+ expect(position(first)).toMatchObject({inflow:75.25,outflow:200,pendingRefunds:124.75,closing:875.25});
+ expect(()=>receivePurchaseRefund(first,'purchase',125,'2026-11-05',actor)).toThrow();
+ expect(()=>receivePurchaseRefund(first,'purchase',1,'2026-11-02',actor)).toThrow();
+ const final=receivePurchaseRefund(first,'purchase',124.75,'2026-11-05',actor);
+ expect(position(final)).toMatchObject({inflow:200,pendingRefunds:0,closing:1000});
+ expect(final.items).toBe(before.items);
+ expect(final.salesInvoices).toBe(before.salesInvoices);
+ expect(final.auditLogs).toHaveLength(2);
+ expect(parseBackup(createBackup(final)).purchaseInvoices).toEqual(final.purchaseInvoices);
 });
 it('reverses cash expenses across period boundaries without recounting payroll',()=>{
  const state={...base(),expenses:[expense({date:'2026-10-25',amount:25,isCancelled:true,cancelledAt:'2026-11-02T10:00:00Z'}),expense({id:'second',isCancelled:true,cancelledAt:'2026-12-02T10:00:00Z'})]};

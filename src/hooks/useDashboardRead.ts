@@ -8,16 +8,20 @@ export function useDashboardRead(userId:string|undefined,enabled:boolean,period:
  const [revision,setRevision]=useState(0),[result,setResult]=useState<{key:string;data:DashboardModel|null;error:string}>({key:'',data:null,error:''});
  useEffect(()=>{
   if(!userId||!enabled)return;
-  let alive=true,version:number|undefined,queueCount:number|undefined,checking=false;
+  let alive=true,version:number|undefined,queueCount:number|undefined,checking=false,loading=false;
+  let needsReload=true;
   setResult({key,data:null,error:''});
   const load=async()=>{
-   try{const data=dashboardSchema.parse(await readRpc('bon_erp_dashboard_v2',{p_from:range.from,p_to:range.to}));if(alive){version=data.version;queueCount=data.queued;setResult({key,data,error:''});}}
-   catch{if(alive)setResult({key,data:null,error:'تعذر تحميل ملخص المحل. أعد المحاولة؛ الأرقام لم تُحمّل بعد.'});}
+   if(loading)return;
+   loading=true;
+   try{const data=dashboardSchema.parse(await readRpc('bon_erp_dashboard_v2',{p_from:range.from,p_to:range.to}));if(alive){version=data.version;queueCount=data.queued;needsReload=false;setResult({key,data,error:''});}}
+   catch{needsReload=true;if(alive)setResult(previous=>({...previous,key,error:'تعذر تحميل ملخص المحل. أعد المحاولة؛ الأرقام لم تُحمّل بعد.'}));}
+   finally{loading=false;}
   };
   const check=async()=>{
-   if(!alive||checking||document.visibilityState==='hidden'||!navigator.onLine)return;
+   if(!alive||checking||loading||document.visibilityState==='hidden'||!navigator.onLine)return;
    checking=true;
-   try{const sb=getSupabaseClient();if(!sb)return;const [response,queue]=await Promise.all([sb.from('bon_elagouz_store').select('version').eq('id','main_store').single(),sb.from('cashier_sync_queue').select('id',{count:'exact',head:true}).eq('processed',false)]);if(response.error||queue.error||queue.count===null)throw Error('VERSION_CHECK_FAILED');if(alive&&version!==undefined&&(Number(response.data.version)!==version||queue.count!==queueCount))await load();else if(alive)setResult(previous=>previous.key===key&&previous.error?{...previous,error:''}:previous);}
+   try{if(needsReload){await load();return;}const sb=getSupabaseClient();if(!sb)return;const [response,queue]=await Promise.all([sb.from('bon_elagouz_store').select('version').eq('id','main_store').single(),sb.from('cashier_sync_queue').select('id',{count:'exact',head:true}).eq('processed',false)]);if(response.error||queue.error||queue.count===null)throw Error('VERSION_CHECK_FAILED');if(alive&&(Number(response.data.version)!==version||queue.count!==queueCount))await load();else if(alive)setResult(previous=>previous.key===key&&previous.error?{...previous,error:''}:previous);}
    catch{if(alive)setResult(previous=>previous.key===key?{...previous,error:'تعذر التحقق من أحدث البيانات؛ المعروض هو آخر ملخص وصل بنجاح.'}:previous);}
    finally{checking=false;}
   };

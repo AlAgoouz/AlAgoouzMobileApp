@@ -10,6 +10,8 @@ it('keeps a ten-thousand-item catalog bounded and requires explicit confirmation
  render(<CashierRowReview index={0} items={items} suggestions={[{itemId:'item-9999',code:'B9999',name:'Catalog 9999',score:91}]} busy={false} onChange={onChange}/>);
  expect(onChange).not.toHaveBeenCalled();expect(screen.getByLabelText('مطابقة الصف 1').querySelectorAll('option').length).toBeLessThanOrEqual(32);
  expect(screen.getByLabelText('مطابقة الصف 1').getAttribute('value')).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:/Catalog 9999.*B9999/}));
+ expect(onChange).toHaveBeenCalledExactlyOnceWith({itemId:'item-9999',unit:''});
  fireEvent.change(screen.getByLabelText('بحث لصنف الصف 1'),{target:{value:'B9999'}});
  fireEvent.change(screen.getByLabelText('مطابقة الصف 1'),{target:{value:'item-9999'}});
  expect(onChange).toHaveBeenLastCalledWith({itemId:'item-9999',unit:''});

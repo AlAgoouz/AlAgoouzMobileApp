@@ -3,10 +3,15 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { getSupabaseClient } from '../lib/supabaseSync';
 import { StoreEngine } from '../lib/storeEngine';
 import { cloudStoreInput, toCloud } from '../lib/storeState';
+import {storeChanges} from '../lib/storeChanges';
 import { scrubLegacyPasswords } from '../lib/legacyCache';
 import { authErrorMessage } from '../lib/authErrors';
 import { StoreWriteFailure,storeWriteError } from '../lib/storeErrors';
-import { clearRecoveryDraft, saveRecoveryDraft } from '../lib/recoveryDraft';
+import { clearRecoveryDraft, forgetRecoveryDraft, recoveryDraftKey, rememberRecoveryDraft, saveRecoveryDraft } from '../lib/recoveryDraft';
+
+function isTransientStatus(status: number | undefined) {
+  return status === 0 || status === 408 || status === 429 || (status !== undefined && status >= 500);
+}
 
 export function useErpStore(loadFull=true) {
   const fullRequested=useRef(loadFull);fullRequested.current=loadFull;
@@ -26,8 +31,32 @@ export function useErpStore(loadFull=true) {
   const activeUser = useRef<string | null>(null);
   const engineRef = useRef<StoreEngine>();
   if (!engineRef.current) {
+    const draftKey = `${recoveryDraftKey}:${crypto.randomUUID()}`;
     engineRef.current = new StoreEngine(
       {
+        async saveChanges(before, state, version, operationId, queueId) {
+          const payload = toCloud(state);
+          if (JSON.stringify(payload).length <= 512 * 1024 && !state.purchaseInvoices.some(i=>i.refundReceipts?.length))
+            return this.save(state, version, operationId, queueId);
+          const sb = getSupabaseClient();
+          if (!sb) throw new Error('اتصال التخزين غير متاح.');
+          const {data,error,status} = await sb.rpc('bon_erp_save_store_changes', {
+            p_expected_version: version,
+            p_changes: storeChanges(toCloud(before), payload),
+            p_operation_id: operationId,
+            p_queue_id: queueId ?? null,
+          });
+          if (error) {
+            const transient = isTransientStatus(status);
+            const code = /^[A-Z][A-Z0-9_]+/.exec(error.message)?.[0] ?? error.code;
+            if (error.code === 'PGRST202')
+              throw new StoreWriteFailure(error.code, 'حفظ هذه العملية يحتاج ترقية قاعدة البيانات.');
+            throw new StoreWriteFailure(code, transient ? 'تعذر تأكيد الحفظ بسبب الاتصال. يمكنك إعادة المحاولة.' : storeWriteError(error.message), transient);
+          }
+          if (!data || !Number.isSafeInteger(Number(data.version)))
+            throw new Error('لم يصل تأكيد حفظ صالح.');
+          return Number(data.version);
+        },
         async getVersion() {
           const sb = getSupabaseClient();
           if (!sb) throw new Error('إعداد الاتصال غير صالح');
@@ -61,7 +90,6 @@ export function useErpStore(loadFull=true) {
           if (!sb) throw new Error('إعداد الاتصال غير صالح');
           const { data, error } = await sb.rpc('bon_erp_discard_cashier_save', {p_operation_id: operationId});
           if (error || (data !== 'saved' && data !== 'discarded')) throw new Error('لم يصل تأكيد صالح');
-          clearRecoveryDraft(localStorage);
           return data;
         },
         async save(state, version, operationId, queueId, restore) {
@@ -75,7 +103,7 @@ export function useErpStore(loadFull=true) {
           });
           if (error) {
             const code=/^[A-Z][A-Z0-9_]+/.exec(error.message)?.[0]??error.code;
-            const transient=status===0||status===408||status===429||status>=500;
+            const transient=isTransientStatus(status);
             throw new StoreWriteFailure(code,transient?'الاتصال بالخادم غير مستقر؛ إعادة المحاولة تستخدم نفس العملية.':storeWriteError(error.message),transient);
           }
           if (!data || !Number.isSafeInteger(Number(data.version)))
@@ -85,9 +113,11 @@ export function useErpStore(loadFull=true) {
       },
       (state) => {
         // Preserve a draft before network writes. Legacy cache remains untouched for recovery.
-        saveRecoveryDraft(localStorage, state);
+        saveRecoveryDraft(localStorage, state, undefined, draftKey);
+        rememberRecoveryDraft(draftKey);
       },
       (before,after)=>assertUserChanges(before,after,accessRef.current),
+      () => clearRecoveryDraft(localStorage, draftKey),
     );
   }
   const engine = engineRef.current;
@@ -119,6 +149,9 @@ export function useErpStore(loadFull=true) {
         error,
       } = await sb.auth.getUser();
       if (disposed || run !== generation.current) return;
+      if (error && (isTransientStatus(error.status) || error.name === 'AuthRetryableFetchError')) {
+        throw error;
+      }
       if (error || !user) {
         activeUser.current = null;
         accessRef.current = null;
@@ -131,12 +164,14 @@ export function useErpStore(loadFull=true) {
         setAuthReady(true);
         return;
       }
-      let {data:profile,error:profileError}=await sb.rpc('bon_erp_my_access');
+      let {data:profile,error:profileError,status:profileStatus}=await sb.rpc('bon_erp_my_access');
       if(!profile && !profileError){
         const setup=await sb.rpc('bon_erp_bootstrap_owner');
-        if(!setup.error){const result=await sb.rpc('bon_erp_my_access');profile=result.data;profileError=result.error;}
+        if(!setup.error){const result=await sb.rpc('bon_erp_my_access');profile=result.data;profileError=result.error;profileStatus=result.status;}
+        else if(isTransientStatus(setup.status))throw setup.error;
       }
       if(disposed||run!==generation.current)return;
+      if(profileError && isTransientStatus(profileStatus))throw profileError;
       if(profileError||!profile||!['partner','cashier'].includes(profile.role)){
         accessRef.current=null;activeUser.current=null;
         setAuthError('الحساب غير مخوّل للدخول أو تم تعطيله؛ راجع المالك');
@@ -191,10 +226,13 @@ export function useErpStore(loadFull=true) {
         }, 0);
       }
     });
+    const online = () => void resolveUser();
+    window.addEventListener('online', online);
     return () => {
       disposed = true;
       ++generation.current;
       clearInterval(accessTimer);
+      window.removeEventListener('online', online);
       subscription.unsubscribe();
     };
   }, [engine]);
@@ -232,20 +270,23 @@ export function useErpStore(loadFull=true) {
       if (!fullRequested.current || document.visibilityState === 'hidden' || !navigator.onLine) return;
       void engine.refresh();
     };
+    const reconnect = () => {
+      if (fullRequested.current) void engine.reconnect();
+    };
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (engine.hasPending) {
         event.preventDefault();
         event.returnValue = '';
       }
     };
-    window.addEventListener('online', refresh);
+    window.addEventListener('online', reconnect);
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
     window.addEventListener('beforeunload', beforeUnload);
     return () => {
       clearInterval(timer);
       void sb.removeChannel(channel);
-      window.removeEventListener('online', refresh);
+      window.removeEventListener('online', reconnect);
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
       window.removeEventListener('beforeunload', beforeUnload);
@@ -270,6 +311,7 @@ export function useErpStore(loadFull=true) {
     const result = await sb?.auth.signOut();
     if (result?.error) throw new Error('تعذر إنهاء الجلسة؛ حاول مرة أخرى');
     clearRecoveryDraft(localStorage);
+    forgetRecoveryDraft();
     setMember(null);
     engine.logout();
   }

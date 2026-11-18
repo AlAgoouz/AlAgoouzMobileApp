@@ -10,11 +10,13 @@ import {AppErrorBoundary} from './components/AppErrorBoundary';
 import {Modal} from './components/Modal';
 import {useWorkspaceNavigation} from './hooks/useWorkspaceNavigation';
 import {DashboardScreen} from './components/DashboardScreen';
+import {SaveStatus} from './components/SaveStatus';
+import {WorkspaceQuickAccess} from './components/WorkspaceQuickAccess';
 import {WorkspaceSidebar} from './components/WorkspaceSidebar';
 import {StockMovementModal} from './components/StockMovementModal';
 import {ExpenseRecordDetail} from './components/ExpenseRecordDetail';
 import {CashierDayDetail} from './components/CashierDayDetail';
-import {initialPeriod} from './lib/reporting';
+import {initialPeriod,reportRange} from './lib/reporting';
 import {canView,canWrite,writePermissions} from './lib/userAccess';
 import {SectionsHub} from './components/SectionsHub';
 import type {QueuedCashierReport} from './components/CashierDayScreen';
@@ -79,6 +81,7 @@ import {
   saveSaleReturn,
   recordPayment,
   cancelPurchase,
+  receivePurchaseRefund,
   recordExpense,
   cancelExpense,
   operatingExpenses,
@@ -215,6 +218,10 @@ export default function App() {
   const cloud = useErpStore(needsFullStore);
   const { engine, member } = cloud;
   const dashboard=useDashboardRead(member?.userId,!!member&&canView(member)&&['home','sections','sales_invoices'].includes(activeScreen),reportPeriod);
+  const today = businessDate();
+  const range = reportRange(reportPeriod, today);
+  const needsTodayRead = today < range.from || today > range.to || Date.parse(range.to) - Date.parse(range.from) > 62 * 86400000;
+  const dailyDashboard = useDashboardRead(member?.userId, !!member && canView(member) && activeScreen === 'home' && needsTodayRead, {kind:'today',from:today,to:today});
   const [recipeTargetId,setRecipeTargetId]=useState<string>();
   const [purchaseTargetId,setPurchaseTargetId]=useState<string>();
   const [movementId,setMovementId]=useState<string>();
@@ -965,12 +972,7 @@ export default function App() {
           بيئة اختبار محلية — بيانات تجريبية منفصلة
         </div>
       )}
-      {(needsFullStore||engine.hasPending)&&cloud.status !== 'ready' && <div
-        role="status"
-        className="sticky top-0 z-40 w-full bg-stone-900 text-white text-xs text-center p-2"
-      >
-        {statusText}
-      </div>}
+      <SaveStatus savedAt={cloud.savedAt} ready={cloud.status === 'ready'} message={needsFullStore || engine.hasPending ? statusText : ''}/>
       {cloud.recoveryWarning&&<p role="status" className="w-full p-3 bg-amber-100 text-amber-900 text-sm">{cloud.recoveryWarning}</p>}
       {queueError && (
         <div
@@ -1056,11 +1058,12 @@ export default function App() {
 
       {/* حاوية التطبيق بهوية بُن العجوز الفاتحة والذهبية */}
       <WorkspaceSidebar name={currentPartner.name} screen={activeScreen==='more'&&moreInitialTab!=='menu'?moreInitialTab:activeScreen==='insights'?'reports':activeScreen} onNavigate={navigateScreen} isOwner={member.isOwner}/>
-      <div className="app-workspace min-h-screen bg-[#FAF8F4] text-[#1E1612] relative pb-16">
+      <div className="app-workspace min-h-screen relative pb-16">
+        <WorkspaceQuickAccess member={member} onNavigate={navigateScreen} showButton={activeScreen==='home'||activeScreen==='sections'}/>
         <div className="screen-stage" key={activeScreen+':'+moreInitialTab}>
         <AppErrorBoundary key={activeScreen+':'+moreInitialTab} onReset={()=>setActiveScreen('home')}>
         {/* ================= 1. الشاشة الرئيسية: لوحة الإحصائيات والرسوم البيانية الاحترافية ================= */}
-        {activeScreen === 'home'&&<DashboardScreen model={dashboard.data} error={dashboard.error} onRetry={dashboard.retry} period={reportPeriod} onPeriod={setReportPeriod} name={currentPartner.name} isOwner={member?.isOwner} onNavigate={navigateScreen}/>}
+        {activeScreen === 'home'&&<DashboardScreen model={dashboard.data} dailyModel={needsTodayRead ? dailyDashboard.data : dashboard.data} dailyError={needsTodayRead ? dailyDashboard.error : dashboard.error} onRetryDaily={needsTodayRead ? dailyDashboard.retry : dashboard.retry} error={dashboard.error} onRetry={dashboard.retry} period={reportPeriod} onPeriod={setReportPeriod} name={currentPartner.name} isOwner={member?.isOwner} onNavigate={navigateScreen}/>}
 
         {/* ================= 2. قسم الأقسام (بالتصميم الاحترافي الأول الفخم بالإسبريسو والذهبي) ================= */}
         {activeScreen === "sections" && <SectionsHub
@@ -1087,6 +1090,12 @@ export default function App() {
               showToast('تم حفظ فاتورة المشتريات '+invoice.invoiceNumber);
               return true;
             }}
+            onReceiveRefund={canWrite(member,'purchases') ? async (invoiceId, amount, date) => {
+              if(engine.hasPending)throw Error('انتظر تأكيد الحفظ الحالي ثم أعد المحاولة.');
+              engine.replace(receivePurchaseRefund(engine.state,invoiceId,amount,date,{id:member.userId,name:currentPartner.name}));
+              await engine.flush();
+              if(!engine.hasPending && engine.snapshot.status==='ready')showToast('تم تسجيل استلام المبلغ من المورد.');
+            } : undefined}
             onDeletePurchaseInvoice={(invId) => {
               safeAction(() => {
                 engine.replace(
@@ -1763,7 +1772,7 @@ export default function App() {
         </AppErrorBoundary>
         </div>
         {/* شريط القوائم السفلي المثبت دائماً في أسفل الشاشة مع قسم "الأقسام" بجانب "الرئيسية" */}
-        <nav aria-label="التنقل الرئيسي" style={{paddingBottom:'max(6px, env(safe-area-inset-bottom))'}} className="workspace-nav fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#E6DEC8] py-1.5 px-2 grid grid-cols-4 z-40 mx-auto shadow-[0_-4px_20px_rgba(30,22,18,0.06)]">
+        <nav aria-label="التنقل الرئيسي" style={{paddingBottom:'max(6px, env(safe-area-inset-bottom))'}} className="workspace-nav fixed bottom-0 left-0 right-0 workspace-nav-surface backdrop-blur-md border-t py-1.5 px-2 grid grid-cols-4 z-40 mx-auto">
           {[
             { id: "home", label: "الرئيسية", icon: Home },
             { id: "sections", label: "الأقسام", icon: LayoutGrid },
@@ -1784,20 +1793,12 @@ export default function App() {
                 className="min-h-[44px] flex flex-col items-center justify-center gap-0.5 py-0.5 transition"
               >
                 <div
-                  className={`px-3.5 py-1 rounded-full transition-all ${
-                    isActive
-                      ? "bg-[#1E1612] text-[#D4AF37] shadow-sm border border-[#C59B27]/50"
-                      : "text-[#8C7B6B] hover:text-[#1E1612]"
-                  }`}
+                  className="px-3.5 py-1 rounded-full transition-all border border-transparent"
                 >
                   <IconComp className="w-4 h-4" />
                 </div>
                 <span
-                  className={`text-[10px] ${
-                    isActive
-                      ? "font-black text-[#1E1612]"
-                      : "font-semibold text-[#8C7B6B]"
-                  }`}
+                  className="text-[10px] font-bold"
                 >
                   {tab.label}
                 </span>
