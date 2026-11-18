@@ -212,10 +212,10 @@ export const ProductionAndRecipesScreen: React.FC<
                     data-shortage={!sim.isEnough}
                   >
                     <div className="space-y-0.5">
-                      <div className="text-xs font-extrabold text-slate-900">
+                      <div className="text-xs font-extrabold text-ink-strong">
                         {sim.ingredientName}
                       </div>
-                      <div className="text-[11px] text-slate-500">
+                      <div className="text-xs text-ink">
                         في الكيلو الواحد: {sim.perKgQty}{" "}
                         {displayUnit(sim.perKgUnit)}{" "}
                         • المتاح بالمخزن:{" "}
@@ -226,14 +226,14 @@ export const ProductionAndRecipesScreen: React.FC<
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs font-black text-amber-900">
+                      <div className="text-xs font-black text-gold">
                         {sim.invalidUnit
                           ? "⚠️ وحدة الكمية غير متوافقة مع وحدة الصنف"
                           : `مطلوب: ${sim.totalRequiredInBase} كجم (${sim.totalRequiredGrams} جم)`}
                       </div>
                       <div
-                        className={`text-[11px] font-bold ${
-                          sim.isEnough ? "text-emerald-600" : "text-red-600"
+                        className={`text-xs font-bold ${
+                          sim.isEnough ? "text-status-ok" : "text-status-danger"
                         }`}
                       >
                         {sim.isEnough
@@ -299,58 +299,62 @@ export const ProductionAndRecipesScreen: React.FC<
             </label>
             <RecordPagination {...historyPage}/>
             {!historyPage.total&&<p className="record-state">{productionBatches.length?'لا توجد تشغيلات مطابقة.':'لا توجد تشغيلات مسجلة.'}</p>}
-            {historyPage.visible.map((batch) => (
-              <div
-                key={batch.id}
-                className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-2.5"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg">
-                    #{batch.batchNumber} • {batch.date}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-emerald-700">
-                      +{batch.quantityProducedKg} كجم جاهز
+            <div className="record-grid">
+              {historyPage.visible.map((batch) => (
+                <article
+                  key={batch.id}
+                  className="record-card space-y-2.5"
+                >
+                  <div className="record-heading mb-0">
+                    <span className="record-badge" dir="ltr">
+                      #{batch.batchNumber} • {batch.date}
                     </span>
-                    {onDeleteBatch && (
-                      <button
-                        onClick={() => onDeleteBatch(batch.id)}
-                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
-                        title="حذف التشغيلة"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="text-sm font-extrabold text-slate-900">
-                  {batch.blendName}
-                </div>
-                <div className="text-xs text-slate-600">
-                  تكلفة الكيلو: <b>{batch.unitCostPerKg} ج.م</b> • إجمالي تكلفة
-                  التشغيلة: <b>{batch.totalBatchCost.toFixed(2)} ج.م</b>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-2.5 space-y-1 border border-slate-100">
-                  <div className="text-[11px] font-bold text-slate-500">
-                    الخامات التي تم سحبها من المخزن:
-                  </div>
-                  {batch.ingredientsConsumed.map((ing, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between text-[11px] text-slate-700"
-                    >
-                      <span>• {ing.ingredientName}</span>
-                      <span className="font-bold">
-                        {ing.displayQuantity} ({ing.cost} ج.م)
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-status-ok">
+                        +{batch.quantityProducedKg} كجم جاهز
                       </span>
+                      {onDeleteBatch && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteBatch(batch.id)}
+                          className="action-button text-status-danger border-status-danger-line"
+                          aria-label={`حذف التشغيلة ${batch.batchNumber}`}
+                          title="حذف التشغيلة"
+                        >
+                          <Trash2 className="w-4 h-4" aria-hidden="true" />
+                        </button>
+                      )}
                     </div>
-                  ))}
-                </div>
-                <div className="text-[11px] text-slate-400">
-                  تم الإنتاج بواسطة: {batch.partnerName}
-                </div>
-              </div>
-            ))}
+                  </div>
+                  <h3 className="text-sm font-extrabold text-ink-strong">
+                    {batch.blendName}
+                  </h3>
+                  <div className="text-xs text-ink">
+                    تكلفة الكيلو: <b>{batch.unitCostPerKg} ج.م</b> • إجمالي تكلفة
+                    التشغيلة: <b>{batch.totalBatchCost.toFixed(2)} ج.م</b>
+                  </div>
+                  <div className="bg-surface-sunken rounded-md p-2.5 space-y-1 border border-line-subtle">
+                    <div className="text-xs font-bold text-ink">
+                      الخامات التي تم سحبها من المخزن:
+                    </div>
+                    {batch.ingredientsConsumed.map((ing, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between text-xs text-ink-strong"
+                      >
+                        <span>• {ing.ingredientName}</span>
+                        <span className="font-bold">
+                          {ing.displayQuantity} ({ing.cost} ج.م)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-xs text-ink-faint">
+                    تم الإنتاج بواسطة: {batch.partnerName}
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -41,7 +41,7 @@
 .modal-body { padding:20px;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;font-size:13px;line-height:1.85; }
 .modal-body > * + * { margin-top:14px; }
 .modal-body label { font-size:12px;font-weight:700;color:#6e583e; }
-.modal-body input:not([type=checkbox]):not([type=radio]),.modal-body select,.modal-body textarea { min-height:46px;max-width:100%;min-width:0;font-size:14px;font-weight:500;color:var(--ink);border:1px solid var(--control-line);border-radius:var(--r-md);background:var(--control); }
+.modal-body input:not([type=checkbox]):not([type=radio]),.modal-body select,.modal-body textarea { min-height:46px;max-width:100%;min-width:0;font-size:14px;font-weight:500;color:var(--ink) !important;border:1px solid var(--control-line) !important;border-radius:var(--r-md);background-color:var(--control) !important;padding-inline:.75rem; }
 .modal-body label > input:not([type=checkbox]):not([type=radio]),.modal-body label > select,.modal-body label > textarea { display:block;width:100%;margin-top:7px; }
 .modal-body input[type=checkbox],.modal-body input[type=radio] { width:18px;height:18px;min-height:18px;flex:0 0 18px;margin-top:3px;accent-color:#8d6b2e; }
 .modal-body fieldset { min-width:0; }
@@ -67,6 +67,7 @@
   .operation-actions > button,.operation-actions > div { flex:1; }
   .operation-actions > div > button { flex:1; }
   .agouz-modal { width:calc(100% - 20px);max-height:calc(100vh - 20px);max-height:calc(100dvh - 20px);border-radius:22px; }
+  .agouz-modal:not([data-layout=side]) { margin-block:auto max(10px, env(safe-area-inset-bottom)); }
   .modal-heading { padding:16px;gap:10px; }
   .modal-heading h2 { font-size:16px; }
   .modal-symbol { width:36px;height:36px;border-radius:var(--r-md); }

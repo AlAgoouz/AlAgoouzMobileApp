@@ -2,11 +2,12 @@ import React from 'react';
 import {ChevronLeft, Home, LayoutGrid, UserRound} from 'lucide-react';
 import {sectionLinks, workspaceGroups} from './workspaceSections';
 
-export function WorkspaceSidebar({screen, name, onNavigate, isOwner = false}: {
+export function WorkspaceSidebar({screen, name, onNavigate, isOwner = false, counts = {}}: {
   screen: string;
   name: string;
   onNavigate: (id: string) => void;
   isOwner?: boolean;
+  counts?: Record<string, number>;
 }) {
   const links = [
     {id: 'home', title: 'نظرة على المحل', icon: Home, group: 'مساحة العمل'},
@@ -26,6 +27,7 @@ export function WorkspaceSidebar({screen, name, onNavigate, isOwner = false}: {
         <h2>{group}</h2>
         {groupLinks.map(link => <button key={link.id} type="button" aria-current={screen === link.id ? 'page' : undefined} onClick={() => onNavigate(link.id)}>
           <link.icon size={18} aria-hidden="true" /><span>{link.title}</span>
+          {counts[link.id] > 0 && <small className={`sidebar-count${link.id === 'shortages' ? ' has-shortage' : ''}`}>{counts[link.id].toLocaleString('ar-EG')}</small>}
           {screen === link.id && <ChevronLeft size={15} aria-hidden="true" />}
         </button>)}
       </section>;

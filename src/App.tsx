@@ -968,7 +968,7 @@ export default function App() {
               : "تعذر تأكيد الحفظ";
 
   return (
-    <div className="agouz-app min-h-screen bg-[#EFECE4] flex flex-col items-center justify-start">
+    <div className="agouz-app min-h-screen bg-surface-page flex flex-col items-center justify-start">
       {getSupabaseCredentials().url.startsWith("http://127.0.0.1:") && (
         <div className="w-full bg-amber-100 p-2 text-center text-xs font-bold">
           بيئة اختبار محلية — بيانات تجريبية منفصلة
@@ -1053,15 +1053,15 @@ export default function App() {
 
       {/* إشعار عائم */}
       {toastNotification && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#1E1612] text-[#FBF5B7] px-4 py-3 rounded-2xl shadow-2xl border border-[#C59B27] flex items-center gap-2 text-xs font-extrabold max-w-sm w-[92%]">
-          <CheckCircle2 className="w-5 h-5 text-[#D4AF37] shrink-0" />
+        <div role="status" aria-live="polite" className="app-toast">
+          <CheckCircle2 className="w-5 h-5 text-gold-soft shrink-0" aria-hidden="true" />
           <span>{toastNotification}</span>
         </div>
       )}
 
       {/* حاوية التطبيق بهوية بُن العجوز الفاتحة والذهبية */}
-      <WorkspaceSidebar name={currentPartner.name} screen={activeScreen==='more'&&moreInitialTab!=='menu'?moreInitialTab:activeScreen==='insights'?'reports':activeScreen} onNavigate={navigateScreen} isOwner={member.isOwner}/>
-      <div className="app-workspace min-h-screen relative pb-16">
+      <WorkspaceSidebar name={currentPartner.name} screen={activeScreen==='more'&&moreInitialTab!=='menu'?moreInitialTab:activeScreen==='insights'?'reports':activeScreen} onNavigate={navigateScreen} isOwner={member.isOwner} counts={dashboard.data?.counts ?? {}}/>
+      <div className="app-workspace min-h-screen relative">
         <WorkspaceQuickAccess member={member} onNavigate={navigateScreen} showButton={activeScreen==='home'||activeScreen==='sections'}/>
         <div className="screen-stage" key={activeScreen+':'+moreInitialTab}>
         <AppErrorBoundary key={member.userId+':'+activeScreen+':'+moreInitialTab} recoveryAccess={recoveryAccess} onReset={()=>setActiveScreen('home')}>
@@ -1571,9 +1571,11 @@ export default function App() {
           />
         )}
 
-        {activeScreen === "staff_payroll" && (<>
-          <label className="block m-4 text-xs font-bold">حساب الشريك المالي للحركة<select aria-label="حساب الشريك المالي للحركة" className="block w-full border rounded-xl p-3 mt-2" value={financialPartner?.id??''} onChange={e=>setSelectedFinancialPartnerId(e.target.value)}><option value="">اختر الحساب المالي</option>{partners.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+        {activeScreen === "staff_payroll" && (
           <StaffAndPayrollScreen onOpenExpense={setExpenseDetailId}
+            partners={partners}
+            selectedFinancialPartnerId={financialPartner?.id??''}
+            onSelectFinancialPartnerId={setSelectedFinancialPartnerId}
             employees={employees}
             transactions={employeeTransactions}
             currentPartnerName={currentPartner.name}
@@ -1633,7 +1635,7 @@ export default function App() {
             }}
             onBack={() => setActiveScreen("home")}
           />
-        </>)}
+        )}
 
         {activeScreen === "more" && (
           <MoreMenuScreen

@@ -377,7 +377,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-28 flex flex-col">
+    <div className="operation-screen min-h-screen pb-28 flex flex-col">
 <OperationHeader title={<>{viewMode === "list"
               ? "المشتريات وفواتير التوريد"
               : "إنشاء فاتورة مشتريات جديدة"}</>} description={<>{viewMode === "list"
@@ -390,22 +390,22 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
             }
           }}>{viewMode === "list" ? (
           <button
+            type="button"
             onClick={handleStartNewInvoice}
-            className="operation-primary"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4" aria-hidden="true" />
             <span>فاتورة جديدة</span>
           </button>
         ) : (
           <button
+            type="button"
             onClick={() => setViewMode("list")}
-            className="text-xs font-bold text-[#D4AF37] bg-white/10 px-2.5 py-1.5 rounded-xl border border-[#C59B27]/30"
           >
             الفواتير ({purchaseInvoices.length})
           </button>
         )}</OperationHeader>
       {invoiceError && (
-        <p role="alert" className="text-red-700 bg-red-50 p-3 font-bold">
+        <p role="alert" className="text-status-danger bg-status-danger-bg border border-status-danger-line rounded-md p-3 mx-4 mt-2 font-bold">
           {invoiceError}
         </p>
       )}
@@ -488,404 +488,410 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
       {/* ================= الوضع الثاني: إنشاء فاتورة مشتريات جديدة واختيار الأصناف ================= */}
       {viewMode === "create" && (
-        <div className="p-3.5 space-y-3.5 flex-1">
-          {/* الخطوة 1: اختيار المورد وتاريخ الفاتورة */}
-          <div className="bg-white rounded-2xl border border-[#E6DEC8] p-3.5 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-[#1E1612] flex items-center gap-1.5">
-                <Truck className="w-4 h-4 text-[#9E7918]" />
-                <span>1. بيانات المورد وتاريخ الفاتورة</span>
-              </span>
-              {onQuickAddSupplier && (
-                <button
-                  onClick={() => setShowNewSupplierModal(true)}
-                  className="text-[11px] font-extrabold text-[#9E7918] bg-[#FDF8EB] border border-[#E8D8A8] px-2.5 py-1 rounded-lg flex items-center gap-1"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>+ مورد جديد</span>
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2 bg-[#FAF8F4] rounded-xl border border-[#E6DEC8] px-3 py-2">
-                <label className="text-[10px] text-[#8C7A6B] font-bold block">
-                  اختر المورد
-                </label>
-                <button type="button" className="picker-trigger" aria-haspopup="dialog" onClick={()=>setShowSupplierPicker(true)}>
-                  <Search size={17} aria-hidden="true"/>
-                  {suppliers.find(supplier=>supplier.id===selectedSupplierId)?.name??'اختيار مورد'}
-                </button>
-              </div>
-
-              <div className="bg-[#FAF8F4] rounded-xl border border-[#E6DEC8] px-2.5 py-2">
-                <label className="text-[10px] text-[#8C7A6B] font-bold block">
-                  التاريخ
-                </label>
-                <input
-                  type="date"
-                  value={invoiceDate}
-                  onChange={(e) => setInvoiceDate(e.target.value)}
-                  className="w-full text-[11px] font-black text-[#1E1612] bg-transparent focus:outline-none mt-0.5"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* الخطوة 2: اختيار الأصناف لإضافتها في الفاتورة */}
-          <div className="bg-white rounded-2xl border border-[#E6DEC8] p-3.5 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-[#1E1612] flex items-center gap-1.5">
-                <Package className="w-4 h-4 text-[#9E7918]" />
-                <span>2. اختر الأصناف لإضافتها للفاتورة</span>
-              </span>
-              {onQuickAddItem && (
-                <button
-                  onClick={() => setShowNewItemModal(true)}
-                  className="text-[11px] font-extrabold text-[#1E1612] bg-[#FDF8EB] border border-[#C59B27] px-2.5 py-1 rounded-lg flex items-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5 text-[#9E7918]" />
-                  <span>تعريف صنف جديد</span>
-                </button>
-              )}
-            </div>
-
-            {/* تبويبات تصفية الأصناف */}
-            <div className="grid grid-cols-4 gap-1.5">
-              {[{id:'all',label:'الكل'},...itemCategories.filter(c=>['raw_bean','direct_product','direct_drink','snack'].includes(c.id))].map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() =>
-                    setItemCategoryFilter(
-                      cat.id as 'all'|ItemCategory,
-                    )
-                  }
-                  className={`py-1.5 px-1 rounded-xl text-[10px] font-extrabold border transition ${
-                    itemCategoryFilter === cat.id
-                      ? "bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]"
-                      : "bg-[#FAF8F4] text-[#6E5D4F] border-[#E6DEC8]"
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-
-            <button type="button" className="picker-trigger" aria-haspopup="dialog" onClick={()=>setShowItemPickerModal(true)}>
-              <Search size={17} aria-hidden="true"/>اختيار صنف للفاتورة
-            </button>
-          </div>
-
-          {showItemPickerModal&&<RecordPicker title="اختيار صنف للمشتريات" searchLabel="ابحث باسم الصنف أو الكود"
-            options={filteredPickerItems.map(item=>({
-              id:item.id,title:item.name,keywords:item.barcode,
-              detail:item.code+' · الرصيد '+item.stock+' '+displayUnit(item.baseUnit),
-            }))}
-            onSelect={id=>{
-              const item=filteredPickerItems.find(value=>value.id===id);
-              if(item)addItemToCart(item);
-              setShowItemPickerModal(false);
-            }}
-            onClose={()=>setShowItemPickerModal(false)}/>}
-          {showSupplierPicker&&<RecordPicker title="اختيار المورد" searchLabel="ابحث باسم المورد أو التليفون"
-            options={suppliers.map(supplier=>({id:supplier.id,title:supplier.name,detail:[supplier.address,supplier.phone].filter(Boolean).join(' · ')}))}
-            selectedId={selectedSupplierId} onSelect={id=>{setSelectedSupplierId(id);setShowSupplierPicker(false);}}
-            onClose={()=>setShowSupplierPicker(false)}/>}
-
-          {/* بانر التنبيه لو هناك صنف بسعر أعلى من أرخص مورد */}
-          {higherThanCheapestCount > 0 && (
-            <div className="bg-red-50/90 border border-red-200 rounded-2xl p-3 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-xs font-black text-red-700">
-                    تنبيه: {higherThanCheapestCount} صنف بسعر أعلى من أرخص مورد
-                    مسجل
-                  </div>
-                  <div className="text-[10px] text-red-600/80 font-semibold">
-                    راجع مقارنة الموردين بالأسفل للحفاظ على تكلفة التوليفات
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* الخطوة 3: الأصناف المختارة داخل الفاتورة وتحديد الكميات والأسعار */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E6DEC8] space-y-4">
-            <div className="flex items-center justify-between border-b border-[#F2ECE1] pb-2.5">
-              <span className="text-xs font-black text-[#1E1612]">
-                3. بنود فاتورة المشتريات ({cart.length} أصناف)
-              </span>
-              <span className="text-xs font-black text-[#9E7918]">
-                الإجمالي: {totalInvoiceAmount.toLocaleString("ar-EG")} ج.م
-              </span>
-            </div>
-
-            {cart.length === 0 ? (
-              <div className="text-center py-8 space-y-2">
-                <div className="w-12 h-12 rounded-2xl bg-[#FAF8F4] border border-[#E6DEC8] text-[#9E7918] flex items-center justify-center mx-auto">
-                  <ShoppingBag className="w-6 h-6" />
-                </div>
-                <div className="text-xs font-extrabold text-[#6E5D4F]">
-                  الفاتورة فارغة حالياً
-                </div>
-                <div className="text-[11px] text-[#8C7A6B]">
-                  اختار صنف من الزر بالأعلى وحدد الكمية
-                  والسعر
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {cart.map((entry) => {
-                  const {
-                    item,
-                    quantity,
-                    purchasePrice,
-                    newRetailPrice,
-                    newWholesalePrice,
-                    updateCost,
-                  } = entry;
-                  const lineTotal = quantity * purchasePrice;
-                  const supplierPrice = latestSupplierPrices(item.supplierPrices).find(record=>record.supplierId===selectedSupplierId);
-                  const lastPrice = item.lastPurchasePrice || purchasePrice;
-                  const diffPercentFromLast =
-                    lastPrice > 0
-                      ? Math.round(
-                          ((purchasePrice - lastPrice) / lastPrice) * 100,
-                        )
-                      : 0;
-
-                  const cheapestRecord =
-                    item.supplierPrices.length > 0
-                      ? latestSupplierPrices(item.supplierPrices).reduce(
-                          (min, p) => (p.price < min.price ? p : min),
-                          latestSupplierPrices(item.supplierPrices)[0],
-                        )
-                      : {
-                          price: lastPrice,
-                          supplierName: "آخر مورد مسجل",
-                          date: "-",
-                        };
-
-                  const newWac = movingAverageCost(item.stock,item.costPrice,quantity,purchasePrice);
-
-                  const unitArabic =
-                    displayUnit(item.baseUnit);
-                  const controlId = 'purchase-' + item.id;
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="border border-[#E6DEC8] rounded-2xl p-3.5 space-y-3 bg-[#FAF8F4]/70"
+        <div className="record-workspace flex-1">
+          <div className="workspace-split-layout">
+            <div className="space-y-3.5 min-w-0">
+              {/* الخطوة 1: اختيار المورد وتاريخ الفاتورة */}
+              <section className="operation-surface space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-xs font-black text-ink-strong flex items-center gap-1.5">
+                    <Truck className="w-4 h-4 text-gold" aria-hidden="true" />
+                    <span>1. بيانات المورد وتاريخ الفاتورة</span>
+                  </span>
+                  {onQuickAddSupplier && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewSupplierModal(true)}
+                      className="action-button"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-black text-[#1E1612]">
-                          {item.name}
-                        </span>
-                        <button
-                          onClick={() => removeCartItem(item.id)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
-                          aria-label={"حذف " + item.name + " من الفاتورة"}
-                          title="حذف الصنف من الفاتورة"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <UserPlus className="w-4 h-4 text-gold" aria-hidden="true" />
+                      <span>+ مورد جديد</span>
+                    </button>
+                  )}
+                </div>
 
-                      {/* السعر والكمية والإجمالي */}
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <div className="bg-white border border-[#DED6C6] rounded-xl px-3 py-2">
-                          <label htmlFor={controlId + "-price"} className="purchase-field-label">
-                            سعر الشراء قبل الضريبة للـ {unitArabic}
-                          </label>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <Edit3 className="w-3.5 h-3.5 text-[#9E7918] shrink-0" />
-                            <input
-                              id={controlId + "-price"}
-                              name="purchase-price"
-                              type="number"
-                              inputMode="decimal"
-                              min="0"
-                              step="any"
-                              value={purchasePrice}
-                              onChange={(e) =>
-                                updateCartItem(item.id, {
-                                  purchasePrice: Math.max(
-                                    0,
-                                    parseFloat(e.target.value) || 0,
-                                  ),
-                                })
-                              }
-                              className="w-full text-sm font-black text-[#1E1612] bg-transparent"
-                            />
-                            <span className="text-[10px] text-[#7A6855] font-bold">
-                              ج.م
-                            </span>
-                          </div>
-                        </div>
+                <div className="operation-fields">
+                  <div className="invoice-choice">
+                    <span>اختر المورد</span>
+                    <button type="button" className="picker-trigger" aria-haspopup="dialog" onClick={()=>setShowSupplierPicker(true)}>
+                      <Search size={17} aria-hidden="true"/>
+                      {suppliers.find(supplier=>supplier.id===selectedSupplierId)?.name??'اختيار مورد'}
+                    </button>
+                  </div>
 
-                        <div className="bg-white border border-[#DED6C6] rounded-xl px-3 py-2">
-                          <label htmlFor={controlId + "-quantity"} className="purchase-field-label">
-                            الكمية المشتراة ({unitArabic})
-                          </label>
-                          <div className="flex items-center justify-between gap-1 mt-0.5">
-                            <button
-                              type="button"
-                              aria-label={"تقليل كمية " + item.name}
-                              onClick={() =>
-                                updateCartItem(item.id, {
-                                  quantity: Math.max(
-                                    0.5,
-                                    Number((quantity - 1).toFixed(2)),
-                                  ),
-                                })
-                              }
-                              className="w-6 h-6 rounded-lg bg-[#FAF8F4] border border-[#E6DEC8] text-[#1E1612] flex items-center justify-center"
-                            >
-                              <Minus className="w-3.5 h-3.5" aria-hidden="true" />
-                            </button>
-                            <input
-                              id={controlId + "-quantity"}
-                              name="purchase-quantity"
-                              type="number"
-                              inputMode="decimal"
-                              step="any"
-                              min="0.1"
-                              value={quantity}
-                              onChange={(e) =>
-                                updateCartItem(item.id, {
-                                  quantity: Math.max(
-                                    0.1,
-                                    parseFloat(e.target.value) || 0.1,
-                                  ),
-                                })
-                              }
-                              className="w-14 text-center font-black text-sm text-[#1E1612] bg-transparent"
-                            />
-                            <button
-                              type="button"
-                              aria-label={"زيادة كمية " + item.name}
-                              onClick={() =>
-                                updateCartItem(item.id, {
-                                  quantity: Number((quantity + 1).toFixed(2)),
-                                })
-                              }
-                              className="w-6 h-6 rounded-lg bg-[#1E1612] text-[#FBF5B7] flex items-center justify-center"
-                            >
-                              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                  <label>
+                    التاريخ
+                    <input
+                      type="date"
+                      value={invoiceDate}
+                      onChange={(e) => setInvoiceDate(e.target.value)}
+                      className="operation-input font-black"
+                    />
+                  </label>
+                </div>
+              </section>
 
-                      {/* إجمالي السطر + تعديل أسعار البيع القطاعي والجملة */}
-                      <div className="bg-white border border-[#E6DEC8] rounded-xl px-3 py-2 space-y-2">
-                        <div className="flex items-center justify-between gap-1.5">
-                          <div className="flex items-center gap-1.5">
-                            <Tag className="w-3.5 h-3.5 text-[#9E7918]" />
-                            <span className="text-[11px] font-bold text-[#6E5D4F]">
-                              بيع قطاعي:
-                            </span>
-                            <input
-                              type="number"
-                              value={newRetailPrice}
-                              onChange={(e) =>
-                                updateCartItem(item.id, {
-                                  newRetailPrice: e.target.value,
-                                })
-                              }
-                              className="w-16 text-xs font-black text-[#1E1612] bg-[#FAF8F4] border border-[#DED6C6] rounded-lg px-2 py-0.5 text-center"
-                            />
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] font-bold text-[#6E5D4F]">
-                              بيع جملة:
-                            </span>
-                            <input
-                              type="number"
-                              value={newWholesalePrice}
-                              onChange={(e) =>
-                                updateCartItem(item.id, {
-                                  newWholesalePrice: e.target.value,
-                                })
-                              }
-                              className="w-16 text-xs font-black text-[#1E1612] bg-[#FAF8F4] border border-[#DED6C6] rounded-lg px-2 py-0.5 text-center"
-                            />
-                          </div>
-                        </div>
-                        <div className="text-xs font-black text-[#1E1612] text-left">
-                          الإجمالي: {lineTotal.toLocaleString("ar-EG")} ج.م
-                        </div>
-                      </div>
+              {/* الخطوة 2: اختيار الأصناف لإضافتها في الفاتورة */}
+              <section className="operation-surface space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-xs font-black text-ink-strong flex items-center gap-1.5">
+                    <Package className="w-4 h-4 text-gold" aria-hidden="true" />
+                    <span>2. اختر الأصناف لإضافتها للفاتورة</span>
+                  </span>
+                  {onQuickAddItem && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewItemModal(true)}
+                      className="action-button"
+                    >
+                      <Plus className="w-4 h-4 text-gold" aria-hidden="true" />
+                      <span>تعريف صنف جديد</span>
+                    </button>
+                  )}
+                </div>
 
-                      {/* ملخص مقارنة الموردين ومتوسط التكلفة الجديد (WAC) */}
-                      <div className="rounded-xl border border-[#E8D8A8] bg-[#FDF8EB] p-2.5 space-y-1.5 text-[11px]">
-                        <div className="flex items-center justify-between text-[#6E5D4F]">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-[#9E7918]" />
-                            آخر شراء: <b>{lastPrice} ج.م</b>
-                          </span>
-                          {diffPercentFromLast !== 0 && (
-                            <span
-                              className={`px-2 py-0.5 rounded font-black text-[10px] ${
-                                diffPercentFromLast > 0
-                                  ? "bg-red-100 text-red-700"
-                                  : "bg-emerald-100 text-emerald-700"
-                              }`}
-                            >
-                              {diffPercentFromLast > 0
-                                ? `▲ +${diffPercentFromLast}%`
-                                : `▼ ${diffPercentFromLast}%`}
-                            </span>
-                          )}
-                        </div>
+                {/* تبويبات تصفية الأصناف */}
+                <div className="filter-pills" aria-label="تصفية أصناف المشتريات">
+                  {[{id:'all',label:'الكل'},...itemCategories.filter(c=>['raw_bean','direct_product','direct_drink','snack'].includes(c.id))].map((cat) => (
+                    <button
+                      type="button"
+                      key={cat.id}
+                      aria-pressed={itemCategoryFilter === cat.id}
+                      onClick={() =>
+                        setItemCategoryFilter(
+                          cat.id as 'all'|ItemCategory,
+                        )
+                      }
+                      className="filter-pill"
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
 
-                        <div className="flex items-center justify-between text-[#6E5D4F]">
-                          <span>
-                            متوسط التكلفة (WAC): <b>{item.costPrice} ج.م</b>
-                            {updateCost && (
-                              <>
-                                {" ← "}
-                                <b className="text-emerald-700">
-                                  سيصبح {newWac} ج.م
-                                </b>
-                              </>
-                            )}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setCompareModalItem(item)}
-                            className="font-black text-[#9E7918] underline"
-                          >
-                            مقارنة الموردين
-                          </button>
-                        </div>
+                <button type="button" className="picker-trigger" aria-haspopup="dialog" onClick={()=>setShowItemPickerModal(true)}>
+                  <Search size={17} aria-hidden="true"/>اختيار صنف للفاتورة
+                </button>
+              </section>
 
-                        <div className="text-[10px] text-emerald-800 font-bold">
-                          🏷️ أرخص مورد: {cheapestRecord.price} ج.م (
-                          {cheapestRecord.supplierName})
-                        </div>
-                      </div>
+              <section className="operation-surface space-y-3">
+                <dl className="record-facts mb-0">
+                  <div>
+                    <dt>قيمة الأصناف قبل الضريبة</dt>
+                    <dd>{netInvoiceAmount.toLocaleString('ar-EG')} ج.م</dd>
+                  </div>
+                  <div>
+                    <dt>الإجمالي شامل الضريبة</dt>
+                    <dd className="text-gold">{totalInvoiceAmount.toLocaleString('ar-EG')} ج.م</dd>
+                  </div>
+                </dl>
+                <label className="block">الضريبة (مبلغ منفصل)
+                  <input aria-label="ضريبة فاتورة الشراء" type="number" min="0" step="0.01" value={taxInput} onChange={e=>setTaxInput(e.target.value)} className="operation-input font-black" />
+                </label>
+                <p className="operation-note">مدفوعة بالكامل — لا تُضاف مديونية جديدة للمورد.</p>
+              </section>
+            </div>
 
-                      <p className="text-xs">{supplierPrice?<>آخر سعر من المورد المحدد {money(supplierPrice.price)} ج.م · {supplierPrice.date}</>:'لسه مفيش سعر شراء مسجل للصنف عند المورد المحدد.'}</p>
-                      <p className="text-xs">يتحدث متوسط التكلفة تلقائيًا مع كل شراء، دون الضريبة.</p>
+            <div className="space-y-3.5 min-w-0">
+              {showItemPickerModal&&<RecordPicker title="اختيار صنف للمشتريات" searchLabel="ابحث باسم الصنف أو الكود"
+                options={filteredPickerItems.map(item=>({
+                  id:item.id,title:item.name,keywords:item.barcode,
+                  detail:item.code+' · الرصيد '+item.stock+' '+displayUnit(item.baseUnit),
+                }))}
+                onSelect={id=>{
+                  const item=filteredPickerItems.find(value=>value.id===id);
+                  if(item)addItemToCart(item);
+                  setShowItemPickerModal(false);
+                }}
+                onClose={()=>setShowItemPickerModal(false)}/>}
+              {showSupplierPicker&&<RecordPicker title="اختيار المورد" searchLabel="ابحث باسم المورد أو التليفون"
+                options={suppliers.map(supplier=>({id:supplier.id,title:supplier.name,detail:[supplier.address,supplier.phone].filter(Boolean).join(' · ')}))}
+                selectedId={selectedSupplierId} onSelect={id=>{setSelectedSupplierId(id);setShowSupplierPicker(false);}}
+                onClose={()=>setShowSupplierPicker(false)}/>}
+
+              {/* بانر التنبيه لو هناك صنف بسعر أعلى من أرخص مورد */}
+              {higherThanCheapestCount > 0 && (
+                <div className="bg-status-danger-bg border border-status-danger-line rounded-lg p-3.5 flex items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-md bg-white text-status-danger border border-status-danger-line flex items-center justify-center shrink-0">
+                      <AlertTriangle className="w-4 h-4" aria-hidden="true" />
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                    <div>
+                      <div className="text-xs font-black text-status-danger">
+                        تنبيه: {higherThanCheapestCount} صنف بسعر أعلى من أرخص مورد
+                        مسجل
+                      </div>
+                      <div className="text-xs text-status-danger/85 font-semibold">
+                        راجع مقارنة الموردين بالأسفل للحفاظ على تكلفة التوليفات
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-          <section className="operation-surface space-y-3">
-            <p>قيمة الأصناف قبل الضريبة: {netInvoiceAmount.toLocaleString('ar-EG')} ج.م</p>
-            <label className="block">الضريبة (مبلغ منفصل)
-              <input aria-label="ضريبة فاتورة الشراء" type="number" min="0" step="0.01" value={taxInput} onChange={e=>setTaxInput(e.target.value)} className="border rounded-xl p-2 w-full" />
-            </label>
-            <p>الإجمالي شامل الضريبة: {totalInvoiceAmount.toLocaleString('ar-EG')} ج.م</p>
-            <p>مدفوعة بالكامل — لا تُضاف مديونية جديدة للمورد.</p>
-          </section>
+              {/* الخطوة 3: الأصناف المختارة داخل الفاتورة وتحديد الكميات والأسعار */}
+              <section className="operation-surface space-y-4">
+                <div className="flex items-center justify-between border-b border-line-subtle pb-2.5">
+                  <span className="text-xs font-black text-ink-strong">
+                    3. بنود فاتورة المشتريات ({cart.length} أصناف)
+                  </span>
+                  <span className="text-xs font-black text-gold">
+                    الإجمالي: {totalInvoiceAmount.toLocaleString("ar-EG")} ج.م
+                  </span>
+                </div>
+
+                {cart.length === 0 ? (
+                  <div className="text-center py-8 space-y-2">
+                    <div className="w-12 h-12 rounded-lg bg-surface-sunken border border-line text-gold flex items-center justify-center mx-auto">
+                      <ShoppingBag className="w-6 h-6" aria-hidden="true" />
+                    </div>
+                    <div className="text-xs font-extrabold text-ink-strong">
+                      الفاتورة فارغة حالياً
+                    </div>
+                    <div className="text-xs text-ink">
+                      اختار صنف من الزر بالأعلى وحدد الكمية والسعر
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3.5">
+                    {cart.map((entry) => {
+                      const {
+                        item,
+                        quantity,
+                        purchasePrice,
+                        newRetailPrice,
+                        newWholesalePrice,
+                        updateCost,
+                      } = entry;
+                      const lineTotal = quantity * purchasePrice;
+                      const supplierPrice = latestSupplierPrices(item.supplierPrices).find(record=>record.supplierId===selectedSupplierId);
+                      const lastPrice = item.lastPurchasePrice || purchasePrice;
+                      const diffPercentFromLast =
+                        lastPrice > 0
+                          ? Math.round(
+                              ((purchasePrice - lastPrice) / lastPrice) * 100,
+                            )
+                          : 0;
+
+                      const cheapestRecord =
+                        item.supplierPrices.length > 0
+                          ? latestSupplierPrices(item.supplierPrices).reduce(
+                              (min, p) => (p.price < min.price ? p : min),
+                              latestSupplierPrices(item.supplierPrices)[0],
+                            )
+                          : {
+                              price: lastPrice,
+                              supplierName: "آخر مورد مسجل",
+                              date: "-",
+                            };
+
+                      const newWac = movingAverageCost(item.stock,item.costPrice,quantity,purchasePrice);
+
+                      const unitArabic =
+                        displayUnit(item.baseUnit);
+                      const controlId = 'purchase-' + item.id;
+
+                      return (
+                        <article
+                          key={item.id}
+                          className="record-card space-y-3 bg-surface-sunken"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-black text-ink-strong">
+                              {item.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeCartItem(item.id)}
+                              className="action-button text-status-danger border-status-danger-line"
+                              aria-label={"حذف " + item.name + " من الفاتورة"}
+                              title="حذف الصنف من الفاتورة"
+                            >
+                              <Trash2 className="w-4 h-4" aria-hidden="true" />
+                            </button>
+                          </div>
+
+                          {/* السعر والكمية والإجمالي */}
+                          <div className="operation-fields">
+                            <div className="bg-surface-card border border-line rounded-md px-3 py-2">
+                              <label htmlFor={controlId + "-price"} className="purchase-field-label">
+                                سعر الشراء قبل الضريبة للـ {unitArabic}
+                              </label>
+                              <div className="flex items-center gap-1 mt-1">
+                                <Edit3 className="w-3.5 h-3.5 text-gold shrink-0" aria-hidden="true" />
+                                <input
+                                  id={controlId + "-price"}
+                                  name="purchase-price"
+                                  type="number"
+                                  inputMode="decimal"
+                                  min="0"
+                                  step="any"
+                                  value={purchasePrice}
+                                  onChange={(e) =>
+                                    updateCartItem(item.id, {
+                                      purchasePrice: Math.max(
+                                        0,
+                                        parseFloat(e.target.value) || 0,
+                                      ),
+                                    })
+                                  }
+                                  className="w-full text-sm font-black text-ink-strong bg-transparent"
+                                />
+                                <span className="text-xs text-ink font-bold">
+                                  ج.م
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="bg-surface-card border border-line rounded-md px-3 py-2">
+                              <label htmlFor={controlId + "-quantity"} className="purchase-field-label">
+                                الكمية المشتراة ({unitArabic})
+                              </label>
+                              <div className="flex items-center justify-between gap-1 mt-1">
+                                <button
+                                  type="button"
+                                  aria-label={"تقليل كمية " + item.name}
+                                  onClick={() =>
+                                    updateCartItem(item.id, {
+                                      quantity: Math.max(
+                                        0.5,
+                                        Number((quantity - 1).toFixed(2)),
+                                      ),
+                                    })
+                                  }
+                                  className="min-w-[40px] min-h-[40px] rounded-sm bg-surface-sunken border border-line text-ink-strong flex items-center justify-center"
+                                >
+                                  <Minus className="w-4 h-4" aria-hidden="true" />
+                                </button>
+                                <input
+                                  id={controlId + "-quantity"}
+                                  name="purchase-quantity"
+                                  type="number"
+                                  inputMode="decimal"
+                                  step="any"
+                                  min="0.1"
+                                  value={quantity}
+                                  onChange={(e) =>
+                                    updateCartItem(item.id, {
+                                      quantity: Math.max(
+                                        0.1,
+                                        parseFloat(e.target.value) || 0.1,
+                                      ),
+                                    })
+                                  }
+                                  className="w-16 text-center font-black text-sm text-ink-strong bg-transparent"
+                                />
+                                <button
+                                  type="button"
+                                  aria-label={"زيادة كمية " + item.name}
+                                  onClick={() =>
+                                    updateCartItem(item.id, {
+                                      quantity: Number((quantity + 1).toFixed(2)),
+                                    })
+                                  }
+                                  className="min-w-[40px] min-h-[40px] rounded-sm bg-espresso text-gold-highlight flex items-center justify-center"
+                                >
+                                  <Plus className="w-4 h-4" aria-hidden="true" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* إجمالي السطر + تعديل أسعار البيع القطاعي والجملة */}
+                          <div className="bg-surface-card border border-line rounded-md px-3 py-2 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <label className="flex items-center gap-1.5 text-xs font-bold text-ink">
+                                <Tag className="w-3.5 h-3.5 text-gold" aria-hidden="true" />
+                                <span>بيع قطاعي:</span>
+                                <input
+                                  type="number"
+                                  value={newRetailPrice}
+                                  onChange={(e) =>
+                                    updateCartItem(item.id, {
+                                      newRetailPrice: e.target.value,
+                                    })
+                                  }
+                                  className="w-20 text-xs font-black text-ink-strong bg-surface-sunken border border-line-control rounded-sm px-2 py-1 text-center"
+                                />
+                              </label>
+                              <label className="flex items-center gap-1.5 text-xs font-bold text-ink">
+                                <span>بيع جملة:</span>
+                                <input
+                                  type="number"
+                                  value={newWholesalePrice}
+                                  onChange={(e) =>
+                                    updateCartItem(item.id, {
+                                      newWholesalePrice: e.target.value,
+                                    })
+                                  }
+                                  className="w-20 text-xs font-black text-ink-strong bg-surface-sunken border border-line-control rounded-sm px-2 py-1 text-center"
+                                />
+                              </label>
+                            </div>
+                            <div className="text-xs font-black text-ink-strong text-left">
+                              الإجمالي: {lineTotal.toLocaleString("ar-EG")} ج.م
+                            </div>
+                          </div>
+
+                          {/* ملخص مقارنة الموردين ومتوسط التكلفة الجديد (WAC) */}
+                          <div className="rounded-md border border-gold-edge/50 bg-gold-tint p-2.5 space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between text-ink">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-gold" aria-hidden="true" />
+                                آخر شراء: <b>{lastPrice} ج.م</b>
+                              </span>
+                              {diffPercentFromLast !== 0 && (
+                                <span
+                                  className={`record-badge font-black ${
+                                    diffPercentFromLast > 0
+                                      ? "bg-status-danger-bg text-status-danger border-status-danger-line"
+                                      : "bg-status-ok-bg text-status-ok border-status-ok-line"
+                                  }`}
+                                >
+                                  {diffPercentFromLast > 0
+                                    ? `▲ +${diffPercentFromLast}%`
+                                    : `▼ ${diffPercentFromLast}%`}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between text-ink flex-wrap gap-1">
+                              <span>
+                                متوسط التكلفة (WAC): <b>{item.costPrice} ج.م</b>
+                                {updateCost && (
+                                  <>
+                                    {" ← "}
+                                    <b className="text-status-ok">
+                                      سيصبح {newWac} ج.م
+                                    </b>
+                                  </>
+                                )}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setCompareModalItem(item)}
+                                className="font-black text-gold underline min-h-[36px]"
+                              >
+                                مقارنة الموردين
+                              </button>
+                            </div>
+
+                            <div className="text-xs text-status-ok font-bold">
+                              🏷️ أرخص مورد: {cheapestRecord.price} ج.م (
+                              {cheapestRecord.supplierName})
+                            </div>
+                          </div>
+
+                          <p className="text-xs text-ink">{supplierPrice?<>آخر سعر من المورد المحدد {money(supplierPrice.price)} ج.م · {supplierPrice.date}</>:'لسه مفيش سعر شراء مسجل للصنف عند المورد المحدد.'}</p>
+                          <p className="text-xs text-ink-faint">يتحدث متوسط التكلفة تلقائيًا مع كل شراء، دون الضريبة.</p>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
 
           <footer className="operation-surface operation-form-footer action-bar">
             <ActionButton onClick={handleSave} disabled={cart.length === 0} variant="primary">
@@ -914,44 +920,44 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
       </Modal>}
       {/* نافذة تفاصيل فاتورة مشتريات مسجلة */}
       {selectedInvoiceDetails && (
-        <Modal title={<>تفاصيل فاتورة مشتريات # {selectedInvoiceDetails.invoiceNumber}</>} description={<>المورد:  {selectedInvoiceDetails.supplierName} • {" "}  {selectedInvoiceDetails.date}</>} onClose={()=>setSelectedInvoiceDetails(null)}><div className="space-y-2 max-h-60 overflow-y-auto">
+        <Modal title={<>تفاصيل فاتورة مشتريات # {selectedInvoiceDetails.invoiceNumber}</>} description={<>المورد: {selectedInvoiceDetails.supplierName} • {selectedInvoiceDetails.date}</>} onClose={()=>setSelectedInvoiceDetails(null)}><div className="space-y-2 max-h-60 overflow-y-auto">
               {selectedInvoiceDetails.items.map((it, idx) => (
                 <div
                   key={idx}
-                  className="p-3 rounded-xl bg-[#FAF8F4] border border-[#E6DEC8] flex items-center justify-between text-xs"
+                  className="p-3 rounded-md bg-surface-sunken border border-line flex items-center justify-between text-xs"
                 >
                   <div>
-                    <div className="font-black text-[#1E1612]">
+                    <div className="font-black text-ink-strong">
                       {it.itemName}
                     </div>
-                    <div className="text-[11px] text-[#7A6855]">
+                    <div className="text-xs text-ink">
                       الكمية: {it.quantity} {it.unit} × السعر:{" "}
                       {it.purchasePrice} ج.م
                     </div>
                   </div>
-                  <div className="font-black text-[#9E7918]">
+                  <div className="font-black text-gold">
                     {(it.quantity * it.purchasePrice).toLocaleString("ar-EG")}{" "}
                     ج.م
                   </div>
                 </div>
               ))}
             </div>
-<div className="bg-[#1E1612] text-[#FBF5B7] rounded-2xl p-3.5 text-xs space-y-1">
+<div className="summary-banner-dark text-xs space-y-1">
               <div className="flex justify-between">
                 <span>إجمالي الفاتورة:</span>
-                <span className="font-black">
+                <span className="font-black text-gold-highlight">
                   {selectedInvoiceDetails.totalAmount.toLocaleString("ar-EG")}{" "}
                   ج.م
                 </span>
               </div>
-              <div className="flex justify-between text-emerald-400">
+              <div className="flex justify-between text-emerald-300">
                 <span>المدفوع للمورد:</span>
                 <span className="font-black">
                   {selectedInvoiceDetails.paidAmount.toLocaleString("ar-EG")}{" "}
                   ج.م
                 </span>
               </div>
-              <div className="flex justify-between text-amber-400">
+              <div className="flex justify-between text-amber-300">
                 <span>المتبقي آجل:</span>
                 <span className="font-black">
                   {selectedInvoiceDetails.remainingAmount.toLocaleString(
@@ -965,31 +971,35 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
 
       {/* نافذة إضافة مورد جديد سريعاً من داخل الفاتورة */}
       {showNewSupplierModal && onQuickAddSupplier && (
-        <Modal title={<>إضافة مورد جديد سريعاً</>}  onClose={()=>setShowNewSupplierModal(false)}><input
+        <Modal title={<>إضافة مورد جديد سريعاً</>} onClose={()=>setShowNewSupplierModal(false)}><input
               type="text"
+              aria-label="اسم المورد أو الشركة"
               value={newSupName}
               onChange={(e) => setNewSupName(e.target.value)}
               placeholder="اسم المورد أو الشركة"
-              className="w-full border border-[#DED6C6] rounded-xl px-3 py-2.5 text-xs font-bold"
+              className="operation-input font-bold"
             />
 <input
               type="text"
+              aria-label="رقم الموبايل"
               value={newSupPhone}
               onChange={(e) => setNewSupPhone(e.target.value)}
               placeholder="رقم الموبايل"
-              className="w-full border border-[#DED6C6] rounded-xl px-3 py-2.5 text-xs font-bold"
+              className="operation-input font-bold"
             />
 <input
               type="text"
+              aria-label="تخصص المورد"
               value={newSupCategory}
               onChange={(e) => setNewSupCategory(e.target.value)}
               placeholder="التخصص (مثلاً: بن أخضر، حبهان، أكواب...)"
-              className="w-full border border-[#DED6C6] rounded-xl px-3 py-2.5 text-xs font-bold"
+              className="operation-input font-bold"
             />
-<input aria-label="عنوان المورد" placeholder="عنوان المورد" value={newSupAddress} onChange={e=>setNewSupAddress(e.target.value)} className="border rounded-xl p-2 w-full" />
-<input aria-label="اسم المندوب" placeholder="اسم المندوب" value={newSupRepresentative} onChange={e=>setNewSupRepresentative(e.target.value)} className="border rounded-xl p-2 w-full" />
-{supplierError&&<p role="alert">{supplierError}</p>}
+<input aria-label="عنوان المورد" placeholder="عنوان المورد" value={newSupAddress} onChange={e=>setNewSupAddress(e.target.value)} className="operation-input" />
+<input aria-label="اسم المندوب" placeholder="اسم المندوب" value={newSupRepresentative} onChange={e=>setNewSupRepresentative(e.target.value)} className="operation-input" />
+{supplierError&&<p role="alert" className="field-error">{supplierError}</p>}
 <button
+              type="button"
               onClick={() => {
                 if (!newSupName.trim()) return;
                 try {
@@ -1009,7 +1019,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                 setShowNewSupplierModal(false);
                 } catch(error){setSupplierError((error as Error).message);}
               }}
-              className="w-full bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] py-2.5 rounded-xl text-xs font-black"
+              className="operation-primary w-full"
             >
               حفظ المورد
             </button></Modal>
@@ -1024,26 +1034,26 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
               {compareModalItem.supplierPrices.map((sp, i) => (
                 <div
                   key={i}
-                  className={`p-3 rounded-xl border flex items-center justify-between ${
-                    i === 0
-                      ? "bg-emerald-50 border-emerald-200"
-                      : "bg-[#FAF8F4] border-[#E6DEC8]"
+                  className={`p-3 rounded-md border flex items-center justify-between ${
+                    i === cheapestCompareIndex
+                      ? "bg-status-ok-bg border-status-ok-line"
+                      : "bg-surface-sunken border-line"
                   }`}
                 >
                   <div>
-                    <div className="text-xs font-black text-[#1E1612]">
+                    <div className="text-xs font-black text-ink-strong">
                       {sp.supplierName}
                     </div>
-                    <div className="text-[10px] text-[#8C7A6B]">
+                    <div className="text-xs text-ink">
                       تاريخ آخر توريد: {sp.date}
                     </div>
                   </div>
                   <div className="text-left">
-                    <div className="text-sm font-black text-emerald-700">
+                    <div className="text-sm font-black text-status-ok">
                       {sp.price} ج.م
                     </div>
                     {i === cheapestCompareIndex && (
-                      <span className="text-[9px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full">
+                      <span className="record-badge bg-status-ok text-white border-status-ok">
                         الأرخص
                       </span>
                     )}
