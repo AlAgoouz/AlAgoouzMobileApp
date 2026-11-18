@@ -28,7 +28,7 @@
 /* The nav owns its own colour states here so the JSX does not need utility colours. */
 .workspace-nav button>div,.workspace-nav button>span{color:var(--ink-faint)}
 .workspace-nav button>div{border-color:transparent}
-.workspace-nav button[aria-current=page]>div{background:var(--brand-espresso-deep);color:#e4bd6e;border-color:#c39a4f}
+.workspace-nav button[aria-current=page]>div{background:var(--brand-dark-finish);color:var(--brand-gold-highlight);border-color:var(--brand-gold-edge)}
 .workspace-nav button[aria-current=page]>span{color:var(--brand-espresso-deep)}
 @media(hover:hover){.workspace-nav button:not([aria-current=page])>div:hover{color:var(--ink-strong)}}
 .workspace-sidebar{display:none}

@@ -21,15 +21,20 @@
      ====================================================================== */
   --brand-espresso:      #34251d;   /* حبر أساسي + سطح داكن          */
   --brand-espresso-deep: #38271b;   /* الشريط الجانبي (سطح أعمق)      */
-  --brand-gold:          #8c6427;   /* الذهبي الرسمي: حدود، أيقونات   */
-  --brand-gold-soft:     #ddb877;   /* ذهبي التفاعل: أزرار مملوءة    */
-  --brand-gold-tint:     #f5eddd;   /* خلفية ذهبية خفيفة             */
-  --brand-gold-edge:     #a17c42;   /* حد أزرار التفاعل             */
+  --brand-gold:          #805515;   /* ذهبي داكن للنصوص والأيقونات  */
+  --brand-gold-soft:     #e9be61;   /* ذهبي التفاعل                  */
+  --brand-gold-tint:     #fbf1d9;   /* خلفية ذهبية خفيفة             */
+  --brand-gold-edge:     #9b6d28;   /* حد أزرار التفاعل             */
+  --brand-gold-highlight: #fff0bc;
+  --brand-gold-shade:    #c79238;
+  --brand-gold-finish:   linear-gradient(158deg, var(--brand-gold-highlight), var(--brand-gold-soft) 49%, var(--brand-gold-shade));
+  --brand-gold-rim:      linear-gradient(110deg, var(--brand-gold-shade), var(--brand-gold-highlight) 38%, var(--brand-gold-soft) 67%, var(--brand-gold-edge));
+  --brand-dark-finish:   linear-gradient(135deg, #211610, #39271b);
 
   /* ======================================================================
      2) SURFACES + INK
      ====================================================================== */
-  --surface-page:        #ffffff;   /* خلفية الصفحة                   */
+  --surface-page:        #f8f5ef;   /* خلفية الصفحة                   */
   --surface-card:        #ffffff;   /* سطح البطاقة                    */
   --surface-sunken:      #f6f4f1;   /* حشو داخلي (tracks, empty)      */
   --surface-raised:      #f2eee5;   /* حشو أعمق (مقاييس، شرائط)      */
