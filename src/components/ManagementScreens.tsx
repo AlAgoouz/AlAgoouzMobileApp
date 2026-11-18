@@ -14,6 +14,7 @@ import {ItemDefinitionModal} from './ItemDefinitionModal';
 import {CatalogNameDraftPanel} from './CatalogNameDraftPanel';
 import {CatalogListControls,CatalogListNavigation} from './CatalogListControls';
 import {CatalogProductRows} from './CatalogProductRows';
+import {ActionButton} from './ActionButton';
 import {browseCatalog,type CatalogSort} from '../lib/catalogBrowse';
 import type {CatalogNameDraft,RecipeProductDefinition} from '../types/erp';
 import {categoryLabel,itemCategories,requiresRecipe,isStockItem,isRecipeOnUse} from '../lib/itemPolicy';
@@ -98,6 +99,16 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 }) => {
   const [filterCat, setFilterCat] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [compact,setCompact] = useState(() => {
+    try { return localStorage.getItem('agouz-catalog-density') === 'compact'; }
+    catch { return false; }
+  });
+  const toggleCompact = () => {
+    const next = !compact;
+    setCompact(next);
+    try { localStorage.setItem('agouz-catalog-density', next ? 'compact' : 'comfortable'); }
+    catch { /* The preference remains active for this visit. */ }
+  };
   const [catalogPane,setCatalogPane]=useState<'pending'|'ready'>(()=>nameDrafts.length?'pending':'ready');
   const [catalogSort,setCatalogSort]=useState<CatalogSort>('name'),[catalogPageSize,setCatalogPageSize]=useState(50);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
@@ -218,13 +229,13 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
         <section className="catalog-pane" hidden={catalogPane!=='pending'} aria-label="المنتجات التي تحتاج استكمالًا">
           <CatalogNameDraftPanel drafts={nameDrafts} items={items} onComplete={onCompleteNameDraft} onChange={onChangeNameDraft} onDefineRecipe={onDefineRecipe} onOpenRecipe={id=>onOpenRecipe?.('draft:'+id)} onShowReady={()=>setCatalogPane('ready')}/>
         </section>
-        <section className="catalog-pane space-y-3" hidden={catalogPane!=='ready'} aria-label="المنتجات الجاهزة">
+        <section className="catalog-pane space-y-3" data-density={compact ? 'compact' : undefined} hidden={catalogPane!=='ready'} aria-label="المنتجات الجاهزة">
           <div className="catalog-summary"><span>أصناف مباشرة <b>{catalogStats.rawAndSpices}</b></span><span>أصناف لها وصفة <b>{catalogStats.blendsAndDrinks}</b></span><span>متوسط هامش البيع الإرشادي <b>{catalogStats.avgMargin}%</b></span></div>
           <div className="flex gap-1.5 overflow-x-auto pb-1" aria-label="تصفية أنواع المنتجات">
             {[{id:'all',label:'كل المنتجات ('+items.length+')'},...itemCategories].map(category=><button key={category.id} aria-pressed={filterCat===category.id} onClick={()=>{catalogPage.setPage(0);setFilterCat(category.id);}} className={'min-h-[44px] px-3 py-2 rounded-xl text-xs font-extrabold shrink-0 border '+(filterCat===category.id?'bg-[#1E1612] text-[#FBF5B7] border-[#C59B27]':'bg-white text-[#5C4B3E] border-[#E6DEC8]')}>{category.label}</button>)}
           </div>
           <CatalogListControls label="البحث في المنتجات الجاهزة" search={search} onSearch={value=>{catalogPage.setPage(0);setSearch(value);}} sort={catalogSort} onSort={value=>{catalogPage.setPage(0);setCatalogSort(value);}} pageSize={catalogPageSize} onPageSize={value=>{catalogPage.setPage(0);setCatalogPageSize(value);}}/>
-          <CatalogListNavigation page={catalogPage} label="انتقل إلى صفحة المنتجات الجاهزة"/>
+          <div className="catalog-controls-end"><CatalogListNavigation page={catalogPage} label="انتقل إلى صفحة المنتجات الجاهزة"/><ActionButton aria-pressed={compact} onClick={toggleCompact}>عرض مضغوط</ActionButton></div>
           {filtered.length?<CatalogProductRows items={catalogPage.visible} canManage={canManage} onEdit={openEditItem} onDelete={item=>{setDeleting(item);setDeleteError('');}} onRecipe={item=>onOpenRecipe?.('item:'+item.id)} onMovement={onOpenMovement}/>:<p role="status" className="catalog-empty">لا توجد منتجات جاهزة مطابقة لهذا العرض.</p>}
         </section>
       </div>

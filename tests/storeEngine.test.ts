@@ -1,6 +1,7 @@
 import {StoreWriteFailure} from '../src/lib/storeErrors';
 import { it, expect, vi, afterEach } from 'vitest';
 import { StoreEngine, type StoreTransport } from '../src/lib/storeEngine';
+import { storeChanges } from '../src/lib/storeChanges';
 import { emptyStore,cloudStoreInput,toCloud } from '../src/lib/storeState';
 
 it('validates mapped cloud input at the engine boundary and rejects malformed remote data',async()=>{
@@ -9,6 +10,26 @@ it('validates mapped cloud input at the engine boundary and rejects malformed re
  expect(engine.snapshot.status).toBe('error');expect(engine.snapshot.state.items).toEqual([]);
  transport.load=async()=>({state:cloudStoreInput(toCloud(emptyStore)),version:1});await engine.load();
  expect(engine.snapshot.status).toBe('ready');expect(engine.snapshot.state).toEqual(emptyStore);
+});
+
+it('reloads a previously unavailable version-zero store',async()=>{
+ const load=vi.fn().mockRejectedValueOnce(Error('temporary')).mockResolvedValue({state:emptyStore,version:0});
+ const engine=new StoreEngine({load,getVersion:async()=>0,save:async()=>1});
+ await engine.load();
+ expect(engine.snapshot.status).toBe('error');
+ await engine.refresh();
+ expect(engine.snapshot.status).toBe('ready');
+ expect(engine.hasLoaded).toBe(true);
+});
+
+it('sends changes to a large register without including its unchanged historical documents',()=>{
+ const before={expenses:Array.from({length:2000},(_,id)=>({id:String(id),notes:'x'.repeat(600)}))};
+ const after={expenses:[before.expenses[0],{id:'new',notes:'record'},...before.expenses.slice(1,-1)]};
+ const changes=storeChanges(before,after);
+ expect(changes.expenses.upsert).toEqual([{id:'new',notes:'record'}]);
+ expect(changes.expenses.remove).toEqual(['1999']);
+ expect(changes.expenses.order?.slice(0,3)).toEqual(['0','new','1']);
+ expect(JSON.stringify(changes).length).toBeLessThan(15000);
 });
 afterEach(() => vi.useRealTimers());
 it('checks a small version without reloading unchanged data and deduplicates refresh requests', async () => {
@@ -259,6 +280,30 @@ it('queues sequential edits during an active save and flushes them with the upda
   expect(engine.snapshot.status).toBe('ready');
   expect(engine.hasPending).toBe(false);
 });
+it('keeps the recovery draft until the final queued save is acknowledged', async () => {
+  vi.useFakeTimers();
+  const {transport} = setup();
+  const clearDraft = vi.fn();
+  const preserve = vi.fn(() => { throw Error('QuotaExceededError'); });
+  const engine = new StoreEngine(transport, preserve, undefined, clearDraft);
+  await engine.load();
+  const acknowledgments: Array<(version: number) => void> = [];
+  transport.save = vi.fn(() => new Promise(resolve => acknowledgments.push(resolve)));
+  engine.replace(structuredClone(emptyStore));
+  const flushing = engine.flush();
+  engine.replace(structuredClone(emptyStore));
+  acknowledgments[0](2);
+  await Promise.resolve();
+  expect(engine.snapshot.recoveryWarning).toBeDefined();
+  expect(clearDraft).not.toHaveBeenCalled();
+  expect(engine.snapshot.savedAt).toBeUndefined();
+  acknowledgments[1](3);
+  await flushing;
+  expect(clearDraft).toHaveBeenCalledTimes(1);
+  expect(engine.snapshot).toMatchObject({version: 3, status: 'ready', savedAt: expect.any(Number)});
+  expect(engine.snapshot.recoveryWarning).toBeUndefined();
+});
+
 it('replays a committed save with a lost acknowledgment before saving the queued edit', async () => {
   vi.useFakeTimers();
   const { engine, transport } = setup();

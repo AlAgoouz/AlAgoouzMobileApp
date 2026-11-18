@@ -124,13 +124,13 @@ export const ProductionAndRecipesScreen: React.FC<
   useEffect(()=>{if(blendItems.length&&!blendItems.some(b=>b.id===selectedBlendId))setSelectedBlendId(blendItems[0].id);},[blendItems,selectedBlendId]);
 
   return (
-    <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
+    <div className="min-h-screen pb-24">
       {/* الهيدر الموحد بهوية بُن العجوز */}
       <OperationHeader title={<>إنتاج التوليفات</>} description={<>تنفيذ أوامر إنتاج التوليفات الجاهزة وسجل تشغيلاتها فقط.</>} icon={HeaderFlame} onBack={onBack}>{onDefineRecipe&&<button
           onClick={() => {
             setShowNewModal(true);
           }}
-          className="bg-[#C59B27] text-[#1E1612] px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow"
+          type="button"
         >
           <Plus className="w-4 h-4" />
           جديد
@@ -140,9 +140,9 @@ export const ProductionAndRecipesScreen: React.FC<
         <RecordTabs label="أقسام الإنتاج" value={activeTab}
           tabs={[{id:'produce',label:'إنتاج توليفة'},{id:'history',label:'سجل التشغيلات ('+productionBatches.length+')'}]}
           onChange={tab=>{setActiveTab(tab);setBannerMessage(null);}}/>
-        <button type="button" onClick={onOpenRecipes} className="record-action"><Layers size={16}/>فتح قسم الوصفات</button>
+        {onOpenRecipes&&<button type="button" onClick={onOpenRecipes} className="record-action"><Layers size={16} aria-hidden="true"/>فتح قسم الوصفات</button>}
       </div>
-      <div className="p-3.5 space-y-4">
+      <div className="record-workspace">
         {bannerMessage && (
           <div
             className={`p-3.5 rounded-2xl border flex items-center gap-2.5 text-xs font-extrabold ${
@@ -162,110 +162,54 @@ export const ProductionAndRecipesScreen: React.FC<
 
         {/* ================= التبويب الأول: أمر إنتاج وتخليط توليفة ================= */}
         {activeTab === "produce" && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3.5">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-extrabold text-slate-800">
-                  1. اختر التوليفة المراد تصنيعها
-                </span>
-                <span className="text-xs font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg">
-                  يخصم الخامات ويضيف لرصيد التوليفة
-                </span>
-              </div>
-
+          <div className="production-layout">
+            <section className="operation-surface production-form">
+              <h2>بيانات التشغيلة</h2>
               <RecordPickerField label="التوليفة المراد إنتاجها" searchLabel="ابحث باسم التوليفة أو الكود"
                 options={blendItems.map(blend=>({id:blend.id,title:blend.name,detail:blend.code+' · الرصيد '+blend.stock+' كجم'}))}
                 value={selectedBlend?.id??''} onChange={setSelectedBlendId}/>
               {selectedBlend && (
-                <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-                  <div className="bg-slate-50 rounded-xl p-2 border border-slate-200/70">
-                    <div className="text-[11px] text-slate-500">
-                      الرصيد الجاهز
-                    </div>
-                    <div className="text-sm font-black text-slate-800">
-                      {selectedBlend.stock} كجم
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 rounded-xl p-2 border border-slate-200/70">
-                    <div className="text-[11px] text-slate-500">
-                      تكلفة الكيلو
-                    </div>
-                    <div className="text-sm font-black text-amber-800">
-                      {selectedBlend.costPrice} ج.م
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 rounded-xl p-2 border border-slate-200/70">
-                    <div className="text-[11px] text-slate-500">
-                      بيع قطاعي / جملة
-                    </div>
-                    <div className="text-sm font-black text-emerald-700">
-                      {selectedBlend.retailPrice} /{" "}
-                      {selectedBlend.wholesalePrice}
-                    </div>
-                  </div>
-                </div>
+                <dl className="record-facts production-facts">
+                  <div><dt>الرصيد الجاهز</dt><dd>{selectedBlend.stock} كجم</dd></div>
+                  <div><dt>تكلفة الكيلو</dt><dd>{selectedBlend.costPrice} ج.م</dd></div>
+                  <div><dt>بيع قطاعي / جملة</dt><dd>{selectedBlend.retailPrice} / {selectedBlend.wholesalePrice}</dd></div>
+                </dl>
               )}
-            </div>
-
-            {/* تحديد الكمية بالكيلو */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
-              <div className="text-sm font-extrabold text-slate-800">
-                2. كم كيلو تريد تصنيعه وتخليطه الآن؟
-              </div>
-              <div className="flex items-center gap-3">
+              <label className="invoice-choice">
+                كمية الإنتاج بالكيلو
                 <input
                   type="text"
                   inputMode="decimal"
-                  aria-label="كمية الإنتاج بالكيلو"
                   value={produceQuantity}
                   onChange={event=>setProduceQuantity(event.target.value)}
-                  className="w-28 text-center text-xl font-black text-amber-900 bg-amber-50 border-2 border-amber-400 rounded-2xl py-2.5 focus:outline-none"
+                  className="operation-input"
                 />
-                <span className="text-sm font-extrabold text-slate-700">
-                  كيلو جرام (
-                  {Math.round(produceQtyKg * 1000).toLocaleString("ar-EG")}{" "}
-                  جرام)
-                </span>
-              </div>
-
-              {/* أزرار سريعة للكميات */}
-              <div className="flex flex-wrap gap-2 pt-1">
+              </label>
+              <p className="operation-caption">{Math.round(produceQtyKg * 1000).toLocaleString('ar-EG')} جرام</p>
+              <div className="production-quantities">
                 {[5, 10, 15, 20, 25, 50].map((q) => (
                   <button
                     key={q}
                     onClick={() => setProduceQuantity(String(q))}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition ${
-                      produceQtyKg === q
-                        ? "bg-amber-800 text-white border-amber-800"
-                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-amber-50"
-                    }`}
+                    type="button"
+                    aria-pressed={produceQtyKg===q}
+                    className="action-button"
                   >
                     {q} كيلو
                   </button>
                 ))}
               </div>
-            </div>
-
-            {/* جدول الخامات التي سيتم سحبها من المخزن */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
-              <div className="flex items-center justify-between border-b pb-2.5">
-                <span className="text-sm font-extrabold text-slate-800">
-                  3. الخامات المطلوب سحبها لـ ({produceQtyKg} كجم)
-                </span>
-                <span className="text-xs font-extrabold text-amber-800">
-                  إجمالي التكلفة: {totalBatchEstimatedCost.toFixed(2)} ج.م
-                </span>
-              </div>
+            </section>
+            <section className="operation-surface production-form">
+              <h2>الخامات المطلوبة لـ {produceQtyKg} كجم</h2>
+              <dl className="production-estimate"><div><dt>إجمالي التكلفة المقدرة</dt><dd>{totalBatchEstimatedCost.toFixed(2)} ج.م</dd></div></dl>
 
               <div className="space-y-2.5">
                 {productionSimulation.map((sim) => (
                   <div
                     key={sim.ingredientId}
-                    className={`p-3 rounded-xl border flex items-center justify-between ${
-                      sim.isEnough
-                        ? "bg-slate-50/70 border-slate-200"
-                        : "bg-red-50 border-red-300"
-                    }`}
+                    className="production-material"
+                    data-shortage={!sim.isEnough}
                   >
                     <div className="space-y-0.5">
                       <div className="text-xs font-extrabold text-slate-900">
@@ -281,7 +225,7 @@ export const ProductionAndRecipesScreen: React.FC<
                         </b>
                       </div>
                     </div>
-                    <div className="text-left shrink-0">
+                    <div>
                       <div className="text-xs font-black text-amber-900">
                         {sim.invalidUnit
                           ? "⚠️ وحدة الكمية غير متوافقة مع وحدة الصنف"
@@ -308,22 +252,24 @@ export const ProductionAndRecipesScreen: React.FC<
                 value={produceNotes}
                 onChange={(e) => setProduceNotes(e.target.value)}
                 placeholder="ملاحظات التشغيلة (اختياري - مثلاً: تحميص وطحن لفرع المحل)"
-                className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-xs bg-slate-50 focus:outline-none"
+                aria-label="ملاحظات التشغيلة"
+                className="operation-input"
               />
 
               <button
                 onClick={()=>setReviewOpen(true)}
                 disabled={!canProduceAll}
-                className="w-full bg-amber-800 hover:bg-amber-900 disabled:bg-slate-300 text-white font-extrabold py-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2 transition"
+                type="button"
+                className="operation-primary w-full"
               >
-                <Flame className="w-5 h-5" />
+                <Flame className="w-5 h-5 shrink-0" aria-hidden="true" />
                 <span>
                   {canProduceAll
                     ? `مراجعة إنتاج وإضافة ${produceQtyKg} كجم للرصيد`
                     : "الرصيد غير كافٍ لبعض الخامات (راجع النواقص)"}
                 </span>
               </button>
-            </div>
+            </section>
           </div>
         )}
 

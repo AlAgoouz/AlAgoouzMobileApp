@@ -62,7 +62,19 @@ export function financialPosition(state:StoreState,from:string,to:string){
    if(initial<0)throw Error();
    cash(i.date,initial*sign);
    if('isReturned' in i&&i.isReturned){const day=timestamp(i.returnedAt);if(day&&day>=opening.date&&day<=to){if(i.returnRefundAmount===undefined)issues.add('مرتجع قديم بلا مبلغ رد مؤكد');else cash(day,-cents(i.returnRefundAmount));}}
-   if('isCancelled' in i&&i.isCancelled){const day=timestamp(i.cancelledAt);if(day&&day<=to&&i.refundDue!==undefined)pendingRefunds+=cents(i.refundDue);}
+   if('isCancelled' in i&&i.isCancelled){
+    const day=timestamp(i.cancelledAt);
+    if(day&&day<=to&&i.refundDue!==undefined){
+     let outstanding=cents(i.refundDue);
+     for(const receipt of i.refundReceipts??[]){
+      if(receipt.date>to)continue;
+      const value=cents(receipt.amount);
+      outstanding-=value;
+      cash(receipt.date,value);
+     }
+     pendingRefunds+=outstanding;
+    }
+   }
   }catch{issues.add('بيانات سداد فاتورة تحتاج مراجعة');}
  }
  for(const p of state.accountPayments){

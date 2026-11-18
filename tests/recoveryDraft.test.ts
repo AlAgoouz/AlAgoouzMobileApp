@@ -47,3 +47,15 @@ it('clears the recovery draft safely on sign-out', () => {
     }),
   ).not.toThrow();
 });
+
+it('clears the acknowledged draft without removing a different tab’s unfinished draft', () => {
+  const rows = new Map<string,string>();
+  const storage = {setItem: (key:string,value:string)=>rows.set(key,value), removeItem: (key:string)=>rows.delete(key)};
+  const first = recoveryDraftKey + ':first';
+  const second = recoveryDraftKey + ':second';
+  saveRecoveryDraft(storage,emptyStore,undefined,first);
+  saveRecoveryDraft(storage,emptyStore,undefined,second);
+  clearRecoveryDraft(storage,first);
+  expect(rows.has(first)).toBe(false);
+  expect(rows.has(second)).toBe(true);
+});

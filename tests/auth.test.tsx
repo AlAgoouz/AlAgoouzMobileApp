@@ -64,6 +64,27 @@ it('never trusts a forged local owner identifier', async () => {
   expect(result.current.member).toBeNull();
   expect(result.current.status).toBe('signed-out');
 });
+
+it('keeps an unconfirmed save through temporary authentication and access lookup failures',async()=>{
+ const {sb}=client();
+ const original=sb.rpc.getMockImplementation()!;
+ let finish!: (result:unknown)=>void;
+ sb.rpc.mockImplementation(((name:string)=>name==='bon_erp_save_store'
+  ? new Promise(resolve=>{finish=resolve;}) : original(name)) as any);
+ const {result}=renderHook(()=>useErpStore());
+ await waitFor(()=>expect(result.current.fullReady).toBe(true));
+ let saving!: Promise<void>;
+ act(()=>{result.current.engine.replace({...emptyStore});saving=result.current.engine.flush();});
+ sb.auth.getUser.mockResolvedValueOnce({data:{user:null},error:{status:503}} as any);
+ await act(async()=>window.dispatchEvent(new Event('online')));
+ expect(result.current.member?.userId).toBe('user1');
+ expect(result.current.engine.hasPending).toBe(true);
+ sb.rpc.mockResolvedValueOnce({data:null,error:{message:'offline'},status:503} as any);
+ await act(async()=>window.dispatchEvent(new Event('online')));
+ expect(result.current.engine.hasPending).toBe(true);
+ await act(async()=>{finish({data:{version:1},error:null});await saving;});
+ expect(result.current.status).toBe('ready');
+});
 it('keeps loaded forms mounted through a failed write and retry without treating an initial load failure as ready',async()=>{
  const {sb}=client(),original=sb.rpc.getMockImplementation()!;let finish:((result:any)=>void)|undefined;
  sb.rpc.mockImplementation(((name:string)=>name==='bon_erp_save_store'?new Promise(resolve=>{finish=resolve;}):original(name)) as any);

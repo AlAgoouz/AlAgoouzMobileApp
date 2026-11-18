@@ -1,5 +1,6 @@
 import React, {useId, useMemo, useRef, useState} from 'react';
 import {Plus, Receipt, Search, Trash2} from 'lucide-react';
+import {ActionButton} from './ActionButton';
 import {OperationHeader} from './OperationHeader';
 import {RecordPicker} from './RecordPicker';
 import {parseLocalizedNumber} from '../lib/cashierRows';
@@ -162,7 +163,7 @@ export function WholesaleInvoiceScreen({items, customers, currentPartnerName, on
     }
   }
 
-  const input = 'w-full min-w-0 border rounded-xl p-3 bg-white';
+  const input = 'operation-input';
   return <main dir="rtl" className="operation-screen invoice-workspace min-h-screen p-4 pb-28 space-y-4">
     <OperationHeader title="إنشاء فاتورة جملة" description="اختار العميل والتوليفات، وحدد السعر المتفق عليه." icon={Receipt} onBack={onBack} busy={busy} />
     <form ref={form} method="post" noValidate className="space-y-4" onSubmit={prepare} aria-busy={busy}>
@@ -223,15 +224,15 @@ export function WholesaleInvoiceScreen({items, customers, currentPartnerName, on
       </section>
 
       {error && <p role="alert" className="text-red-700">{error}</p>}
-      <footer className="operation-surface operation-form-footer invoice-summary">
+      <footer className="operation-surface operation-form-footer action-bar invoice-summary">
         <dl>
           <div><dt>الإجمالي</dt><dd>{moneyOrDash(total)}</dd></div>
           <div><dt>المدفوع</dt><dd>{moneyOrDash(paidAmount)}</dd></div>
           <div><dt>المتبقي</dt><dd>{moneyOrDash(total - paidAmount)}</dd></div>
         </dl>
-        <button type="submit" disabled={busy} className="operation-primary">
+        <ActionButton type="submit" disabled={busy} variant="primary">
           مراجعة الفاتورة
-        </button>
+        </ActionButton>
       </footer>
     </form>
     {picker === 'customer' && <RecordPicker title="اختيار عميل" searchLabel="ابحث باسم العميل أو رقم التليفون"

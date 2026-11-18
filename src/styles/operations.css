@@ -1,0 +1,91 @@
+
+.action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  min-height: 44px;
+  padding: .45rem .75rem;
+  border: 1px solid var(--line-default);
+  border-radius: var(--r-sm);
+  background: var(--surface-card);
+  color: var(--ink-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  touch-action: manipulation;
+}
+.action-button:is(:hover, [aria-pressed="true"]):not(:disabled) { background: var(--surface-sunken); border-color: var(--line-control); }
+.action-button-primary, .action-button-primary:hover:not(:disabled) {
+  background: var(--brand-gold-finish);
+  border-color: var(--brand-gold-edge);
+  color: var(--ink-on-gold);
+}
+.action-button:disabled { opacity: .55; }
+.money-amount { font-variant-numeric: tabular-nums; white-space: normal; }
+.money-amount bdi { white-space: nowrap; }
+.today-summary { margin-block-end: 1rem; min-inline-size: 0; }
+.today-summary header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
+.today-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: .65rem; margin-block-start: .65rem; }
+.today-metrics > div { min-inline-size: 0; padding: .55rem .7rem; border-radius: var(--r-sm); background: var(--surface-sunken); }
+.today-metrics dt { color: var(--ink-default); font-size: var(--fs-xs); }
+.today-metrics dd { color: var(--ink-strong); font-weight: var(--fw-extrabold); overflow-wrap: anywhere; }
+.cashier-suggestions { display: flex; flex-wrap: wrap; gap: .45rem; margin-block: .35rem; }
+.catalog-controls-end { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.catalog-controls-end > .catalog-list-navigation { flex: 1 1 22rem; }
+[data-density="compact"] .catalog-register-row { gap: .4rem .75rem; padding: .4rem .65rem; }
+[data-density="compact"] .catalog-register-actions { gap: .3rem; }
+[data-density="compact"] .catalog-register-actions button { min-height: 44px; padding-block: .2rem; }
+@media (max-width: 767px) {
+  .invoice-summary .action-button { width: 100%; }
+}
+@media print {
+  .today-summary .action-button, .catalog-controls-end { display: none; }
+}
+
+.workspace-quick-access { display: flex; justify-content: flex-end; padding: .55rem 1rem 0; }
+.workspace-quick-access kbd { border: 1px solid var(--line-default); border-radius: var(--r-xs); padding-inline: .3rem; font-size: var(--fs-xs); }
+@media (pointer: coarse), print { .workspace-quick-access kbd { display: none; } }
+@media print { .workspace-quick-access { display: none; } }
+
+.workspace-nav-surface {
+  background: color-mix(in srgb, var(--surface-card) 95%, transparent);
+  border-color: var(--line-default);
+  box-shadow: var(--navigation-shadow);
+}
+
+.save-status {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 35;
+  width: 100%;
+  padding: .45rem .75rem;
+  background: var(--brand-espresso);
+  color: var(--ink-on-dark);
+  font-size: var(--fs-xs);
+  text-align: center;
+}
+
+.save-status-confirmed {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+@media print {
+  .save-status { display: none; }
+}
+
+.production-layout { display: grid; gap: .85rem; align-items: start; }
+.production-form { display: grid; gap: .75rem; }
+.production-form h2, .production-form .operation-input { margin: 0; }
+.production-facts { grid-template-columns: repeat(3, minmax(0,1fr)); margin: 0; }
+.production-quantities { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; }
+.production-quantities .action-button[aria-pressed=true] { background: var(--brand-gold-finish); border-color: var(--brand-gold-edge); color: var(--ink-on-gold); }
+.production-estimate { background: var(--brand-gold-tint); color: var(--ink-strong); padding: .6rem .75rem; border-radius: var(--r-sm); }
+.production-estimate > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem .65rem; align-items: baseline; }
+.production-estimate dt { font-size: var(--fs-xs); }
+.production-estimate dd { font-weight: var(--fw-extrabold); }
+.production-material { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .4rem 1rem; padding: .65rem .75rem; border: 1px solid var(--line-default); border-radius: var(--r-sm); background: var(--surface-sunken); overflow-wrap: anywhere; }
+.production-material[data-shortage=true] { border-color: var(--danger-line); background: var(--danger-bg); }
+@media (min-width: 900px) {
+  .production-layout { grid-template-columns: minmax(17rem,.85fr) minmax(0,1.15fr); }
+}

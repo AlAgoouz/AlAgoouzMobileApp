@@ -1,6 +1,6 @@
 import {roundMoney as money,sumMoney} from './money';
 import type { StoreState } from './storeState';
-import { businessDate } from './dates';
+import { businessDate, validCalendarDate } from './dates';
 import { receiveStock } from './costing';
 import { recalculateRecipeCosts } from './itemCosts';
 import type { StoreEngine } from './storeEngine';
@@ -313,6 +313,44 @@ export function cancelPurchase(
           }
         : i,
     ),
+  };
+}
+
+export function outstandingPurchaseRefund(
+  invoice: Pick<StoreState['purchaseInvoices'][number], 'refundDue' | 'refundReceipts'>,
+) {
+  return sumMoney([invoice.refundDue ?? 0, ...(invoice.refundReceipts ?? []).map(receipt => -receipt.amount)]);
+}
+
+export function receivePurchaseRefund(
+  state: StoreState,
+  invoiceId: string,
+  amount: number,
+  date: string,
+  actor: {id: string; name: string},
+): StoreState {
+  const invoice = state.purchaseInvoices.find(row => row.id === invoiceId);
+  if (!invoice?.isCancelled || !invoice.cancelledAt || !invoice.refundDue)
+    throw new Error('لا توجد مطالبة استرداد لهذه الفاتورة.');
+  const now = new Date();
+  const cancelledAt = new Date(invoice.cancelledAt);
+  if (!validCalendarDate(date) || !Number.isFinite(cancelledAt.getTime()) ||
+      date < businessDate(cancelledAt) || date > businessDate(now))
+    throw new Error('تاريخ الاستلام يجب أن يكون بين تاريخ الإلغاء واليوم.');
+  const outstanding = outstandingPurchaseRefund(invoice);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > outstanding || amount !== money(amount))
+    throw new Error('أدخل مبلغًا موجبًا بدقة قرش ولا يتجاوز المتبقي.');
+  const receipt = {id: crypto.randomUUID(), amount, date, actorId: actor.id, recordedAt: now.toISOString()};
+  return {
+    ...state,
+    purchaseInvoices: state.purchaseInvoices.map(row =>
+      row.id === invoiceId ? {...row, refundReceipts: [...(row.refundReceipts ?? []), receipt]} : row
+    ),
+    auditLogs: [{
+      id: crypto.randomUUID(), timestamp: receipt.recordedAt, actorId: actor.id, partnerName: actor.name,
+      actionType: 'سداد/تحصيل', description: 'استلام مبلغ مسترد عن الفاتورة ' + invoice.invoiceNumber,
+      amount,
+    }, ...state.auditLogs],
   };
 }
 

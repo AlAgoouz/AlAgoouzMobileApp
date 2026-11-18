@@ -4,7 +4,36 @@ import {mkdtemp,readFile,writeFile,rm,access} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve,sep} from 'node:path';
 import {randomBytes} from 'node:crypto';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
 import {encryptFile,decryptFile,sha256} from '../scripts/backup/archive.mjs';
+import {acquireBackupLock} from '../scripts/backup/lock.mjs';
+
+test('a running backup keeps its lock and a terminated process releases it', {timeout:10000}, async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'agouz-archive-test-'));
+  const path=join(dir,'daily.lock.sqlite');
+  const moduleUrl=new URL('../scripts/backup/lock.mjs',import.meta.url).href;
+  const child=spawn(process.execPath,['--input-type=module','-e',`
+    import {acquireBackupLock} from ${JSON.stringify(moduleUrl)};
+    const release=acquireBackupLock(process.argv[1]);
+    process.stdout.write('locked');
+    setInterval(()=>{},1000);
+  `,path],{windowsHide:true,stdio:['ignore','pipe','inherit']});
+  const exited=once(child,'exit');
+  try{
+    const acquired=once(child.stdout,'data').then(([data])=>data.toString());
+    assert.equal(await Promise.race([acquired,exited.then(()=> 'exited')]),'locked');
+    assert.throws(()=>acquireBackupLock(path),/locked/u);
+    child.kill();
+    await exited;
+    acquireBackupLock(path)();
+  }finally{
+    if(child.exitCode===null&&child.signalCode===null)child.kill();
+    await exited;
+    assert(resolve(dir).startsWith(resolve(tmpdir())+sep+'agouz-archive-test-'));
+    await rm(dir,{recursive:true,force:true});
+  }
+});
 
 test('database bytes survive encryption and restore; altered archives and wrong keys cannot publish plaintext',async()=>{
   const dir=await mkdtemp(join(tmpdir(),'agouz-archive-test-'));

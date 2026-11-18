@@ -3,6 +3,9 @@ import React from 'react';
 import {it,expect,vi,afterEach} from 'vitest';
 import {render,screen,fireEvent,cleanup} from '@testing-library/react';
 import {PeriodSelector} from '../src/components/PeriodSelector';
+import {TodaySummary} from '../src/components/TodaySummary';
+import {dashboardSchema} from '../src/lib/readModels';
+import {projectRead} from './performance/read-fixture.mjs';
 import {ComparisonChart,TrendChart} from '../src/components/FinancialCharts';
 import {SmartInsightsScreen} from '../src/components/ReportsAndInsightsScreens';
 import {fixture} from './performance/fixture.mjs';
@@ -13,6 +16,18 @@ it('retains the applied range until valid custom dates are explicitly applied',(
  expect(screen.getByRole('alert')).toBeTruthy();expect((screen.getByRole('button',{name:'تطبيق'}) as HTMLButtonElement).disabled).toBe(true);expect(change).not.toHaveBeenCalled();
  fireEvent.change(screen.getByLabelText('بداية الفترة'),{target:{value:'2026-11-02'}});fireEvent.click(screen.getByRole('button',{name:'تطبيق'}));
  expect(change).toHaveBeenCalledExactlyOnceWith({kind:'custom',from:'2026-11-02',to:'2026-11-03'});
+});
+it('keeps pending costs distinct from zero and never exposes a hidden daily profit',()=>{
+ const date='2026-11-15';
+ const model=dashboardSchema.parse(projectRead(fixture(1),'bon_erp_dashboard_v2',{p_from:date,p_to:date}));
+ model.report.entries=[{date,sales:250,profit:null}];
+ const {rerender}=render(<TodaySummary date={date} model={model} hideProfit={false} onToggleProfit={vi.fn()}/>);
+ expect(screen.getByText('بانتظار التكلفة')).toBeTruthy();
+ expect(screen.getByText('٢٥٠')).toBeTruthy();
+ model.report.entries=[{date,sales:250,profit:45}];
+ rerender(<TodaySummary date={date} model={model} hideProfit onToggleProfit={vi.fn()}/>);
+ expect(screen.getByText('••••')).toBeTruthy();
+ expect(screen.queryByText('٤٥')).toBeNull();
 });
 it('renders no positive column for zero and gives a loss a genuine negative bar',()=>{
  const {container}=render(<ComparisonChart values={[{label:'صفر',value:0,tone:'fill-gold'},{label:'خسارة',value:-20,tone:'fill-green'},{label:'مبيعات',value:10,tone:'fill-gold'}]}/>);

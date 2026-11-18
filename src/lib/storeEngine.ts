@@ -15,11 +15,13 @@ export interface StoreSnapshot {
   status: StoreStatus;
   error: string;
   recoveryWarning?: string;
+  savedAt?: number;
 }
 export interface StoreTransport {
   load(): Promise<{ state: unknown; version: number }>;
   getVersion?(): Promise<number>;
   discardCashierSave?(operationId: string): Promise<'saved' | 'discarded'>;
+  saveChanges?(before: StoreState, state: StoreState, version: number, operationId: string, queueId?: string): Promise<number>;
   save(
     state: StoreState,
     version: number,
@@ -38,6 +40,7 @@ export class StoreEngine {
   private listeners = new Set<() => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private retryCount=0;
+  private canRetryOnReconnect = false;
   private pending:
     | { state: StoreState; version: number; id: string; queueId?: string; restore?: boolean; cashierAttachment?: boolean }
     | undefined;
@@ -46,6 +49,7 @@ export class StoreEngine {
     | undefined;
   private epoch = 0;
   private hydrated = false;
+  private confirmedState = emptyStore;
   private batchState: StoreState | undefined;
   private flushInFlight: Promise<void> | undefined;
   private refreshInFlight: Promise<void> | undefined;
@@ -53,6 +57,7 @@ export class StoreEngine {
     private transport: StoreTransport,
     private preserve: (state: StoreState) => void = () => {},
     private authorize: (before:StoreState,after:StoreState)=>void = ()=>{},
+    private clearDraft: () => void = () => {},
   ) {}
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -83,6 +88,7 @@ export class StoreEngine {
       this.pending = undefined;
       this.queued = undefined;
       this.hydrated = true;
+      this.confirmedState = state;
       this.publish({
         ...remote,
         state,
@@ -101,10 +107,14 @@ export class StoreEngine {
   logout() {
     ++this.epoch;
     this.hydrated = false;
+    this.confirmedState = emptyStore;
     this.retryCount=0;
     clearTimeout(this.timer);
     this.pending = undefined;
     this.queued = undefined;
+    this.flushInFlight = undefined;
+    this.refreshInFlight = undefined;
+    this.canRetryOnReconnect = false;
     this.publish({
       state: emptyStore,
       version: 0,
@@ -141,8 +151,10 @@ export class StoreEngine {
       if (epoch !== this.epoch) return;
       const state = validateStore(remote.state);
       this.pending = undefined;
+      try { this.clearDraft(); } catch { /* Local cleanup cannot invalidate a confirmed result. */ }
       this.retryCount = 0;
       this.hydrated = true;
+      this.confirmedState = state;
       this.publish({ ...remote, state, status: 'ready', error: '' });
       return result;
     } catch {
@@ -252,11 +264,16 @@ export class StoreEngine {
     this.flushInFlight = active;
     return active;
   }
+
+  reconnect(): Promise<void> {
+    return this.canRetryOnReconnect ? this.flush() : this.refresh();
+  }
   private async flushOnce(): Promise<void> {
     if (!this.pending || !['dirty', 'error'].includes(this.snapshot.status))
       return;
     const pending = this.pending,
       epoch = this.epoch;
+    this.canRetryOnReconnect = false;
     this.publish({ ...this.snapshot, status: 'saving', error: '' });
     try {
       const args = [
@@ -267,8 +284,11 @@ export class StoreEngine {
       ] as const;
       const version = pending.restore
         ? await this.transport.save(...args, true)
-        : await this.transport.save(...args);
+        : this.transport.saveChanges
+          ? await this.transport.saveChanges(this.confirmedState, ...args)
+          : await this.transport.save(...args);
       if (epoch !== this.epoch) return;
+      this.confirmedState = pending.state;
       this.retryCount=0;
       if (this.queued) {
         const nextQueued = this.queued;
@@ -285,16 +305,19 @@ export class StoreEngine {
           version,
           status: 'dirty',
           error: '',
+          recoveryWarning: this.snapshot.recoveryWarning,
         });
         await this.flushOnce();
         return;
       }
       this.pending = undefined;
+      try { this.clearDraft(); } catch { /* Local cleanup cannot invalidate a confirmed save. */ }
       this.publish({
         state: pending.state,
         version,
         status: 'ready',
         error: '',
+        savedAt: Date.now(),
       });
     } catch (error) {
       if (epoch !== this.epoch) return;
@@ -304,6 +327,7 @@ export class StoreEngine {
         error instanceof Error ? error.message : 'تعذر حفظ البيانات';
       const code=error instanceof StoreWriteFailure?error.code:message;
       const conflict=/STORE_CONFLICT|QUEUE_PROCESSED/.test(code);
+      this.canRetryOnReconnect = !conflict && error instanceof StoreWriteFailure && error.transient;
       if(!conflict&&error instanceof StoreWriteFailure&&error.transient&&this.retryCount<3){
         const delay=2000*2**this.retryCount++;
         this.timer=setTimeout(()=>void this.flush(),delay);
@@ -337,7 +361,7 @@ export class StoreEngine {
         const version = await this.transport.getVersion();
         if (!Number.isSafeInteger(version) || version < 0) throw new Error('لم يصل إصدار تحديث صالح');
         if (epoch !== this.epoch) return;
-        if (version <= this.snapshot.version) {
+        if (this.hydrated && version <= this.snapshot.version) {
           // A failed background check must not leave a clean, hydrated store
           // locked after connectivity returns. Failed initial loads still need
           // a full reload; their error must not be cleared by a version probe.
@@ -347,7 +371,7 @@ export class StoreEngine {
         }
       }
       const remote = await this.transport.load();
-      if (epoch !== this.epoch || remote.version <= this.snapshot.version)
+      if (epoch !== this.epoch || (this.hydrated && remote.version <= this.snapshot.version))
         return;
       if (this.getSnapshot().status === 'saving' ||
         (this.getSnapshot().status === 'error' && this.pending)) return;
@@ -362,6 +386,7 @@ export class StoreEngine {
       } else {
         const state = validateStore(remote.state);
         this.hydrated = true;
+        this.confirmedState = state;
         this.publish({
           ...remote,
           state,

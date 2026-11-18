@@ -153,6 +153,7 @@ const invoice = base
     cancelledAt: text.optional(),
     cancelledBy: text.optional(),
     refundDue: money.optional(),
+    refundReceipts: z.array(z.object({id, amount: z.number().positive(), date: id, actorId: id, recordedAt: id})).optional(),
   })
   .passthrough();
 export const recipeProductDefinitionSchema=z.object({code:id,category:z.enum(['manufactured_blend','drink_recipe','seasoning_recipe']),baseUnit:z.enum(['kg','piece','count','liter']),retailPrice:money,openingStock:money,minStock:money});

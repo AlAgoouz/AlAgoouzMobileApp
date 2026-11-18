@@ -1,6 +1,6 @@
 import React from "react";
 import { createBackup } from "../lib/storeState";
-import { recoveryDraftKey } from "../lib/recoveryDraft";
+import { readRecoveryDraft } from "../lib/recoveryDraft";
 import { reportBrowserIncident } from "../lib/observability";
 
 export class AppErrorBoundary extends React.Component<
@@ -24,7 +24,7 @@ export class AppErrorBoundary extends React.Component<
 
   exportRecovery = () => {
     try {
-      const raw = localStorage.getItem(recoveryDraftKey);
+      const raw = readRecoveryDraft();
       if (!raw) throw new Error("لا توجد نسخة استرداد محلية على هذا الجهاز.");
       const draft = JSON.parse(raw);
       const backup = createBackup(draft.state);

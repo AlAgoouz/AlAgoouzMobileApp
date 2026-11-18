@@ -3,6 +3,8 @@ import hashlib
 import html
 import io
 import contextlib
+import os
+import sys
 from pathlib import Path
 from string import Template
 from threading import Lock
@@ -40,7 +42,11 @@ def initialize_pdf():
     with _lock:
         if _ready:return
         root=Path(__file__).parent/'native'
-        if (root/'SHA256SUMS').exists():
+        if sys.platform == 'win32':
+            ucrt_dlls = Path(r'C:\msys64\ucrt64\bin')
+            if (ucrt_dlls/'libpango-1.0-0.dll').is_file():
+                os.environ.setdefault('WEASYPRINT_DLL_DIRECTORIES', str(ucrt_dlls))
+        if sys.platform == 'linux' and (root/'SHA256SUMS').exists():
             for line in (root/'SHA256SUMS').read_text().splitlines():
                 digest,name=line.split()
                 path=root/name

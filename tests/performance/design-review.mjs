@@ -99,8 +99,10 @@ export async function verifyDesign(){
     await page.getByLabel('بداية الفترة').fill('2026-11-01');await page.getByRole('button',{name:'تطبيق',exact:true}).click();
     await page.getByRole('button',{name:'كل السجل',exact:true}).click();evidence.periods=true;
     assert.equal(await page.locator('.screen-stage').evaluate(e=>getComputedStyle(e).animationName),'none');evidence.reducedMotion=true;
-    for(const width of [320,360,430,768,1024,1440]){
+    for(const width of [320,360,430,768,950,1024,1099,1100,1199,1200,1440]){
       await page.setViewportSize({width,height:900});await limit(page,`home-${width}`);
+      const panels=await page.locator('.dashboard-main-panels').evaluate(element=>getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length);
+      assert.equal(panels,width>=950?2:1,'Dashboard columns must remain stable when the sidebar appears');
       const used=await page.locator('.app-workspace').evaluate(e=>e.getBoundingClientRect().width);evidence.workspaceWidths.push({viewport:width,used});
       if(width>=768)assert.ok(used>=Math.min(width-(width>=1100?252:0),1440)-2,'Workspace must use the available desktop/tablet width');
       assert.equal(await page.locator('.agouz-app').evaluate(e=>getComputedStyle(e).paddingInlineStart),width>=1100?'252px':'0px','Sidebar space must reset after changing viewport');
@@ -156,7 +158,7 @@ export async function verifyDesign(){
     for(const title of titles){
       await page.locator('.section-tile').filter({has:page.locator('.section-tile-title',{hasText:title})}).click();
       await page.locator('.sections-hub').waitFor({state:'hidden'});
-      await page.getByText('جارٍ تحميل الشاشة…',{exact:true}).waitFor({state:'hidden'});
+      await page.getByText('جارٍ تحميل الشاشة…',{exact:true}).filter({visible:true}).first().waitFor({state:'hidden'});
       assert.equal(await page.getByText('تعذر فتح الشاشة',{exact:false}).count(),0);
       await limit(page,title);
       assert.equal(await page.locator('.operation-header').count(),1,'Every internal section must share one header');
@@ -305,7 +307,7 @@ export async function verifyDesign(){
         await page.getByRole('heading',{name:'حسابي',exact:true}).waitFor();
         await page.getByRole('button',{name:'الأقسام',exact:true}).click();
         await page.locator('.section-tile').filter({has:page.locator('.section-tile-title',{hasText:title})}).click();
-        await page.getByText('جارٍ تحميل الشاشة…',{exact:true}).waitFor({state:'hidden'});
+        await page.getByText('جارٍ تحميل الشاشة…',{exact:true}).filter({visible:true}).first().waitFor({state:'hidden'});
       }
       if(title==='التقارير والأرباح'){
         for(const tab of ['حصص الشركاء','ربحية الأصناف','الفواتير','الملخص']){
@@ -365,10 +367,19 @@ export async function verifyDesign(){
     await page.locator('button:disabled').filter({hasText:'اعتماد الوصفة وتجهيز المنتج'}).waitFor();
     assert.equal(await page.getByRole('button',{name:'اعتماد الوصفة وتجهيز المنتج',exact:true}).isDisabled(),true);
     await page.getByLabel('كمية خام الوصفة',{exact:true}).fill('18');
-    for(const width of [320,360,768,1440]){await page.setViewportSize({width,height:900});await limit(page,`recipe-editor-${width}`);await page.screenshot({path:`design-recipe-editor-${width}-mobile.png`,fullPage:true});}
+    for(const width of [320,360,768,1440]){
+      await page.setViewportSize({width,height:900});await limit(page,`recipe-editor-${width}`);
+      const columns=await page.locator('.recipe-editor').evaluate(element=>getComputedStyle(element).gridTemplateColumns.split(/\s+/).length);
+      assert.equal(columns,width===1440?2:1,'The recipe editor needs a separate cost column only when there is room');
+      const addColumns=await page.locator('.recipe-add-fields').evaluate(element=>getComputedStyle(element).gridTemplateColumns.split(/\s+/).length);
+      assert.equal(addColumns,1,'Ingredient selection, amounts and the add action should stack in the add form');
+      const ingredient=page.locator('.recipe-ingredient').first();
+      assert.equal(await ingredient.getByRole('button',{name:'حذف مكون خام الوصفة'}).isVisible(),true);
+      await page.screenshot({path:`design-recipe-editor-${width}-mobile.png`,fullPage:true});
+    }
     await page.emulateMedia({reducedMotion:'no-preference'});
     const ingredientCard=await reviewCardHover(page,'.record-card','record','design-hover-record-mobile.png');
-    assert.equal(await ingredientCard.evaluate(e=>getComputedStyle(e.parentElement.closest('.visual-card')).transform),'none','Nested records must not lift their parent card too');
+    assert.equal(await ingredientCard.evaluate(e=>getComputedStyle(e.closest('.recipe-ingredients')).transform),'none','Ingredient hover must keep the recipe layout still');
     await page.emulateMedia({reducedMotion:'reduce'});await settleCard(ingredientCard);
     assert.equal(await ingredientCard.evaluate(e=>getComputedStyle(e).transform),'none','Record cards must respect reduced motion');
     await page.route('**/rest/v1/rpc/bon_erp_save_store',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Isolated fixture refuses writes'})}));
@@ -521,7 +532,9 @@ export async function verifyDesign(){
         await operator.getByRole('heading',{name:'مراجعة '+row.file_name,exact:true}).waitFor({state:'hidden'});
       }
       await operator.getByRole('button',{name:'مراجعة واعتماد اليوم',exact:true}).click();
+      const cashierSaved=operator.waitForResponse(response=>response.url().endsWith('/rpc/bon_erp_save_store')&&response.ok());
       await operator.getByRole('button',{name:'تأكيد الاعتماد وخصم الأصناف',exact:true}).click();
+      await cashierSaved;
       await operator.getByRole('heading',{name:day+' — معتمد',exact:true}).waitFor();
       assert.equal(ledgerState.cashier_days.length,1);
       assert.equal(ledgerState.cashier_days[0].financialReport.totalRevenue,120);

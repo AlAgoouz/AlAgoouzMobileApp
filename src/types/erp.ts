@@ -130,6 +130,7 @@ export interface PurchaseInvoice {
   cancelledAt?: string;
   cancelledBy?: string;
   refundDue?: number;
+  refundReceipts?: {id: string; amount: number; date: string; actorId: string; recordedAt: string}[];
   inventoryBefore?: InventoryItem[];
   inventoryAfter?: InventoryItem[];
 }
