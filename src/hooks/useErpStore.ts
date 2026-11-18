@@ -7,7 +7,7 @@ import {storeChanges} from '../lib/storeChanges';
 import { scrubLegacyPasswords } from '../lib/legacyCache';
 import { authErrorMessage } from '../lib/authErrors';
 import { StoreWriteFailure,storeWriteError } from '../lib/storeErrors';
-import { clearRecoveryDraft, forgetRecoveryDraft, recoveryDraftKey, rememberRecoveryDraft, saveRecoveryDraft } from '../lib/recoveryDraft';
+import { clearRecoveryDraft, forgetRecoveryDraft, saveRecoveryDraft, userRecoveryDraftKey } from '../lib/recoveryDraft';
 
 function isTransientStatus(status: number | undefined) {
   return status === 0 || status === 408 || status === 429 || (status !== undefined && status >= 500);
@@ -29,9 +29,11 @@ export function useErpStore(loadFull=true) {
   });
   const generation = useRef(0);
   const activeUser = useRef<string | null>(null);
+  const draftTabId = useRef<string>();
+  draftTabId.current ??= crypto.randomUUID();
+  const tabId = draftTabId.current;
   const engineRef = useRef<StoreEngine>();
   if (!engineRef.current) {
-    const draftKey = `${recoveryDraftKey}:${crypto.randomUUID()}`;
     engineRef.current = new StoreEngine(
       {
         async saveChanges(before, state, version, operationId, queueId) {
@@ -112,12 +114,15 @@ export function useErpStore(loadFull=true) {
         },
       },
       (state) => {
-        // Preserve a draft before network writes. Legacy cache remains untouched for recovery.
-        saveRecoveryDraft(localStorage, state, undefined, draftKey);
-        rememberRecoveryDraft(draftKey);
+        const owner = accessRef.current;
+        if (!owner) throw new Error('تعذر تحديد حساب مسودة الاسترداد');
+        saveRecoveryDraft(localStorage, state, undefined, userRecoveryDraftKey(owner.userId, tabId));
       },
       (before,after)=>assertUserChanges(before,after,accessRef.current),
-      () => clearRecoveryDraft(localStorage, draftKey),
+      () => {
+        const owner = accessRef.current;
+        if (owner) clearRecoveryDraft(localStorage, userRecoveryDraftKey(owner.userId, tabId));
+      },
     );
   }
   const engine = engineRef.current;
@@ -310,7 +315,6 @@ export function useErpStore(loadFull=true) {
     const sb = getSupabaseClient();
     const result = await sb?.auth.signOut();
     if (result?.error) throw new Error('تعذر إنهاء الجلسة؛ حاول مرة أخرى');
-    clearRecoveryDraft(localStorage);
     forgetRecoveryDraft();
     setMember(null);
     engine.logout();
@@ -362,6 +366,7 @@ export function useErpStore(loadFull=true) {
     // Keep mounted forms through acknowledgement waits and write failures. The
     // blocking status dialog still prevents actions; hydration is not save status.
     recoveryWarning:snapshot.recoveryWarning,
+    recoveryDraftKey: member ? userRecoveryDraftKey(member.userId, tabId) : undefined,
     fullReady:hydrationKey===member?.userId&&engine.hasLoaded&&!['signed-out','loading'].includes(snapshot.status),
     engine,
     member,

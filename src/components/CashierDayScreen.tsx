@@ -16,6 +16,7 @@ import {convertToBaseUnit} from '../lib/itemCosts';
 import type {attachCashierReport} from '../lib/cashierDays';
 type Report=Parameters<typeof attachCashierReport>[2];
 export type QueuedCashierReport={id:string;file_name:string;sale_date:string;content_hash:string;report_kind?:'financial'|'items';import_job_id?:string;raw_rows?:Record<string,unknown>[]};
+const needsItems=(day:CashierDay)=>day.status==='pending'&&!!day.financialReport&&!day.itemsReport;
 export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack}: {items:InventoryItem[];days:CashierDay[];queued?:QueuedCashierReport[];onAttach:(date:string,report:Report)=>Promise<void>;onApprove:(id:string)=>Promise<void>;onBack:()=>void}){
  const [date,setDate]=useState(businessDate()),[type,setType]=useState<'financial'|'items'>('financial');
  const [preview,setPreview]=useState<{name:string;sha256:string;rows:Record<string,unknown>[];sourceQueueId?:string;businessDate?:string;suggestions?:NonNullable<ImportJob['result']>['suggestions']} | null>(null);
@@ -27,6 +28,7 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
  const matchPage=useRecordPage(parsed,preview?.sha256);
  const choose=(row:number,change:Partial<CashierReview[number]>)=>{if(!preview)return;setReview({hash:preview.sha256,choices:{...choices,[row]:{itemId:choices[row]?.itemId??'',unit:choices[row]?.unit??'',...change}}});};
  const [historySearch,setHistorySearch]=useState('');
+ const [missingItemsOnly,setMissingItemsOnly]=useState(false);
  const [uploadTarget,setUploadTarget]=useState<{date:string;kind:'financial'|'items';key:number}>();
  const uploadSection=useRef<HTMLDivElement>(null);
  function openUpload(day:string,kind:'financial'|'items'){
@@ -35,8 +37,9 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
  }
  const [approvalId,setApprovalId]=useState<string>();
  const approval=days.find(day=>day.id===approvalId);
- const history=useMemo(()=>[...days].filter(d=>d.date.includes(historySearch)).sort((a,b)=>b.date.localeCompare(a.date)),[days,historySearch]);
- const page=useRecordPage(history,historySearch);
+ const missingItems=days.filter(needsItems).length;
+ const history=useMemo(()=>days.filter(d=>d.date.includes(historySearch)&&(!missingItemsOnly||needsItems(d))).sort((a,b)=>b.date.localeCompare(a.date)),[days,historySearch,missingItemsOnly]);
+ const page=useRecordPage(history,`${historySearch}:${missingItemsOnly}`);
  const revenue=preview?begunRevenue(preview.rows,date):undefined;
  const printed=type==='items'&&preview?.rows.some(row=>row.sourceFormat==='uws-items-v1');
  const sourceDateError=(printed&&preview?.rows.some(row=>row.businessDate!==date)||preview?.businessDate&&preview.businessDate!==date)?'تاريخ تقرير الأصناف لا يطابق يوم العمل؛ أعد معالجة الملف بالتاريخ الصحيح.':'';
@@ -74,7 +77,14 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
   </section>}
   {!approval&&error&&<p role="alert" className="text-red-700">{error}</p>}
   <h2 className="font-bold">الأيام المسجلة</h2>
+  {(missingItems>0||missingItemsOnly)&&<div className="operation-note flex flex-wrap items-center justify-between gap-2">
+   <span>أيام اتسجّل إيرادها وتنتظر تقرير الأصناف: {missingItems.toLocaleString('ar-EG')}</span>
+   <button type="button" className="action-button" aria-pressed={missingItemsOnly} onClick={()=>{setHistorySearch('');setMissingItemsOnly(active=>!active);}}>
+    {missingItemsOnly?'عرض كل الأيام':'عرض الأيام التي تنتظر تقرير الأصناف'}
+   </button>
+  </div>}
   <label className="block">بحث بتاريخ اليوم<input className={input} placeholder="YYYY-MM-DD" value={historySearch} onChange={e=>setHistorySearch(e.target.value)}/></label><RecordPagination {...page}/>
+  {missingItemsOnly&&!history.length&&<p className="record-state">لا توجد أيام مطابقة تنتظر تقرير الأصناف.</p>}
   {page.visible.map(d=><article key={d.id} className="border rounded-xl bg-white p-3 space-y-2"><h3 className="font-bold">{d.date} — {d.status==='approved'?'معتمد':'بانتظار الاعتماد'}</h3><div className="cashier-report-pair">
      {(['financial','items'] as const).map(kind=>{
        const report=kind==='financial'?d.financialReport:d.itemsReport;

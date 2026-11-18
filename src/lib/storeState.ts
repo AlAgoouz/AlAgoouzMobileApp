@@ -559,7 +559,7 @@ export function toCloud(state: StoreState) {
     ]),
   );
 }
-export function createBackup(state: StoreState) {
+export function createBackup(state: unknown) {
   return {
     format: "bon-elagouz-store",
     schemaVersion: 1,

@@ -10,8 +10,13 @@ import type {
   CashierDay,
 } from '../types/erp';
 import { businessDate } from './dates';
-export function downloadFullBackupJson(statePayload: Record<string, unknown>) {
-  const dateStr = businessDate();
+import {createBackup} from './storeState';
+
+export function downloadRecoverySnapshot(state: unknown) {
+  downloadFullBackupJson(createBackup(state), `Agouz-Recovery-${Date.now()}.json`);
+}
+
+export function downloadFullBackupJson(statePayload: Record<string, unknown>, filename = `نسخة_احتياطية_بن_العجوز_${businessDate()}.json`) {
   const blob = new Blob(
     [
       JSON.stringify(
@@ -27,7 +32,7 @@ export function downloadFullBackupJson(statePayload: Record<string, unknown>) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `نسخة_احتياطية_بن_العجوز_${dateStr}.json`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

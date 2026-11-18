@@ -3,6 +3,9 @@ import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { AppErrorBoundary } from "../src/components/AppErrorBoundary";
+import { RecoveryDraftNotice } from "../src/components/RecoveryDraftNotice";
+import { saveRecoveryDraft, userRecoveryDraftKey } from "../src/lib/recoveryDraft";
+import * as backupExport from "../src/lib/backupExport";
 import { emptyStore } from "../src/lib/storeState";
 afterEach(() => {
   cleanup();
@@ -75,4 +78,17 @@ it("allows resetting a failed screen boundary back to the home screen without re
   fireEvent.click(screen.getByRole("button", { name: "العودة للرئيسية" }));
   expect(onReset).toHaveBeenCalledOnce();
   expect(screen.getByText("Recovered Screen")).toBeTruthy();
+});
+
+it("shows and downloads an authenticated account's previous draft from the normal workspace", () => {
+  const download=vi.spyOn(backupExport,'downloadRecoverySnapshot').mockImplementation(()=>{});
+  const activeKey=userRecoveryDraftKey('member','open-tab');
+  for(const key of [activeKey,userRecoveryDraftKey('member','closed-tab'),userRecoveryDraftKey('another','closed-tab')]){
+    saveRecoveryDraft(localStorage,emptyStore,new Date('2026-11-18T03:00:00Z'),key);
+  }
+  render(<RecoveryDraftNotice userId="member" activeKey={activeKey}/>);
+  expect(screen.getByText('مسودات حفظ سابقة على هذا الجهاز (1)')).toBeTruthy();
+  fireEvent.click(screen.getByText('مسودات حفظ سابقة على هذا الجهاز (1)'));
+  fireEvent.click(screen.getByRole('button',{name:'تنزيل المسودة'}));
+  expect(download).toHaveBeenCalledExactlyOnceWith(emptyStore);
 });

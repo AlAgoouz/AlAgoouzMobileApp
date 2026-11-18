@@ -1,10 +1,10 @@
 import React from "react";
-import { createBackup } from "../lib/storeState";
-import { readRecoveryDraft } from "../lib/recoveryDraft";
+import { downloadRecoverySnapshot } from "../lib/backupExport";
+import { readRecoveryDraft, type RecoveryDraftAccess } from "../lib/recoveryDraft";
 import { reportBrowserIncident } from "../lib/observability";
 
 export class AppErrorBoundary extends React.Component<
-  { children: React.ReactNode; onReset?: () => void },
+  { children: React.ReactNode; onReset?: () => void; recoveryAccess?: RecoveryDraftAccess },
   { failed: boolean; updateAvailable: boolean; exportMessage: string }
 > {
   state = { failed: false, updateAvailable: false, exportMessage: "" };
@@ -24,20 +24,9 @@ export class AppErrorBoundary extends React.Component<
 
   exportRecovery = () => {
     try {
-      const raw = readRecoveryDraft();
-      if (!raw) throw new Error("لا توجد نسخة استرداد محلية على هذا الجهاز.");
-      const draft = JSON.parse(raw);
-      const backup = createBackup(draft.state);
-      const url = URL.createObjectURL(
-        new Blob([JSON.stringify(backup, null, 2)], {
-          type: "application/json",
-        }),
-      );
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `Agouz-Recovery-${Date.now()}.json`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const state = this.props.recoveryAccess && readRecoveryDraft(this.props.recoveryAccess);
+      if (!state) throw new Error("لا توجد نسخة استرداد محلية على هذا الجهاز.");
+      downloadRecoverySnapshot(state);
       this.setState({
         exportMessage: "تم تجهيز نسخة الاسترداد المحلية للتنزيل.",
       });
