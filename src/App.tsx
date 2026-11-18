@@ -7,6 +7,7 @@ import type {CatalogNameDraft,RecipeProductDefinition} from './types/erp';
 import {initialSalesHistoryView,PagedSalesHistory} from './components/PagedSalesHistory';
 import {ScreenLoading} from './components/ScreenLoading';
 import {AppErrorBoundary} from './components/AppErrorBoundary';
+import {RecoveryDraftNotice} from './components/RecoveryDraftNotice';
 import {Modal} from './components/Modal';
 import {useWorkspaceNavigation} from './hooks/useWorkspaceNavigation';
 import {DashboardScreen} from './components/DashboardScreen';
@@ -951,6 +952,7 @@ export default function App() {
     );
   if(member.role==='cashier')return <CashierUploadScreen name={member.displayName} onLogout={handleLogout}/>;
   if(!canView(member))return <main dir="rtl" className="agouz-login"><section className="login-panel p-6 space-y-4"><h1 className="font-black">الحساب غير مخوّل لعرض بيانات المحل</h1><p>اطلب من المالك تحديد صلاحياتك ثم سجّل الدخول مجددًا.</p><button className="login-submit w-full" onClick={handleLogout}>تسجيل الخروج</button></section></main>;
+  const recoveryAccess={userId:member.userId,activeKey:cloud.recoveryDraftKey,includeLegacy:member.isOwner};
   const blocked = (needsFullStore||engine.hasPending)&&!["ready", "dirty", "saving"].includes(cloud.status);
   const statusText =
     cloud.status === "saving"
@@ -974,6 +976,7 @@ export default function App() {
       )}
       <SaveStatus savedAt={cloud.savedAt} ready={cloud.status === 'ready'} message={needsFullStore || engine.hasPending ? statusText : ''}/>
       {cloud.recoveryWarning&&<p role="status" className="w-full p-3 bg-amber-100 text-amber-900 text-sm">{cloud.recoveryWarning}</p>}
+      <RecoveryDraftNotice key={member.userId} {...recoveryAccess}/>
       {queueError && (
         <div
           role="alert"
@@ -1061,7 +1064,7 @@ export default function App() {
       <div className="app-workspace min-h-screen relative pb-16">
         <WorkspaceQuickAccess member={member} onNavigate={navigateScreen} showButton={activeScreen==='home'||activeScreen==='sections'}/>
         <div className="screen-stage" key={activeScreen+':'+moreInitialTab}>
-        <AppErrorBoundary key={activeScreen+':'+moreInitialTab} onReset={()=>setActiveScreen('home')}>
+        <AppErrorBoundary key={member.userId+':'+activeScreen+':'+moreInitialTab} recoveryAccess={recoveryAccess} onReset={()=>setActiveScreen('home')}>
         {/* ================= 1. الشاشة الرئيسية: لوحة الإحصائيات والرسوم البيانية الاحترافية ================= */}
         {activeScreen === 'home'&&<DashboardScreen model={dashboard.data} dailyModel={needsTodayRead ? dailyDashboard.data : dashboard.data} dailyError={needsTodayRead ? dailyDashboard.error : dashboard.error} onRetryDaily={needsTodayRead ? dailyDashboard.retry : dashboard.retry} error={dashboard.error} onRetry={dashboard.retry} period={reportPeriod} onPeriod={setReportPeriod} name={currentPartner.name} isOwner={member?.isOwner} onNavigate={navigateScreen}/>}
 

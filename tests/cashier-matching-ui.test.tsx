@@ -3,7 +3,11 @@ import React from 'react';
 import {it,expect,vi,afterEach} from 'vitest';
 import {render,screen,fireEvent,cleanup} from '@testing-library/react';
 import {CashierRowReview} from '../src/components/CashierRowReview';
+import {CashierDayScreen} from '../src/components/CashierDayScreen';
 import {INITIAL_ITEMS} from '../src/data/initialData';
+vi.mock('../src/lib/importJobs',async(importOriginal)=>({
+  ...await importOriginal<typeof import('../src/lib/importJobs')>(),listImports:async()=>[],
+}));
 afterEach(cleanup);
 it('keeps a ten-thousand-item catalog bounded and requires explicit confirmation of suggested matches',()=>{
  const items=Array.from({length:10000},(_,i)=>({...INITIAL_ITEMS[0],id:'item-'+i,code:'B'+i,name:'Catalog '+i})),onChange=vi.fn();
@@ -15,4 +19,20 @@ it('keeps a ten-thousand-item catalog bounded and requires explicit confirmation
  fireEvent.change(screen.getByLabelText('بحث لصنف الصف 1'),{target:{value:'B9999'}});
  fireEvent.change(screen.getByLabelText('مطابقة الصف 1'),{target:{value:'item-9999'}});
  expect(onChange).toHaveBeenLastCalledWith({itemId:'item-9999',unit:''});
+});
+
+it('finds financial-only days and opens the original item-report upload for the selected date',async()=>{
+ const file={fileName:'financial.xlsx',sha256:'a'.repeat(64),uploadedAt:'2026-11-18T00:00:00Z',totalRevenue:100};
+ render(<CashierDayScreen items={[]} days={[
+   {id:'missing',date:'2026-11-01',status:'pending',financialReport:file},
+   {id:'paired',date:'2026-11-02',status:'pending',financialReport:file,itemsReport:{...file,lines:[]}},
+ ]} onAttach={async()=>{}} onApprove={async()=>{}} onBack={()=>{}}/>);
+ await screen.findByText('لا توجد ملفات مرفوعة بعد.');
+ fireEvent.click(screen.getByRole('button',{name:'عرض الأيام التي تنتظر تقرير الأصناف'}));
+ expect(screen.queryByRole('heading',{name:/2026-11-02/})).toBeNull();
+ expect(screen.getByRole('heading',{name:/2026-11-01/})).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'رفع تقرير الأصناف'}));
+ await screen.findByText('لا توجد ملفات مرفوعة بعد.');
+ expect((screen.getByLabelText('يوم العمل') as HTMLInputElement).value).toBe('2026-11-01');
+ expect((screen.getByLabelText('نوع التقرير') as HTMLSelectElement).value).toBe('items');
 });

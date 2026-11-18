@@ -23,3 +23,10 @@ Implementation notes (release verification still pending):
 - Real-device report acceptance requires actual financial and item reports from one date. No synthetic sales or inventory postings are permitted in production.
 
 Recovery isolation: restore-verification containers use an internal Docker network, disable Cron job launches, and point pg_net at a nonexistent isolated database. A restored scheduler must never invoke production endpoints. After a deliberate real recovery, explicitly review and reactivate scheduled jobs only on the chosen target.
+
+## متابعة الإصلاحات بعد إصدار 18 نوفمبر
+
+- **الكاشير.** حصر أيام الإيراد التي تنتظر تقرير الأصناف من شاشة تقارير الكاشير. لكل يوم، يُراجع ملف الأصناف الأصلي من Transight لنفس تاريخ العمل، وتُطابق الأكواد والوحدات والكميات قبل اعتماد التكلفة وخصم المخزون. أربعة أيام كانت بانتظار هذه الملفات وقت المراجعة.
+- **مسودات الحفظ.** عرض المسودات السابقة لكل حساب في المتصفح وإتاحة تنزيلها للمراجعة. المسودات القديمة بلا هوية حساب متاحة للمالك. الاستعادة تمر من مسار إدارة البيانات بعد مقارنة الملف بالحالة الحالية.
+- **نسخ Drive.** تقرير مساحة مع كل تحقق ناجح من النسخ. نافذة المراجعة المقترحة تحتفظ بكل النسخ الموثقة لآخر 30 يومًا، وأحدث نسخة لكل شهر من آخر 12 شهرًا، والنسخة المشار إليها في `latest-verified.json`. تُحصر النسخ المرحلية المطابقة بالاسم والحجم والبصمة بعد 7 أيام. تقرير الجرد للقراءة فقط.
+- **تنبيهات الاعتمادات.** فحص اعتمادات الإنتاج منفصل في السجل عن الفحص الكامل للأدوات. يستمر الفحص الكامل في تسجيل وإيقاف التنبيهات حسب الحد الحالي. تحديث `picomatch` مرتبط بتوفر إصدار مصحّح ومتوافق.

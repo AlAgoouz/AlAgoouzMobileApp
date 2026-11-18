@@ -31,5 +31,8 @@ jobs:
         if: always()
         run: docker compose -f tests/integration/compose.yml down -v
       - run: npm run build
-      - run: npm audit --audit-level=moderate
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Audit all dependencies including development tooling
+        run: npm audit --audit-level=moderate
 

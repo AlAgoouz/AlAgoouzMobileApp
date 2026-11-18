@@ -8,6 +8,24 @@ import {spawn} from 'node:child_process';
 import {once} from 'node:events';
 import {encryptFile,decryptFile,sha256} from '../scripts/backup/archive.mjs';
 import {acquireBackupLock} from '../scripts/backup/lock.mjs';
+import {backupRetentionReport} from '../scripts/backup/retention.mjs';
+
+test('backup inventory protects the current pointer and recent daily and monthly archives',()=>{
+  const file=(day,hash='a'.repeat(32))=>({Name:day+'T00-00-00-000Z-12345678.agouz',Size:200,IsDir:false,Hashes:{md5:hash}});
+  const latest=file('2026-11-17');
+  const pointer=file('2025-09-02');
+  const month=file('2026-09-30');
+  const older=file('2026-09-23');
+  const uncertain=file('2026-11-08');
+  const duplicated=file('2025-09-01');
+  const now=new Date('2026-11-18T03:00:00Z');
+  const report=backupRetentionReport([latest,pointer,month,older,uncertain,duplicated,duplicated],
+    [latest,pointer,month,{...uncertain,Hashes:{md5:'b'.repeat(32)}},duplicated],pointer.Name,now);
+  assert.deepEqual(report.olderVerifiedForReview,{files:1,bytes:200});
+  assert.deepEqual(report.pendingDuplicatesForReview,{files:1,bytes:200});
+  assert.equal(report.ignoredOrAmbiguousFiles,2);
+  assert.throws(()=>backupRetentionReport([latest],[],pointer.Name,now),/LATEST_NOT_LISTED/);
+});
 
 test('a running backup keeps its lock and a terminated process releases it', {timeout:10000}, async()=>{
   const dir=await mkdtemp(join(tmpdir(),'agouz-archive-test-'));
