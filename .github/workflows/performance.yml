@@ -26,8 +26,9 @@ jobs:
         env:
           VITE_SUPABASE_URL: http://127.0.0.1:5284
           VITE_SUPABASE_PUBLISHABLE_KEY: fixture-only-public-key
+          BASELINE_SHA: ${{ github.event.pull_request.base.sha || 'bccd915a059f264ceb7e245adee3ef14a6ecd8a5' }}
         run: |
-          git worktree add --detach "$RUNNER_TEMP/agouz-baseline" bccd915a059f264ceb7e245adee3ef14a6ecd8a5
+          git worktree add --detach "$RUNNER_TEMP/agouz-baseline" "$BASELINE_SHA"
           npm ci --prefix "$RUNNER_TEMP/agouz-baseline"
           (cd "$RUNNER_TEMP/agouz-baseline" && npm run build)
           npm run build
@@ -45,6 +46,23 @@ jobs:
           fixture_pid=$!
           for attempt in {1..30}; do curl -fsS http://127.0.0.1:5284/__perf__/metrics && break || sleep 1; done
           node tests/performance/measure.mjs current
+      - name: Report comparison against the pull request base
+        if: github.event_name == 'pull_request'
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const baseline = JSON.parse(readFileSync('baseline-performance.json', 'utf8')).median;
+          const current = JSON.parse(readFileSync('current-performance.json', 'utf8')).median;
+          const lines = ['| Metric | Base | Current | Change |', '| --- | ---: | ---: | ---: |'];
+          for (const metric of ['homeReadyMs', 'invoiceReadyMs', 'renderedInvoices', 'refreshWireBytes']) {
+            if (!Number.isFinite(baseline[metric]) || !Number.isFinite(current[metric])) {
+              throw new Error(`A complete performance comparison is unavailable for ${metric}`);
+            }
+            const change = ((current[metric] - baseline[metric]) / Math.max(baseline[metric], 1)) * 100;
+            lines.push(`| ${metric} | ${baseline[metric].toFixed(1)} | ${current[metric].toFixed(1)} | ${change.toFixed(1)}% |`);
+          }
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
+          NODE
       - uses: actions/upload-artifact@v4
         if: always()
         with:
