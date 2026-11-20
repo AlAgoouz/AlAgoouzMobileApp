@@ -1,4 +1,5 @@
 import {unitLabel as displayUnit} from '../lib/units';
+import {useThemePreference, type ThemePreference} from '../lib/theme';
 import {Tag as HeaderTag,Package as HeaderPackage,TriangleAlert as HeaderTriangleAlert,Users as HeaderUsers,ReceiptText as HeaderReceiptText,DatabaseBackup as HeaderDatabaseBackup,Wallet as HeaderWallet,Cloud as HeaderCloud,CircleUser as HeaderCircleUser} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
 import {Modal} from './Modal';
@@ -21,7 +22,7 @@ import {categoryLabel,itemCategories,requiresRecipe,isStockItem,isRecipeOnUse} f
 import React, { useState, useMemo } from "react";
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import {checkCustomerDetails,checkSupplierDetails} from '../lib/contactDetails';
-import {Search, Plus, RotateCcw, Flame, Printer, LogOut, Trash2, Download, RefreshCw, MessageCircle, FileText, Upload, FileSpreadsheet} from 'lucide-react';
+import {Search, Plus, RotateCcw, Flame, Printer, LogOut, Trash2, Download, RefreshCw, MessageCircle, FileText, Upload, FileSpreadsheet, Sun, Moon, Monitor} from 'lucide-react';
 import {
   InventoryItem,
   Supplier,
@@ -1018,7 +1019,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
                       <p>المنطقة: {cust.area || 'غير مسجلة'}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <div className="text-left">
+                      <div className="text-end">
                         <div className="text-xs text-ink">عليه</div>
                         <div
                           className={`text-sm font-black ${
@@ -1816,6 +1817,13 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
     );
   }
 
+  const { preference, setPreference, systemScheme } = useThemePreference();
+  const themeOptions: { id: ThemePreference; label: string; icon: typeof Sun }[] = [
+    { id: 'system', label: `حسب الجهاز (${systemScheme === 'dark' ? 'ليلي' : 'نهاري'})`, icon: Monitor },
+    { id: 'light', label: 'نهاري', icon: Sun },
+    { id: 'dark', label: 'ليلي', icon: Moon },
+  ];
+
   return (
     <div className="operation-screen pb-6">
       <OperationHeader title={<>حسابي</>} description={<>بيانات حساب الدخول والصلاحيات.</>} icon={HeaderCircleUser} onBack={onBack}></OperationHeader>
@@ -1824,9 +1832,9 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
         <div className="summary-banner-dark flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <img
-              src="/logo.jpg"
+              src="/logo.png"
               alt="بُن العجوز"
-              className="w-10 h-10 rounded-md object-cover border border-gold-edge shrink-0"
+              className="w-10 h-10 rounded-md object-contain bg-surface-card p-0.5 border border-gold-edge shrink-0"
             />
             <div className="min-w-0">
               <div className="text-sm font-black text-gold-highlight">
@@ -1848,6 +1856,23 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
           <p className="text-xs font-bold">{accountPermissions.length?'الأقسام المسموح لك بالتعديل فيها':'حساب للعرض فقط'}</p>
           <div className="flex flex-wrap gap-2">{accountPermissions.map(label=><span key={label} className="text-xs bg-surface-sunken border border-line rounded-md px-3 py-2">{label}</span>)}</div>
           <p className="text-xs text-ink-faint">حساب الدخول مستقل عن الشراكة والحصص المالية. يدير المالك الرئيسي المستخدمين والصلاحيات من قسم المستخدمين.</p>
+          <div className="border-t border-line-subtle pt-3 space-y-2">
+            <h3 className="text-xs font-extrabold text-ink-strong">مظهر الشاشة (وضع النهار والمناوبة الليلية)</h3>
+            <div className="filter-pills" role="group" aria-label="اختيار مظهر الشاشة">
+              {themeOptions.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  aria-pressed={preference === opt.id}
+                  onClick={() => setPreference(opt.id)}
+                  className="filter-pill inline-flex items-center gap-1.5"
+                >
+                  <opt.icon size={15} aria-hidden="true" />
+                  <span>{opt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
         <button type="button" onClick={onLogout} className="account-signout action-button w-full text-status-danger border-status-danger-line bg-status-danger-bg"><LogOut size={18} aria-hidden="true"/>تسجيل الخروج</button>
 

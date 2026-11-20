@@ -45,6 +45,9 @@ import {
   Flame,
   FolderSync,
   CheckCircle2,
+  AlertCircle,
+  Info,
+  X,
   Home,
   ShieldCheck,
   Scale,
@@ -208,9 +211,12 @@ export default function App() {
   const {activeScreen,setActiveScreen,moreInitialTab,setMoreInitialTab}=useWorkspaceNavigation();
   const [hideProfits, setHideProfits] = useState<boolean>(false);
   const [reportPeriod,setReportPeriod]=useState(initialPeriod);
-  const [toastNotification, setToastNotification] = useState<string | null>(
-    null,
-  );
+  const [toastNotification, setToastNotification] = useState<{
+    id: number;
+    message: string;
+    tone: 'ok' | 'warn' | 'danger' | 'info';
+  } | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
   const [selectedFinancialPartnerId,setSelectedFinancialPartnerId]=useState('');
   const [historyEditing,setHistoryEditing]=useState(false);
@@ -275,7 +281,7 @@ export default function App() {
       engine.transaction(action);
       return true;
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "تعذر تنفيذ العملية");
+      showToast(error instanceof Error ? error.message : "تعذر تنفيذ العملية", 'danger');
       return false;
     }
   };
@@ -360,11 +366,31 @@ export default function App() {
   const [receiptModalInvoice, setReceiptModalInvoice] =
     useState<SalesInvoice | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastNotification(msg);
-    setTimeout(() => {
-      setToastNotification((prev) => (prev === msg ? null : prev));
-    }, 4500);
+  const scheduleToastDismiss = (id: number) => {
+    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastNotification((prev) => (prev?.id === id ? null : prev));
+    }, 5000);
+  };
+
+  const pauseToastDismiss = () => {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+  };
+
+  const showToast = (msg: string, explicitTone?: 'ok' | 'warn' | 'danger' | 'info') => {
+    const inferredTone: 'ok' | 'warn' | 'danger' | 'info' =
+      explicitTone ??
+      (/^(?:تعذر|فشل|خطأ)/.test(msg.trim())
+        ? 'danger'
+        : /^(?:لا يمكن|حساب المورد مرتبط|حساب العميل مرتبط|أُلغيت|هذه فاتورة معتمدة)/.test(msg.trim())
+          ? 'warn'
+          : 'ok');
+    const id = Date.now();
+    setToastNotification({ id, message: msg, tone: inferredTone });
+    scheduleToastDismiss(id);
   };
 
   const [queueError, setQueueError] = useState("");
@@ -440,7 +466,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    void cloud.signOut().catch((error) => showToast(error.message));
+    void cloud.signOut().catch((error) => showToast(error.message, 'danger'));
   };
 
   // إعادة حساب تكلفة جميع التوليفات والمشروبات التي لها وصفة بناءً على أحدث تكلفة للخامات
@@ -690,7 +716,7 @@ export default function App() {
       liveTotalCost = prepared.totalCost;
       updatedInventory = deductInventory(invoiceItems, liveItems);
     } catch (error) {
-      showToast((error as Error).message);
+      showToast((error as Error).message, 'danger');
       return false;
     }
     const prefix = saleData.saleType === "wholesale" ? "WH" : "POS";
@@ -970,17 +996,17 @@ export default function App() {
   return (
     <div className="agouz-app min-h-screen bg-surface-page flex flex-col items-center justify-start">
       {getSupabaseCredentials().url.startsWith("http://127.0.0.1:") && (
-        <div className="w-full bg-amber-100 p-2 text-center text-xs font-bold">
+        <div className="w-full bg-status-warn-bg text-status-warn border-b border-status-warn-line p-2 text-center text-xs font-bold">
           بيئة اختبار محلية — بيانات تجريبية منفصلة
         </div>
       )}
       <SaveStatus savedAt={cloud.savedAt} ready={cloud.status === 'ready'} message={needsFullStore || engine.hasPending ? statusText : ''}/>
-      {cloud.recoveryWarning&&<p role="status" className="w-full p-3 bg-amber-100 text-amber-900 text-sm">{cloud.recoveryWarning}</p>}
+      {cloud.recoveryWarning&&<p role="status" className="w-full p-3 bg-status-warn-bg text-status-warn border-b border-status-warn-line text-sm">{cloud.recoveryWarning}</p>}
       <RecoveryDraftNotice key={member.userId} {...recoveryAccess}/>
       {queueError && (
         <div
           role="alert"
-          className="w-full p-3 bg-amber-100 text-amber-900 text-sm"
+          className="w-full p-3 bg-status-danger-bg text-status-danger border-b border-status-danger-line text-sm font-bold"
         >
           {queueError}
         </div>
@@ -1051,11 +1077,43 @@ export default function App() {
             )}</div></Modal>
       )}
 
-      {/* إشعار عائم */}
+      {/* إشعار عائم دلالي */}
       {toastNotification && (
-        <div role="status" aria-live="polite" className="app-toast">
-          <CheckCircle2 className="w-5 h-5 text-gold-soft shrink-0" aria-hidden="true" />
-          <span>{toastNotification}</span>
+        <div role="region" aria-label="الإشعارات" className="app-toast-region">
+          <div
+            role={toastNotification.tone === 'danger' ? 'alert' : 'status'}
+            aria-live={toastNotification.tone === 'danger' ? 'assertive' : 'polite'}
+            data-tone={toastNotification.tone}
+            className="app-toast"
+            onMouseEnter={pauseToastDismiss}
+            onMouseLeave={() => scheduleToastDismiss(toastNotification.id)}
+            onFocus={pauseToastDismiss}
+            onBlur={() => scheduleToastDismiss(toastNotification.id)}
+          >
+            <div className="app-toast-body">
+              {toastNotification.tone === 'danger' ? (
+                <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
+              ) : toastNotification.tone === 'warn' ? (
+                <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
+              ) : toastNotification.tone === 'info' ? (
+                <Info className="w-5 h-5 shrink-0" aria-hidden="true" />
+              ) : (
+                <CheckCircle2 className="w-5 h-5 shrink-0" aria-hidden="true" />
+              )}
+              <span>{toastNotification.message}</span>
+            </div>
+            <button
+              type="button"
+              className="app-toast-close"
+              aria-label="إغلاق الإشعار"
+              onClick={() => {
+                pauseToastDismiss();
+                setToastNotification(null);
+              }}
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -1516,7 +1574,7 @@ export default function App() {
                 await saveSaleReturn(engine,invId,currentPartner.name,member?.userId);
                 showToast('تم حفظ المرتجع وعكس المستحق وتحديث متوسط تكلفة البضاعة؛ المكونات تظل مستهلكة.');
               } catch(error) {
-                showToast(error instanceof Error?error.message:'تعذر تأكيد حفظ المرتجع');
+                showToast(error instanceof Error?error.message:'تعذر تأكيد حفظ المرتجع', 'danger');
               } finally {returnBusy.current=false;}
             }}
             onDeleteInvoice={(invId) => {
@@ -1730,7 +1788,7 @@ export default function App() {
                 );
                 showToast("📊 تم تصدير ملف الإكسيل الشامل للمحل بنجاح!");
               } catch {
-                showToast("تعذر تصدير Excel؛ حاول مجددًا.");
+                showToast("تعذر تصدير Excel؛ حاول مجددًا.", 'danger');
               }
             }}
             onRestoreBackupJson={(data) => {
@@ -1742,7 +1800,7 @@ export default function App() {
                   "تم التحقق من النسخة واسترجاعها؛ تابع تأكيد الحفظ أعلى الشاشة.",
                 );
               } catch (error) {
-                showToast(error instanceof Error ? error.message : 'تعذر استرجاع النسخة');
+                showToast(error instanceof Error ? error.message : 'تعذر استرجاع النسخة', 'danger');
               }
             }}
             onLogout={handleLogout}
@@ -1802,9 +1860,7 @@ export default function App() {
                 >
                   <IconComp className="w-4 h-4" />
                 </div>
-                <span
-                  className="text-[10px] font-bold"
-                >
+                <span>
                   {tab.label}
                 </span>
               </button>

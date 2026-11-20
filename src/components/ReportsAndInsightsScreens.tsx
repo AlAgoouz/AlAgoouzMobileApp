@@ -377,7 +377,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                     {stats.sales.toLocaleString('ar-EG')} ج.م
                   </div>
                 </div>
-                <div className="text-left">
+                <div className="text-end">
                   <div className="text-gold-soft">تكلفة البضاعة المباعة</div>
                   <div className="text-base font-black text-white">
                     {amountText(stats.cost)}
@@ -391,7 +391,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                     {amountText(stats.grossProfit)}
                   </div>
                 </div>
-                <div className="text-left">
+                <div className="text-end">
                   <div className="text-gold-soft">إجمالي المصروفات</div>
                   <div className="text-base font-black text-amber-300">
                     - {stats.expenses.toLocaleString('ar-EG')} ج.م
@@ -469,7 +469,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                           <p>حصة الشراكة: {p.sharePercent}%</p>
                         </div>
                       </div>
-                      <div className="text-left">
+                      <div className="text-end">
                         <div className="text-xs text-ink">
                           الصافي المستحق له
                         </div>

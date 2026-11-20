@@ -861,7 +861,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <div className="text-left bg-status-ok-bg border border-status-ok-line px-3 py-1.5 rounded-md">
+                      <div className="text-end bg-status-ok-bg border border-status-ok-line px-3 py-1.5 rounded-md">
                         <div className="text-xs text-status-ok font-bold">
                           الصافي المتبقي
                         </div>

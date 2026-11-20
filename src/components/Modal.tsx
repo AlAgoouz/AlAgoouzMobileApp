@@ -15,6 +15,7 @@ export function Modal({title,description,onClose,busy=false,dismissible=true,wid
   dialog.showModal();
   dialog.querySelector<HTMLElement>('[data-initial-focus]')?.focus();
   return()=>{
+   if (dialog.returnValue) dialog.returnValue = '';
    dialog.close();
    if(--scrollLocks===0)document.body.style.overflow=previousOverflow;
    if(previousFocus?.isConnected)previousFocus.focus({preventScroll:true});

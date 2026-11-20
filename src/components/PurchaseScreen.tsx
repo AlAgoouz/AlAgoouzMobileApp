@@ -613,7 +613,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
               {higherThanCheapestCount > 0 && (
                 <div className="bg-status-danger-bg border border-status-danger-line rounded-lg p-3.5 flex items-center justify-between gap-2.5">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-md bg-white text-status-danger border border-status-danger-line flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-md bg-surface-card text-status-danger border border-status-danger-line flex items-center justify-center shrink-0">
                       <AlertTriangle className="w-4 h-4" aria-hidden="true" />
                     </div>
                     <div>
@@ -828,7 +828,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                                 />
                               </label>
                             </div>
-                            <div className="text-xs font-black text-ink-strong text-left">
+                            <div className="text-xs font-black text-ink-strong text-end">
                               الإجمالي: {lineTotal.toLocaleString("ar-EG")} ج.م
                             </div>
                           </div>
@@ -1048,7 +1048,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                       تاريخ آخر توريد: {sp.date}
                     </div>
                   </div>
-                  <div className="text-left">
+                  <div className="text-end">
                     <div className="text-sm font-black text-status-ok">
                       {sp.price} ج.م
                     </div>

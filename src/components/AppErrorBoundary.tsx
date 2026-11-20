@@ -42,55 +42,62 @@ export class AppErrorBoundary extends React.Component<
     return (
       <main
         dir="rtl"
-        className="min-h-screen bg-[#1E1612] text-[#FBF5B7] p-6 flex items-center justify-center"
+        className="min-h-screen bg-surface-page text-ink-strong p-6 flex items-center justify-center"
       >
         <section
           role="alert"
-          className="max-w-md space-y-5 border border-[#C59B27] rounded-3xl p-6"
+          className="max-w-md w-full space-y-4 bg-surface-card border border-line-control rounded-xl p-6 shadow-sh-2"
         >
-          <h1 className="text-xl font-bold">
+          <h1 className="text-xl font-extrabold text-ink-strong">
             {this.state.updateAvailable
               ? "تحديث التطبيق متاح"
               : "تعذر فتح الشاشة"}
           </h1>
-          <p>
+          <p className="text-sm text-ink leading-relaxed">
             {this.state.updateAvailable
               ? "الصفحة المفتوحة تستخدم ملفات نسخة سابقة. حدّث التطبيق لتحميل النسخة الحالية."
               : "حدث خطأ أثناء عرض الشاشة. يمكنك تحديث التطبيق والمحاولة مرة أخرى."}
           </p>
-          <p>
+          <p className="text-xs text-ink-faint leading-relaxed">
             لو عندك تعديلات لم يتأكد حفظها، نزّل نسخة الاسترداد المتاحة قبل
             التحديث. لا تحذف بيانات المتصفح.
           </p>
-          <button
-            className="w-full rounded-xl p-3 border border-[#C59B27]"
-            onClick={this.exportRecovery}
-          >
-            حفظ نسخة الاسترداد المحلية
-          </button>
-          {this.props.onReset && (
+          <div className="space-y-2.5 pt-2">
             <button
-              className="w-full rounded-xl p-3 border border-[#C59B27]"
-              onClick={() => {
-                this.setState({
-                  failed: false,
-                  updateAvailable: false,
-                  exportMessage: "",
-                });
-                this.props.onReset?.();
-              }}
+              type="button"
+              className="action-button w-full"
+              onClick={this.exportRecovery}
             >
-              العودة للرئيسية
+              حفظ نسخة الاسترداد المحلية
             </button>
-          )}
-          <button
-            className="w-full rounded-xl p-3 bg-[#C59B27] text-[#1E1612] font-bold"
-            onClick={() => window.location.reload()}
-          >
-            تحديث التطبيق
-          </button>
+            {this.props.onReset && (
+              <button
+                type="button"
+                className="action-button w-full"
+                onClick={() => {
+                  this.setState({
+                    failed: false,
+                    updateAvailable: false,
+                    exportMessage: "",
+                  });
+                  this.props.onReset?.();
+                }}
+              >
+                العودة للرئيسية
+              </button>
+            )}
+            <button
+              type="button"
+              className="action-button action-button-primary w-full"
+              onClick={() => window.location.reload()}
+            >
+              تحديث التطبيق
+            </button>
+          </div>
           {this.state.exportMessage && (
-            <p role="status">{this.state.exportMessage}</p>
+            <p role="status" className="text-xs font-bold text-ink bg-surface-sunken border border-line rounded-md p-3">
+              {this.state.exportMessage}
+            </p>
           )}
         </section>
       </main>
