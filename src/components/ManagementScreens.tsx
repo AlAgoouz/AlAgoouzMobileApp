@@ -1,4 +1,5 @@
 import {unitLabel as displayUnit} from '../lib/units';
+import {useThemePreference, type ThemePreference} from '../lib/theme';
 import {Tag as HeaderTag,Package as HeaderPackage,TriangleAlert as HeaderTriangleAlert,Users as HeaderUsers,ReceiptText as HeaderReceiptText,DatabaseBackup as HeaderDatabaseBackup,Wallet as HeaderWallet,Cloud as HeaderCloud,CircleUser as HeaderCircleUser} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
 import {Modal} from './Modal';
@@ -21,7 +22,7 @@ import {categoryLabel,itemCategories,requiresRecipe,isStockItem,isRecipeOnUse} f
 import React, { useState, useMemo } from "react";
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import {checkCustomerDetails,checkSupplierDetails} from '../lib/contactDetails';
-import {Search, Plus, RotateCcw, Flame, Printer, LogOut, Trash2, Download, RefreshCw, MessageCircle, FileText, Upload, FileSpreadsheet} from 'lucide-react';
+import {Search, Plus, RotateCcw, Flame, Printer, LogOut, Trash2, Download, RefreshCw, MessageCircle, FileText, Upload, FileSpreadsheet, Sun, Moon, Monitor} from 'lucide-react';
 import {
   InventoryItem,
   Supplier,
@@ -210,13 +211,13 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
   return (
     <div className="operation-screen min-h-screen pb-24">
       {/* هيدر قسم المنتجات والتسعير */}
-      <OperationHeader title={<>المنتجات والتسعير</>} description={<>الكتالوج الأساسي للدورة التشغيلية (شراء • إنتاج • بيع)</>} icon={HeaderTag} onBack={onBack}><button
+      <OperationHeader title="المنتجات والتسعير" description="راجع تعريفات المنتجات والأكواد والأسعار." icon={HeaderTag} onBack={onBack}>{canManage && <button
           type="button"
           onClick={handleOpenAddModal}
         >
           <Plus className="w-4 h-4" aria-hidden="true" />
           <span>منتج جديد</span>
-        </button></OperationHeader>
+        </button>}</OperationHeader>
 
       <div className="catalog-workspace">
         <div className="catalog-overview">
@@ -242,7 +243,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 
       {/* نافذة تعريف وإضافة منتج جديد */}
       {deleting&&<Modal title="حذف المنتج" description={`هل تريد حذف (${deleting.name})؟ لا يمكن حذف منتج مرتبط بفواتير أو وصفات أو حركات مخزون.`} busy={deleteBusy} onClose={()=>setDeleting(null)} footer={<div className="record-actions"><button type="button" className="action-button" disabled={deleteBusy} onClick={()=>setDeleting(null)}>إلغاء</button><button type="button" disabled={deleteBusy} className="action-button text-status-danger border-status-danger-line" onClick={()=>void confirmDelete()}>{deleteBusy?'جارٍ تأكيد الحذف…':'تأكيد حذف المنتج'}</button></div>}>{deleteError&&<p role="alert">{deleteError}</p>}</Modal>}
-      {showAddModal && <ItemDefinitionModal items={items} reservedCodes={nameDrafts.flatMap(d=>d.definition?[d.definition.code]:[])} onSaveRecipeDefinition={onDefineRecipe} onSave={onAddNewItem} onClose={()=>setShowAddModal(false)}/>}
+      {canManage && showAddModal && <ItemDefinitionModal items={items} reservedCodes={nameDrafts.flatMap(d=>d.definition?[d.definition.code]:[])} onSaveRecipeDefinition={onDefineRecipe} onSave={onAddNewItem} onClose={()=>setShowAddModal(false)}/>}
 
       {/* نافذة تعديل بيانات وتسعير المنتج */}
       {editingItem && (
@@ -364,6 +365,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
 // ============================================================================
 interface InventoryScreenProps {
   onOpenMovement?: (id:string)=>void;
+  canManage?: boolean;
   items: InventoryItem[];
   onAddNewItem: (item: Omit<InventoryItem, "id">) => void;
   onUpdateItemPricesAndStock: (
@@ -388,6 +390,7 @@ interface InventoryScreenProps {
 
 export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   onOpenMovement,
+  canManage = true,
   items,
   onAddNewItem,
   onUpdateItemPricesAndStock,
@@ -476,13 +479,13 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 
   return (
     <div className="operation-screen min-h-screen pb-24">
-      <OperationHeader title={<>المخزن والأصناف</>} description={<>القيمة: {Math.round(totalInventoryCapital).toLocaleString("ar-EG")} ج.م</>} icon={HeaderPackage} onBack={onBack}><button
+      <OperationHeader title={<>المخزن والأصناف</>} description={<>قيمة المخزون الحالية {Math.round(totalInventoryCapital).toLocaleString("ar-EG")} ج.م</>} icon={HeaderPackage} onBack={onBack}>{canManage && <button
           type="button"
           onClick={() => setShowAddModal(true)}
         >
           <Plus className="w-4 h-4" aria-hidden="true" />
-          إضافة
-        </button></OperationHeader>
+          إضافة صنف
+        </button>}</OperationHeader>
 
       <div className="record-workspace">
         {/* فلاتر الأقسام المختصرة */}
@@ -510,7 +513,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               aria-label="البحث في المخزون"
-              placeholder="بحث باسم الصنف أو الكود..."
+              placeholder="بحث باسم الصنف أو الكود…"
             />
           </div>
           <button
@@ -525,8 +528,8 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 
         {inventoryPage.total>inventoryPage.pageSize&&<RecordPagination {...inventoryPage}/>}
         {filtered.length === 0 ? (
-          <p className="record-state">
-            لا توجد أصناف في هذا القسم حالياً. اضغط (+ إضافة) لإضافة صنف جديد.
+          <p className="record-state" role="status">
+            {search || filterCat !== 'all' ? 'لا توجد أصناف مطابقة. جرّب تعديل البحث أو التصفية.' : 'لا توجد أصناف في المخزن بعد.'}
           </p>
         ) : (
           <div className="record-grid-3">
@@ -586,7 +589,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 
                   <div className="register-actions">
                     {onOpenMovement&&<button type="button" className="record-action flex-1" onClick={()=>onOpenMovement(item.id)}>حركات الصنف</button>}
-                    <button
+                    {canManage && <><button
                       type="button"
                       onClick={() => openEditItem(item)}
                       className="action-button flex-1"
@@ -609,7 +612,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                       title="حذف الصنف"
                     >
                       <Trash2 className="w-4 h-4" aria-hidden="true" />
-                    </button>
+                    </button></>}
                   </div>
                 </article>
               );
@@ -619,7 +622,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
       </div>
 
       {/* نافذة تعديل الصنف */}
-      {editingItem && (
+      {canManage && editingItem && (
         <Modal title={<>تعديل الصنف</>} onClose={()=>setEditingItem(null)} footer={<div className="flex gap-2 w-full">
               <button
                 type="button"
@@ -729,7 +732,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
       )}
 
       {/* نافذة إضافة صنف جديد */}
-      {showAddModal && <ItemDefinitionModal items={items} onSave={onAddNewItem} onClose={()=>setShowAddModal(false)}/>}
+      {canManage && showAddModal && <ItemDefinitionModal items={items} onSave={onAddNewItem} onClose={()=>setShowAddModal(false)}/>}
     </div>
   );
 };
@@ -851,6 +854,8 @@ export const SuppliersAndCustomersScreen: React.FC<{
   onDeleteSupplier: (id: string) => void;
   onAddCustomer: (cust: Omit<Customer, "id">) => void|boolean;
   onDeleteCustomer: (id: string) => void;
+  canManageContacts?: boolean;
+  canManagePayments?: boolean;
   onBack: () => void;
 }> = ({
   mode,
@@ -872,6 +877,8 @@ export const SuppliersAndCustomersScreen: React.FC<{
   onDeleteSupplier,
   onAddCustomer,
   onDeleteCustomer,
+  canManageContacts = true,
+  canManagePayments = true,
   onBack,
 }) => {
   const [localView,setLocalView]=useState({query:'',page:0});
@@ -963,13 +970,13 @@ export const SuppliersAndCustomersScreen: React.FC<{
     <div className="operation-screen min-h-screen pb-24">
       <OperationHeader title={<>{mode === "suppliers"
             ? `الموردين (${suppliers.length})`
-            : `العملاء (${customers.length})`}</>} description={<>بيانات التواصل وسجل المعاملات والأرصدة.</>} icon={HeaderUsers} onBack={onBack}><button
+            : `العملاء (${customers.length})`}</>} description={<>بيانات التواصل وسجل المعاملات والأرصدة.</>} icon={HeaderUsers} onBack={onBack}>{canManageContacts && <button
           type="button"
           onClick={() => setShowAddModal(true)}
         >
           <Plus className="w-4 h-4" aria-hidden="true" />
           إضافة
-        </button></OperationHeader>
+        </button>}</OperationHeader>
 
       <div className="record-workspace">
         <label className="record-search">{mode==='suppliers'?'بحث في الموردين':'بحث في العملاء'}
@@ -996,8 +1003,8 @@ export const SuppliersAndCustomersScreen: React.FC<{
                     <div><dt>عدد الفواتير</dt><dd>{purchases.purchases.length}</dd></div>
                   </dl>
                   <div className="register-actions">
-                    {onUpdateContact&&<button type="button" onClick={()=>setEditingContact(sup)} className="action-button flex-1">تعديل البيانات</button>}
-                    <button type="button" onClick={()=>onDeleteSupplier(sup.id)} className="action-button text-status-danger border-status-danger-line">حذف المورد</button>
+                    {canManageContacts&&onUpdateContact&&<button type="button" onClick={()=>setEditingContact(sup)} className="action-button flex-1">تعديل البيانات</button>}
+                    {canManageContacts&&<button type="button" onClick={()=>onDeleteSupplier(sup.id)} className="action-button text-status-danger border-status-danger-line">حذف المورد</button>}
                   </div>
                   <SupplierPurchasePanels data={purchases} onOpenInvoice={onOpenPurchase}/>
                 </article>;
@@ -1018,7 +1025,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
                       <p>المنطقة: {cust.area || 'غير مسجلة'}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <div className="text-left">
+                      <div className="text-end">
                         <div className="text-xs text-ink">عليه</div>
                         <div
                           className={`text-sm font-black ${
@@ -1030,7 +1037,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
                           {cust.balance.toLocaleString("ar-EG")} ج.م
                         </div>
                       </div>
-                      <button
+                      {canManageContacts && <button
                         type="button"
                         onClick={() => onDeleteCustomer(cust.id)}
                         className="action-button text-status-danger border-status-danger-line"
@@ -1038,11 +1045,11 @@ export const SuppliersAndCustomersScreen: React.FC<{
                         title="حذف العميل"
                       >
                         <Trash2 className="w-4 h-4" aria-hidden="true" />
-                      </button>
+                      </button>}
                     </div>
                   </div>
                   <div className="record-actions pt-2 border-t border-line-subtle">
-                    {onUpdateContact&&<button type="button" className="action-button" onClick={()=>setEditingContact(cust)}>تعديل البيانات</button>}
+                    {canManageContacts&&onUpdateContact&&<button type="button" className="action-button" onClick={()=>setEditingContact(cust)}>تعديل البيانات</button>}
                     <button
                       type="button"
                       onClick={() => setStatementTargetId(cust.id)}
@@ -1051,7 +1058,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
                       <FileText className="w-4 h-4 shrink-0" aria-hidden="true" />
                       <span>كشف حساب تفصيلي / واتساب</span>
                     </button>
-                    {cust.balance > 0 && (
+                    {canManagePayments && cust.balance > 0 && (
                       <button
                         type="button"
                         onClick={() => {
@@ -1073,7 +1080,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
         </div>
       </div>
 
-      {editingContact&&onUpdateContact&&<ContactEditModal target={editingContact} mode={mode} onSave={(id,details)=>onUpdateContact(mode,id,details)} onClose={()=>setEditingContact(null)}/>}
+      {canManageContacts&&editingContact&&onUpdateContact&&<ContactEditModal target={editingContact} mode={mode} onSave={(id,details)=>onUpdateContact(mode,id,details)} onClose={()=>setEditingContact(null)}/>}
       {/* نافذة كشف الحساب التفصيلي للمورد أو العميل */}
       {activeStatementEntity && (
         <AccountStatementModal
@@ -1083,19 +1090,19 @@ export const SuppliersAndCustomersScreen: React.FC<{
           purchaseInvoices={purchaseInvoices}
           salesInvoices={salesInvoices}
           accountPayments={accountPayments}
-          onRecordPayment={(amt, notes) => {
+          onRecordPayment={canManagePayments ? (amt, notes) => {
             if (mode === "suppliers") {
               return onPaySupplier(activeStatementEntity.id, amt, notes);
             } else {
               return onCollectCustomer(activeStatementEntity.id, amt, notes);
             }
-          }}
-          onDeletePayment={onDeletePayment}
+          } : undefined}
+          onDeletePayment={canManagePayments ? onDeletePayment : undefined}
           onClose={() => setStatementTargetId(null)}
         />
       )}
 
-      {payModalTarget && (
+      {canManagePayments && payModalTarget && (
         <Modal title={<>{mode === "suppliers" ? "سداد للمورد:" : "تحصيل من العميل:"} {" "}  {payModalTarget.name}</>}  onClose={()=>setPayModalTarget(null)} footer={<div className="flex gap-2 w-full">
               <button
                 type="button"
@@ -1156,7 +1163,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
             )}</Modal>
       )}
 
-      {showAddModal && (
+      {canManageContacts && showAddModal && (
         <Modal title={<>{mode === "suppliers" ? "إضافة مورد جديد" : "إضافة عميل جديد"}</>}  onClose={()=>setShowAddModal(false)} footer={<div className="flex gap-2 w-full">
               <button
                 type="button"
@@ -1394,6 +1401,7 @@ interface MoreMenuProps {
   onAddExpense: (exp: Omit<Expense, "id">) => void | boolean;
   showDemoTools?: boolean;
   canManageData?:boolean;
+  canManageExpenses?:boolean;
   canEditPartners?:boolean;
   onSavePartners?:(next:Partner[])=>boolean;
   selectedFinancialPartnerId?:string;
@@ -1424,7 +1432,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
   showBackupHealth,
   showDemoTools = false,
   accountPermissions=[],
-  canManageData=true,canEditPartners=false,onSavePartners,
+  canManageData=true,canManageExpenses=true,canEditPartners=false,onSavePartners,
   selectedFinancialPartnerId,onSelectFinancialPartnerId,
   onAddExpense,
   onDeleteExpense,
@@ -1611,8 +1619,8 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
       <div className="operation-screen min-h-screen pb-24">
         <OperationHeader title={<>المصروفات</>} description={<>المصروفات اليومية والشهرية الثابتة.</>} icon={HeaderWallet} onBack={onBack}></OperationHeader>
         <div className="record-workspace">
-          <div className="workspace-split-layout">
-            <section className="operation-surface space-y-3">
+          <div className={canManageExpenses ? "workspace-split-layout" : undefined}>
+            {canManageExpenses && <section className="operation-surface space-y-3">
               <h2 className="text-xs font-extrabold text-gold mb-0">
                 + تسجيل مصروف جديد
               </h2>
@@ -1712,7 +1720,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                   {expenseError}
                 </p>
               )}
-            </section>
+            </section>}
 
             <div className="space-y-3">
               <div className="operation-surface space-y-3">
@@ -1747,7 +1755,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                     <span className="text-sm font-black text-status-danger">
                       {e.amount} ج.م
                     </span>
-                    <button
+                    {canManageExpenses && <button
                       type="button"
                       disabled={e.isCancelled || Boolean(e.sourceInvoiceId) || Boolean(e.sourceEmployeeTransactionId)}
                       title="إلغاء المصروف مع حفظ السجل"
@@ -1756,7 +1764,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
                       className="action-button text-status-danger border-status-danger-line"
                     >
                       <Trash2 className="w-4 h-4" aria-hidden="true" />
-                    </button>
+                    </button>}
                   </div>
                 </article>
               ))}
@@ -1816,6 +1824,13 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
     );
   }
 
+  const { preference, setPreference, systemScheme } = useThemePreference();
+  const themeOptions: { id: ThemePreference; label: string; icon: typeof Sun }[] = [
+    { id: 'system', label: `حسب الجهاز (${systemScheme === 'dark' ? 'ليلي' : 'نهاري'})`, icon: Monitor },
+    { id: 'light', label: 'نهاري', icon: Sun },
+    { id: 'dark', label: 'ليلي', icon: Moon },
+  ];
+
   return (
     <div className="operation-screen pb-6">
       <OperationHeader title={<>حسابي</>} description={<>بيانات حساب الدخول والصلاحيات.</>} icon={HeaderCircleUser} onBack={onBack}></OperationHeader>
@@ -1824,9 +1839,9 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
         <div className="summary-banner-dark flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <img
-              src="/logo.jpg"
+              src="/logo.png"
               alt="بُن العجوز"
-              className="w-10 h-10 rounded-md object-cover border border-gold-edge shrink-0"
+              className="w-10 h-10 rounded-md object-contain bg-surface-card p-0.5 border border-gold-edge shrink-0"
             />
             <div className="min-w-0">
               <div className="text-sm font-black text-gold-highlight">
@@ -1848,6 +1863,23 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
           <p className="text-xs font-bold">{accountPermissions.length?'الأقسام المسموح لك بالتعديل فيها':'حساب للعرض فقط'}</p>
           <div className="flex flex-wrap gap-2">{accountPermissions.map(label=><span key={label} className="text-xs bg-surface-sunken border border-line rounded-md px-3 py-2">{label}</span>)}</div>
           <p className="text-xs text-ink-faint">حساب الدخول مستقل عن الشراكة والحصص المالية. يدير المالك الرئيسي المستخدمين والصلاحيات من قسم المستخدمين.</p>
+          <div className="border-t border-line-subtle pt-3 space-y-2">
+            <h3 className="text-xs font-extrabold text-ink-strong">مظهر الشاشة (وضع النهار والمناوبة الليلية)</h3>
+            <div className="filter-pills" role="group" aria-label="اختيار مظهر الشاشة">
+              {themeOptions.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  aria-pressed={preference === opt.id}
+                  onClick={() => setPreference(opt.id)}
+                  className="filter-pill inline-flex items-center gap-1.5"
+                >
+                  <opt.icon size={15} aria-hidden="true" />
+                  <span>{opt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
         <button type="button" onClick={onLogout} className="account-signout action-button w-full text-status-danger border-status-danger-line bg-status-danger-bg"><LogOut size={18} aria-hidden="true"/>تسجيل الخروج</button>
 

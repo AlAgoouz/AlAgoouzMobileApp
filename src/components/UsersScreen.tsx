@@ -36,7 +36,7 @@ export function UsersScreen({access,partners,onBack}:{access:UserAccess;partners
  const page=useRecordPage(users.filter(user=>(showDeleted||!user.deleted)&&
    [user.displayName,user.username,user.email].some(value=>value?.toLocaleLowerCase('ar-EG').includes(term))),query+'|'+showDeleted,20);
  const editingMaster=!!form?.id&&users.some(u=>u.userId===form.id&&u.isOwner);
- return <main className="operation-screen min-h-screen pb-28 space-y-4" dir="rtl">
+ return <div className="operation-screen min-h-screen pb-28 space-y-4" dir="rtl">
   <OperationHeader title="المستخدمين وصلاحيات الدخول" description="حسابات الدخول مستقلة عن حسابات الشركاء وحصصهم." icon={Users} onBack={onBack} busy={busy}/>
   <div className="record-workspace">
    {!access.isOwner?<section className="operation-surface space-y-2"><h2 className="font-bold">حسابك</h2><p>{access.displayName}</p><p className="operation-note">إضافة المستخدمين وتعديل الصلاحيات متاحان لحساب المالك الرئيسي فقط.</p></section>:<>
@@ -78,5 +78,5 @@ export function UsersScreen({access,partners,onBack}:{access:UserAccess;partners
     {error&&<p role="alert" className="login-error">{error}</p>}
 
    </form></Modal>}
- </main>;
+ </div>;
 }

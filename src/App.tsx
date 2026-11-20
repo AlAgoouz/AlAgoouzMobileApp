@@ -14,6 +14,7 @@ import {DashboardScreen} from './components/DashboardScreen';
 import {SaveStatus} from './components/SaveStatus';
 import {WorkspaceQuickAccess} from './components/WorkspaceQuickAccess';
 import {WorkspaceSidebar} from './components/WorkspaceSidebar';
+import {OperationHeader} from './components/OperationHeader';
 import {StockMovementModal} from './components/StockMovementModal';
 import {ExpenseRecordDetail} from './components/ExpenseRecordDetail';
 import {CashierDayDetail} from './components/CashierDayDetail';
@@ -45,6 +46,9 @@ import {
   Flame,
   FolderSync,
   CheckCircle2,
+  AlertCircle,
+  Info,
+  X,
   Home,
   ShieldCheck,
   Scale,
@@ -206,11 +210,23 @@ const InvoiceReceiptModal = React.lazy(() =>
 
 export default function App() {
   const {activeScreen,setActiveScreen,moreInitialTab,setMoreInitialTab}=useWorkspaceNavigation();
+  const screenKey = activeScreen === 'more' ? activeScreen + ':' + moreInitialTab : activeScreen;
+  const workspaceMain = useRef<HTMLElement>(null);
+  const lastScreen = useRef(screenKey);
+  useEffect(() => {
+    if (lastScreen.current !== screenKey) {
+      workspaceMain.current?.focus();
+      lastScreen.current = screenKey;
+    }
+  }, [screenKey]);
   const [hideProfits, setHideProfits] = useState<boolean>(false);
   const [reportPeriod,setReportPeriod]=useState(initialPeriod);
-  const [toastNotification, setToastNotification] = useState<string | null>(
-    null,
-  );
+  const [toastNotification, setToastNotification] = useState<{
+    id: number;
+    message: string;
+    tone: 'ok' | 'warn' | 'danger' | 'info';
+  } | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
   const [selectedFinancialPartnerId,setSelectedFinancialPartnerId]=useState('');
   const [historyEditing,setHistoryEditing]=useState(false);
@@ -275,7 +291,7 @@ export default function App() {
       engine.transaction(action);
       return true;
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "تعذر تنفيذ العملية");
+      showToast(error instanceof Error ? error.message : "تعذر تنفيذ العملية", 'danger');
       return false;
     }
   };
@@ -360,11 +376,31 @@ export default function App() {
   const [receiptModalInvoice, setReceiptModalInvoice] =
     useState<SalesInvoice | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastNotification(msg);
-    setTimeout(() => {
-      setToastNotification((prev) => (prev === msg ? null : prev));
-    }, 4500);
+  const scheduleToastDismiss = (id: number) => {
+    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastNotification((prev) => (prev?.id === id ? null : prev));
+    }, 5000);
+  };
+
+  const pauseToastDismiss = () => {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+  };
+
+  const showToast = (msg: string, explicitTone?: 'ok' | 'warn' | 'danger' | 'info') => {
+    const inferredTone: 'ok' | 'warn' | 'danger' | 'info' =
+      explicitTone ??
+      (/^(?:تعذر|فشل|خطأ)/.test(msg.trim())
+        ? 'danger'
+        : /^(?:لا يمكن|حساب المورد مرتبط|حساب العميل مرتبط|أُلغيت|هذه فاتورة معتمدة)/.test(msg.trim())
+          ? 'warn'
+          : 'ok');
+    const id = Date.now();
+    setToastNotification({ id, message: msg, tone: inferredTone });
+    scheduleToastDismiss(id);
   };
 
   const [queueError, setQueueError] = useState("");
@@ -440,7 +476,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    void cloud.signOut().catch((error) => showToast(error.message));
+    void cloud.signOut().catch((error) => showToast(error.message, 'danger'));
   };
 
   // إعادة حساب تكلفة جميع التوليفات والمشروبات التي لها وصفة بناءً على أحدث تكلفة للخامات
@@ -690,7 +726,7 @@ export default function App() {
       liveTotalCost = prepared.totalCost;
       updatedInventory = deductInventory(invoiceItems, liveItems);
     } catch (error) {
-      showToast((error as Error).message);
+      showToast((error as Error).message, 'danger');
       return false;
     }
     const prefix = saleData.saleType === "wholesale" ? "WH" : "POS";
@@ -968,19 +1004,24 @@ export default function App() {
               : "تعذر تأكيد الحفظ";
 
   return (
-    <div className="agouz-app min-h-screen bg-surface-page flex flex-col items-center justify-start">
+    <div className="agouz-app min-h-screen bg-surface-page flex flex-col items-center justify-start"
+      data-awaiting-summary={activeScreen === 'home' && !dashboard.data && !dashboard.error ? '' : undefined}>
+      <a className="workspace-skip" href="#workspace-main" onClick={(event) => {
+        event.preventDefault();
+        workspaceMain.current?.focus();
+      }}>انتقل إلى المحتوى</a>
       {getSupabaseCredentials().url.startsWith("http://127.0.0.1:") && (
-        <div className="w-full bg-amber-100 p-2 text-center text-xs font-bold">
+        <div className="w-full bg-status-warn-bg text-status-warn border-b border-status-warn-line p-2 text-center text-xs font-bold">
           بيئة اختبار محلية — بيانات تجريبية منفصلة
         </div>
       )}
       <SaveStatus savedAt={cloud.savedAt} ready={cloud.status === 'ready'} message={needsFullStore || engine.hasPending ? statusText : ''}/>
-      {cloud.recoveryWarning&&<p role="status" className="w-full p-3 bg-amber-100 text-amber-900 text-sm">{cloud.recoveryWarning}</p>}
+      {cloud.recoveryWarning&&<p role="status" className="w-full p-3 bg-status-warn-bg text-status-warn border-b border-status-warn-line text-sm">{cloud.recoveryWarning}</p>}
       <RecoveryDraftNotice key={member.userId} {...recoveryAccess}/>
       {queueError && (
         <div
           role="alert"
-          className="w-full p-3 bg-amber-100 text-amber-900 text-sm"
+          className="w-full p-3 bg-status-danger-bg text-status-danger border-b border-status-danger-line text-sm font-bold"
         >
           {queueError}
         </div>
@@ -1051,24 +1092,54 @@ export default function App() {
             )}</div></Modal>
       )}
 
-      {/* إشعار عائم */}
+      {/* إشعار عائم دلالي */}
       {toastNotification && (
-        <div role="status" aria-live="polite" className="app-toast">
-          <CheckCircle2 className="w-5 h-5 text-gold-soft shrink-0" aria-hidden="true" />
-          <span>{toastNotification}</span>
+        <div role="region" aria-label="الإشعارات" className="app-toast-region">
+          <div
+            role={toastNotification.tone === 'danger' ? 'alert' : 'status'}
+            aria-live={toastNotification.tone === 'danger' ? 'assertive' : 'polite'}
+            data-tone={toastNotification.tone}
+            className="app-toast"
+            onMouseEnter={pauseToastDismiss}
+            onMouseLeave={() => scheduleToastDismiss(toastNotification.id)}
+            onFocus={pauseToastDismiss}
+            onBlur={() => scheduleToastDismiss(toastNotification.id)}
+          >
+            <div className="app-toast-body">
+              {toastNotification.tone === 'danger' ? (
+                <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
+              ) : toastNotification.tone === 'warn' ? (
+                <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
+              ) : toastNotification.tone === 'info' ? (
+                <Info className="w-5 h-5 shrink-0" aria-hidden="true" />
+              ) : (
+                <CheckCircle2 className="w-5 h-5 shrink-0" aria-hidden="true" />
+              )}
+              <span>{toastNotification.message}</span>
+            </div>
+            <button
+              type="button"
+              className="app-toast-close"
+              aria-label="إغلاق الإشعار"
+              onClick={() => {
+                pauseToastDismiss();
+                setToastNotification(null);
+              }}
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
         </div>
       )}
 
-      {/* حاوية التطبيق بهوية بُن العجوز الفاتحة والذهبية */}
-      <WorkspaceSidebar name={currentPartner.name} screen={activeScreen==='more'&&moreInitialTab!=='menu'?moreInitialTab:activeScreen==='insights'?'reports':activeScreen} onNavigate={navigateScreen} isOwner={member.isOwner} counts={dashboard.data?.counts ?? {}}/>
+      <WorkspaceSidebar name={currentPartner.name} screen={activeScreen==='more'&&moreInitialTab!=='menu'?moreInitialTab:activeScreen==='insights'?'reports':activeScreen} onNavigate={navigateScreen} isOwner={member.isOwner} canCreateSale={canWrite(member,'sales')} counts={dashboard.data?.counts ?? {}}/>
       <div className="app-workspace min-h-screen relative">
         <WorkspaceQuickAccess member={member} onNavigate={navigateScreen} showButton={activeScreen==='home'||activeScreen==='sections'}/>
-        <div className="screen-stage" key={activeScreen+':'+moreInitialTab}>
-        <AppErrorBoundary key={member.userId+':'+activeScreen+':'+moreInitialTab} recoveryAccess={recoveryAccess} onReset={()=>setActiveScreen('home')}>
+        <main id="workspace-main" ref={workspaceMain} tabIndex={-1} aria-label="محتوى مساحة العمل" className="screen-stage" key={screenKey}>
+        <AppErrorBoundary key={member.userId+':'+screenKey} recoveryAccess={recoveryAccess} onReset={()=>setActiveScreen('home')} insideWorkspace>
         {/* ================= 1. الشاشة الرئيسية: لوحة الإحصائيات والرسوم البيانية الاحترافية ================= */}
         {activeScreen === 'home'&&<DashboardScreen model={dashboard.data} dailyModel={needsTodayRead ? dailyDashboard.data : dashboard.data} dailyError={needsTodayRead ? dailyDashboard.error : dashboard.error} onRetryDaily={needsTodayRead ? dailyDashboard.retry : dashboard.retry} error={dashboard.error} onRetry={dashboard.retry} period={reportPeriod} onPeriod={setReportPeriod} name={currentPartner.name} isOwner={member?.isOwner} onNavigate={navigateScreen}/>}
 
-        {/* ================= 2. قسم الأقسام (بالتصميم الاحترافي الأول الفخم بالإسبريسو والذهبي) ================= */}
         {activeScreen === "sections" && <SectionsHub
           counts={dashboard.data?.counts??{}}
           canManageCashier={canWrite(member,'cashier')}
@@ -1087,19 +1158,19 @@ export default function App() {
             suppliers={suppliers}
             purchaseInvoices={purchaseInvoices}
             currentPartnerName={currentPartner.name}
-            onSavePurchase={async data=>{
+            onSavePurchase={canWrite(member,'purchases') ? async data=>{
               const invoice=await saveInvoice('purchase',data,()=>handleSavePurchase(data),()=>engine.state.purchaseInvoices);
               if(!invoice)return false;
               showToast('تم حفظ فاتورة المشتريات '+invoice.invoiceNumber);
               return true;
-            }}
+            } : undefined}
             onReceiveRefund={canWrite(member,'purchases') ? async (invoiceId, amount, date) => {
               if(engine.hasPending)throw Error('انتظر تأكيد الحفظ الحالي ثم أعد المحاولة.');
               engine.replace(receivePurchaseRefund(engine.state,invoiceId,amount,date,{id:member.userId,name:currentPartner.name}));
               await engine.flush();
               if(!engine.hasPending && engine.snapshot.status==='ready')showToast('تم تسجيل استلام المبلغ من المورد.');
             } : undefined}
-            onDeletePurchaseInvoice={(invId) => {
+            onDeletePurchaseInvoice={canWrite(member,'purchases') ? (invId) => {
               safeAction(() => {
                 engine.replace(
                   cancelPurchase(
@@ -1113,8 +1184,8 @@ export default function App() {
                   "تم إلغاء الفاتورة وعكس المخزون والمديونية مع حفظ الأصل ومبلغ الاسترداد.",
                 );
               });
-            }}
-            onQuickAddSupplier={(newSup) => {
+            } : undefined}
+            onQuickAddSupplier={canWrite(member,'contacts') ? (newSup) => {
               return safeAction(() => {
                 checkSupplierDetails(newSup);
                 const created: Supplier = {
@@ -1124,8 +1195,8 @@ export default function App() {
                 setSuppliers((prev) => [created, ...prev]);
                 showToast(`✅ تمت إضافة المورد (${created.name})!`);
               });
-            }}
-            onQuickAddItem={(newItem) => {
+            } : undefined}
+            onQuickAddItem={canWrite(member,'catalog') ? (newItem) => {
               return safeAction(() => {
                 const created: InventoryItem = {
                   ...newItem,
@@ -1135,7 +1206,7 @@ export default function App() {
                 setItems((prev) => [created, ...prev]);
                 showToast(`✅ تمت إضافة الصنف (${created.name}) للمخزن!`);
               });
-            }}
+            } : undefined}
             onBack={()=>{setActiveScreen(purchaseTargetId?'suppliers':'sections');setPurchaseTargetId(undefined);}}
           />
         )}
@@ -1145,6 +1216,7 @@ export default function App() {
           <ProductionAndRecipesScreen
             items={items}
             productionBatches={productionBatches}
+            canRunProduction={canWrite(member,'production')}
             currentPartnerName={currentPartner.name}
             onOpenRecipes={()=>openRecipes()}
             reservedCodes={cloud.state.catalogNameDrafts.flatMap(d=>d.definition?[d.definition.code]:[])}
@@ -1162,7 +1234,7 @@ export default function App() {
           />
         )}
 
-        {activeScreen === 'sales_pos' && <WholesaleInvoiceScreen items={items} customers={customers} currentPartnerName={currentPartner.name} onBack={()=>setActiveScreen('home')} onSaveSale={async data=>{
+        {activeScreen === 'sales_pos' && (canWrite(member,'sales') ? <WholesaleInvoiceScreen items={items} customers={customers} currentPartnerName={currentPartner.name} onBack={()=>setActiveScreen('home')} onSaveSale={async data=>{
           const invoice=await saveInvoice('sale',data,()=>{
             const result=handleSaveSale(data);
             if(!result)throw Error('تعذر اعتماد الفاتورة');
@@ -1172,8 +1244,10 @@ export default function App() {
           setReceiptModalInvoice(invoice);
           setActiveScreen('home');
           return true;
-        }}/>}
-        {activeScreen === 'cashier_sync' && <CashierDayScreen items={items} days={cashierDaysForDisplay} queued={queuedReports} onBack={()=>setActiveScreen('home')} onAttach={async(date,report)=>{if(engine.hasPending)await confirmSave();engine.attachCashier(attachCashierReport(engine.state,date,report),report.file.sourceQueueId);await confirmSave();if(report.file.sourceQueueId)setQueuedReports(rows=>rows.filter(r=>r.id!==report.file.sourceQueueId));}} onApprove={async(id)=>{engine.replace(approveCashierDay(engine.state,id,currentPartner.name));await confirmSave();}}/>}
+        }}/> : <OperationHeader title="فواتير الجملة" description="هذا الحساب يمكنه مراجعة سجل البيع. إنشاء الفواتير يتطلب صلاحية المبيعات." icon={Lock} onBack={()=>setActiveScreen('sections')}>
+          <button type="button" onClick={()=>navigateScreen('sales_invoices')}>فتح سجل البيع</button>
+        </OperationHeader>)}
+        {activeScreen === 'cashier_sync' && <CashierDayScreen items={items} days={cashierDaysForDisplay} queued={queuedReports} canManage={canWrite(member,'cashier')} onBack={()=>setActiveScreen('home')} onAttach={async(date,report)=>{if(engine.hasPending)await confirmSave();engine.attachCashier(attachCashierReport(engine.state,date,report),report.file.sourceQueueId);await confirmSave();if(report.file.sourceQueueId)setQueuedReports(rows=>rows.filter(r=>r.id!==report.file.sourceQueueId));}} onApprove={async(id)=>{engine.replace(approveCashierDay(engine.state,id,currentPartner.name));await confirmSave();}}/>}
 
         {activeScreen === "products" && (
           <ProductsCatalogScreen onOpenMovement={setMovementId}
@@ -1258,6 +1332,7 @@ export default function App() {
         {activeScreen === "inventory" && (
           <InventoryScreen onOpenMovement={setMovementId}
             items={items}
+            canManage={canWrite(member,'catalog')}
             onAddNewItem={(newItem) => {
               return safeAction(() => {
                 if (
@@ -1330,7 +1405,7 @@ export default function App() {
         )}
 
         {activeScreen === "suppliers" && (
-          <SuppliersAndCustomersScreen onUpdateContact={(mode,id,details)=>safeAction(()=>{if(mode==='customers'){checkCustomerDetails(details);setCustomers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}else{checkSupplierDetails(details);setSuppliers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}addAuditLog("تعديل وصفة/صنف","تحديث بيانات التواصل");})}
+          <SuppliersAndCustomersScreen canManageContacts={canWrite(member,'contacts')} canManagePayments={canWrite(member,'collections')} onUpdateContact={(mode,id,details)=>safeAction(()=>{if(mode==='customers'){checkCustomerDetails(details);setCustomers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}else{checkSupplierDetails(details);setSuppliers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}addAuditLog("تعديل وصفة/صنف","تحديث بيانات التواصل");})}
             mode="suppliers" listView={supplierView} onListViewChange={setSupplierView} onOpenPurchase={openPurchase}
             suppliers={suppliers}
             customers={customers}
@@ -1421,7 +1496,7 @@ export default function App() {
         )}
 
         {activeScreen === "customers" && (
-          <SuppliersAndCustomersScreen onUpdateContact={(mode,id,details)=>safeAction(()=>{if(mode==='customers'){checkCustomerDetails(details);setCustomers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}else{checkSupplierDetails(details);setSuppliers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}addAuditLog("تعديل وصفة/صنف","تحديث بيانات التواصل");})}
+          <SuppliersAndCustomersScreen canManageContacts={canWrite(member,'contacts')} canManagePayments={canWrite(member,'collections')} onUpdateContact={(mode,id,details)=>safeAction(()=>{if(mode==='customers'){checkCustomerDetails(details);setCustomers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}else{checkSupplierDetails(details);setSuppliers(rows=>rows.map(c=>c.id===id?{...c,...details}:c));}addAuditLog("تعديل وصفة/صنف","تحديث بيانات التواصل");})}
             mode="customers" listView={customerView} onListViewChange={setCustomerView} initialStatementId={customerTargetId}
             onOpenSale={id=>setReceiptModalInvoice(salesInvoices.find(invoice=>invoice.id===id)??null)}
             suppliers={suppliers}
@@ -1516,7 +1591,7 @@ export default function App() {
                 await saveSaleReturn(engine,invId,currentPartner.name,member?.userId);
                 showToast('تم حفظ المرتجع وعكس المستحق وتحديث متوسط تكلفة البضاعة؛ المكونات تظل مستهلكة.');
               } catch(error) {
-                showToast(error instanceof Error?error.message:'تعذر تأكيد حفظ المرتجع');
+                showToast(error instanceof Error?error.message:'تعذر تأكيد حفظ المرتجع', 'danger');
               } finally {returnBusy.current=false;}
             }}
             onDeleteInvoice={(invId) => {
@@ -1561,6 +1636,7 @@ export default function App() {
         {activeScreen === "stocktaking" && (
           <StocktakingScreen
             items={items}
+            canManage={canWrite(member,'stocktaking')}
             auditRecords={stocktakingRecords}
             employees={canWrite(member,'staff')?employees:[]}
             currentPartnerName={currentPartner.name}
@@ -1573,6 +1649,7 @@ export default function App() {
 
         {activeScreen === "staff_payroll" && (
           <StaffAndPayrollScreen onOpenExpense={setExpenseDetailId}
+            canManage={canWrite(member,'staff')}
             partners={partners}
             selectedFinancialPartnerId={financialPartner?.id??''}
             onSelectFinancialPartnerId={setSelectedFinancialPartnerId}
@@ -1646,6 +1723,7 @@ export default function App() {
             currentPartner={currentPartner}
             accountPermissions={writePermissions.filter(permission=>canWrite(member,permission.id)).map(permission=>permission.label)}
             canManageData={member.isOwner}
+            canManageExpenses={canWrite(member,'expenses')}
             canEditPartners={canWrite(member,'partners')}
             onSavePartners={(next)=>safeAction(()=>{engine.field('partners',next);})}
             selectedFinancialPartnerId={financialPartner?.id??''}
@@ -1730,7 +1808,7 @@ export default function App() {
                 );
                 showToast("📊 تم تصدير ملف الإكسيل الشامل للمحل بنجاح!");
               } catch {
-                showToast("تعذر تصدير Excel؛ حاول مجددًا.");
+                showToast("تعذر تصدير Excel؛ حاول مجددًا.", 'danger');
               }
             }}
             onRestoreBackupJson={(data) => {
@@ -1742,7 +1820,7 @@ export default function App() {
                   "تم التحقق من النسخة واسترجاعها؛ تابع تأكيد الحفظ أعلى الشاشة.",
                 );
               } catch (error) {
-                showToast(error instanceof Error ? error.message : 'تعذر استرجاع النسخة');
+                showToast(error instanceof Error ? error.message : 'تعذر استرجاع النسخة', 'danger');
               }
             }}
             onLogout={handleLogout}
@@ -1775,9 +1853,9 @@ export default function App() {
 
         </React.Fragment>}
         </AppErrorBoundary>
-        </div>
+        </main>
         {/* شريط القوائم السفلي المثبت دائماً في أسفل الشاشة مع قسم "الأقسام" بجانب "الرئيسية" */}
-        <nav aria-label="التنقل الرئيسي" style={{paddingBottom:'max(6px, env(safe-area-inset-bottom))'}} className="workspace-nav fixed bottom-0 left-0 right-0 workspace-nav-surface backdrop-blur-md border-t py-1.5 px-2 grid grid-cols-4 z-40 mx-auto">
+        <nav aria-label="التنقل الرئيسي" className="workspace-nav fixed bottom-0 left-0 right-0 workspace-nav-surface border-t py-1.5 px-2 grid grid-cols-4 mx-auto">
           {[
             { id: "home", label: "الرئيسية", icon: Home },
             { id: "sections", label: "الأقسام", icon: LayoutGrid },
@@ -1791,20 +1869,15 @@ export default function App() {
               <button
                 key={tab.id}
                 aria-current={isActive ? 'page' : undefined}
-                onClick={() => {
-                  if (tab.id === "more") setMoreInitialTab("menu");
-                  setActiveScreen(tab.id);
-                }}
-                className="min-h-[44px] flex flex-col items-center justify-center gap-0.5 py-0.5 transition"
+                onClick={() => navigateScreen(tab.id)}
+                className="min-h-[44px] flex flex-col items-center justify-center gap-0.5 py-0.5"
               >
                 <div
-                  className="px-3.5 py-1 rounded-full transition-all border border-transparent"
+                  className="px-3.5 py-1 rounded-full border border-transparent"
                 >
-                  <IconComp className="w-4 h-4" />
+                  <IconComp className="w-4 h-4" aria-hidden="true" />
                 </div>
-                <span
-                  className="text-[10px] font-bold"
-                >
+                <span>
                   {tab.label}
                 </span>
               </button>

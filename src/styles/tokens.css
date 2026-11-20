@@ -1,132 +1,127 @@
 /* ==========================================================================
-   AGOUZ DESIGN TOKENS — المصدر الوحيد للحقيقة
-   --------------------------------------------------------------------------
-   هذا الملف يُستورد أولًا في main.tsx. أي قيمة جديدة يجب أن تُعرَّف هنا
-   أولًا، لا داخل ملف مكوّن.
-
-   البنية:
-     1) Tokens أساسية (canonical)  — الأسماء الجديدة، معرَّفة بدقّة
-     2) Tokens دلالية (semantic)    — ألوان الحالة (نجاح/تحذير/خطر)
-     3) Tokens نظام (system)       — radius / shadow / typography / motion
-     4) Tokens رADIUS (deprecated)  — أسماء قديمة، مُعاد توجيهها إلى الأساسية
-     --------------------------------------------------------------------------
-   لا تُعدّل أي قيمة في (4) إلا لتوحيدها مع (1)-(3).
+   SHIFT BOARD DESIGN TOKENS
+   Shared palette, rhythm, elevation and interaction for the ERP
    ========================================================================== */
 
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
 
-  /* ======================================================================
-     1) BRAND — الألوان الأساسية
-     ====================================================================== */
-  --brand-espresso:      #34251d;   /* حبر أساسي + سطح داكن          */
-  --brand-espresso-deep: #38271b;   /* الشريط الجانبي (سطح أعمق)      */
-  --brand-gold:          #805515;   /* ذهبي داكن للنصوص والأيقونات  */
-  --brand-gold-soft:     #e9be61;   /* ذهبي التفاعل                  */
-  --brand-gold-tint:     #fbf1d9;   /* خلفية ذهبية خفيفة             */
-  --brand-gold-edge:     #9b6d28;   /* حد أزرار التفاعل             */
-  --brand-gold-highlight: #fff0bc;
-  --brand-gold-shade:    #c79238;
-  --brand-gold-finish:   linear-gradient(158deg, var(--brand-gold-highlight), var(--brand-gold-soft) 49%, var(--brand-gold-shade));
-  --brand-gold-rim:      linear-gradient(110deg, var(--brand-gold-shade), var(--brand-gold-highlight) 38%, var(--brand-gold-soft) 67%, var(--brand-gold-edge));
-  --brand-dark-finish:   linear-gradient(135deg, #211610, #39271b);
+  /* Brand */
+    --primary: #12615F;
+    --primary-hover: #0D514F;
+    --secondary: #285785;
+    --accent: #73D0C2;
+    --brand-espresso: #173A3E;
+    --brand-espresso-deep: #102B2F;
+    --brand-gold: var(--primary);
+    --brand-gold-soft: var(--accent);
+    --brand-gold-tint: #E2F2EF;
+    --brand-gold-edge: #5B827F;
+    --brand-gold-highlight: #E8F6F3;
+    --brand-gold-shade: #147976;
+    --brand-gold-finish: var(--primary);
+    --brand-dark-finish: #173A3E;
 
-  /* ======================================================================
-     2) SURFACES + INK
-     ====================================================================== */
-  --surface-page:        #f8f5ef;   /* خلفية الصفحة                   */
-  --surface-card:        #ffffff;   /* سطح البطاقة                    */
-  --surface-sunken:      #f6f4f1;   /* حشو داخلي (tracks, empty)      */
-  --surface-raised:      #f2eee5;   /* حشو أعمق (مقاييس، شرائط)      */
-  --surface-control:     #ffffff;   /* خلفية حقول الإدخال             */
+  /* Surfaces (Daylight Default) */
+  --surface-page:         #F2F6F6;
+  --surface-card:         #FFFFFF;
+  --surface-sunken:       #E6EEEE;
+  --surface-raised:       #DCE8E8;
+  --surface-control:      #FFFFFF;
 
-  --ink-strong:          #34251d;   /* العناوين والنصوص الأساسية      */
-  --ink-default:         #6b5846;   /* النصوص الثانوية                */
-  --ink-faint:           #756250;   /* النصوص الوصفية tertiary      */
-  --ink-on-dark:         #f7ecd8;   /* نص على أسطح داكنة              */
-  --ink-on-gold:         #302415;   /* نص على أزرار ذهبية             */
+  /* Text */
+  --ink-strong:           #142D31;
+  --ink-default:          #3F585D;
+  --ink-faint:            #4D6468;
+  --ink-on-dark:          #E8F6F3;
+  --ink-on-gold:          #FFFFFF;
+  --ink-on-accent:        #142D31;
 
-  /* ======================================================================
-     3) LINES
-     ====================================================================== */
-  --line-subtle:         #ece3d4;   /* فواصل خفيفة                    */
-  --line-default:        #ded3c5;   /* حدود البطاقات والحقول          */
-  --line-strong:         #c9b48f;   /* حدود مُبرزة                    */
-  --line-control:        #8c7762;   /* حدود حقول الإدخال              */
+  /* Borders */
+  --line-subtle:          #D8E5E5;
+  --line-default:         #CBD9DA;
+  --line-strong:          #9AB0B2;
+  --line-control:         #738A8A;
 
-  /* ======================================================================
-     4) SEMANTIC — ألوان الحالة
-     ====================================================================== */
-  --ok:        #246047;  --ok-bg:        #edf6f0;  --ok-line:  #bcd9c7;
-  --warn:      #8c6427;  --warn-bg:      #fdf6e6;  --warn-line:#e8d3a4;
-  --danger:    #a4352d;  --danger-bg:    #fdf1ee;  --danger-line:#eccbc4;
-  --info:      #2f5f7a;  --info-bg:      #eef4f8;  --info-line:#c2d6e2;
+  /* Semantic Status (Daylight) */
+  --ok:     #196148;  --ok-ink: #196148;     --ok-bg: #E9F6EF;     --ok-line: #B7DAC6;
+  --warn:   #825024;  --warn-ink: #825024;   --warn-bg: #FFF0DC;   --warn-line: #E7CF9D;
+  --danger: #A22F42;  --danger-ink: #A22F42; --danger-bg: #FCECEF; --danger-line: #F1C6C1;
+  --info:   var(--secondary);  --info-ink: var(--secondary);  --info-bg: #E8F3FC;  --info-line: #BFD6E6;
 
-  /* ======================================================================
-     5) CHARTS — مصدر واحد لكل الرسوم البيانية
-     ====================================================================== */
-  --chart-1:      #ae873e;   /* إيرادات */
-  --chart-2:      #28745b;   /* ربح    */
-  --chart-3:      #b45309;   /* تكلفة  */
-  --chart-4:      #6b5846;   /* ثابت   */
-  --chart-5:      #b8443b;   /* سالب   */
-  --chart-track:  #f2eee5;
+  /* Charts */
+  --chart-1:      var(--secondary);
+  --chart-2:      #196148;
+  --chart-3:      #A4602D;
+  --chart-4:      #4D6468;
+  --chart-5:      #A22F42;
+  --chart-track:  #DCE8E8;
 
-  /* ======================================================================
-     6) RADIUS
-     القيم مضبوطة على ما هو مستعمل فعليًا اليوم — توحيد لا تغيير بصري.
-     ====================================================================== */
+  /* Border Radius */
   --r-xs:   8px;
   --r-sm:  10px;
   --r-md:  12px;
-  --r-lg:  18px;   /* نصف قطر البطاقات (كما هو) */
-  --r-xl:  24px;
+  --r-lg:  16px;
+  --r-xl:  20px;
   --r-pill: 999px;
 
-  /* ======================================================================
-     7) ELEVATION
-     ====================================================================== */
-  --sh-1: 0 5px 18px -9px #39271726, 0 1px 3px #3927170d;   /* old --shadow  */
-  --sh-2: 0 3px 10px #34251d0a, 0 1px 2px #34251d08;         /* old --surface-shadow */
-  --sh-3: 0 16px 40px -16px #2e1f1647, 0 2px 8px #2e1f1614;
-  --sh-inset: inset 0 1px 0 #fff;
+  /* Elevation */
+  --sh-1: 0 1px 2px rgba(20, 45, 49, 0.05), 0 1px 3px rgba(20, 45, 49, 0.04);
+  --sh-2: 0 8px 20px -6px rgba(20, 45, 49, 0.12), 0 2px 6px rgba(20, 45, 49, 0.06);
+  --sh-3: 0 20px 44px -10px rgba(16, 35, 38, 0.24);
+  --sh-inset: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 
-  /* ======================================================================
-     8) TYPOGRAPHY — rem فقط (لا px)
-     ====================================================================== */
-  --fs-2xs: .69rem;   --fs-xs: .78rem;   --fs-sm: .88rem;   --fs-md: 1rem;
-  --fs-lg: 1.15rem;  --fs-xl: 1.4rem;    --fs-2xl: 1.85rem; --fs-3xl: 2.4rem;
+  /* Typography — Strict 12px minimum floor */
+  --fs-2xs: 0.75rem;
+  --fs-xs:  0.8125rem;
+  --fs-sm:  0.875rem;
+  --fs-md:  0.9375rem;
+  --fs-lg:  1.0625rem;
+  --fs-xl:  clamp(1.25rem, 1.1rem + 0.6vw, 1.625rem);
+  --fs-2xl: clamp(1.375rem, 1.15rem + 0.9vw, 1.75rem);
+  --fs-3xl: clamp(1.75rem, 1.3rem + 1.4vw, 2.25rem);
 
-  --fw-normal: 400;  --fw-medium: 500;  --fw-semibold: 600;
-  --fw-bold: 700;    --fw-extrabold: 800; --fw-black: 900;
-  /* Cairo مُحمَّل بـ 400/500/600/700/800/900 فقط.
-     استخدم 700 و 800 — لا 750 ولا 850 (غير موجودتين ⇒ تقريب صامت). */
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 700;
+  --fw-bold: 700;
+  --fw-extrabold: 800;
+  --fw-black: 800;
 
-  /* ======================================================================
-     9) MOTION
-     ====================================================================== */
-  --ease-out:  cubic-bezier(.2,.7,.3,1);
-  --t-fast: .14s;
-  --t-base: .22s;
+  /* Spacing and layers */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --layer-action: 20;
+  --layer-status: 35;
+  --layer-navigation: 40;
+  --layer-sidebar: 45;
+  --layer-toast: 60;
+  --layer-skip: 70;
 
-  /* ======================================================================
-     10) LAYOUT
-     ====================================================================== */
-  --sidebar-w:  252px;
-  --nav-h:       66px;
-  --shell-max:  1440px;
-  --focus-ring: 2px solid var(--brand-gold);
-  --scroll-thumb: #cdbda3;
-  --scroll-thumb-hover: #b09b7c;
-  --navigation-shadow: 0 -4px 20px rgba(30,22,18,.06);
-  --action-bar-shadow: 0 -2px 15px rgba(52,37,29,.07);
+  /* Motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --t-fast: 120ms;
+  --t-base: 200ms;
 
-  /* ======================================================================
-     11) DEPRECATED ALIASES
-     ----------------------------------------------------------------------
-     أسماء قديمة الاستُعملت في مواضع كثيرة. مُعاد توجيهها إلى الأساس
-     أعلاه حتى تنتقل تدريجيًا بلا كسر.
-     ====================================================================== */
+  /* Shell Layout (preserves 252px desktop sidebar invariant) */
+  --sidebar-w: 252px;
+  --nav-h:      68px;
+  --shell-max: 1440px;
+  --focus-ring: 3px solid var(--brand-gold);
+  --scroll-thumb: #A6BDBF;
+  --scroll-thumb-hover: #819FA1;
+  --navigation-shadow: 0 -4px 20px rgba(20, 45, 49, 0.08);
+  --action-bar-shadow: 0 -4px 18px rgba(20, 45, 49, 0.08);
+
+  /* Scrollbars follow active color-scheme statically (never animate scrollbar-color) */
+  scrollbar-color: var(--scroll-thumb) transparent;
+
+  /* Legacy Aliases (retained cleanly for component compatibility) */
   --paper:          var(--surface-page);
   --surface:        var(--surface-card);
   --surface-inset:  var(--surface-sunken);
@@ -141,10 +136,143 @@
   --red:            var(--danger);
   --action-gold:    var(--brand-gold-soft);
   --action-edge:    var(--brand-gold-edge);
-
   --radius:         var(--r-lg);
   --surface-radius: var(--r-lg);
-  --surface-shadow: var(--sh-2);
+  --surface-shadow: var(--sh-1);
   --surface-highlight: var(--sh-inset);
   --shadow:         var(--sh-1);
+}
+
+/* Override mapping from <meta name="color-scheme"> */
+:root:has(> head > meta[name="color-scheme"][content="dark"]) {
+  color-scheme: dark;
+}
+:root:has(> head > meta[name="color-scheme"][content="light"]) {
+  color-scheme: light;
+}
+
+/* Resolve color tokens using the active color scheme. */
+@supports (color: light-dark(white, black)) {
+  :root {
+    --surface-page:         light-dark(#F2F6F6, #102326);
+    --surface-card:         light-dark(#FFFFFF, #183236);
+    --surface-sunken:       light-dark(#E6EEEE, #142B2E);
+    --surface-raised:       light-dark(#DCE8E8, #213C40);
+    --surface-control:      light-dark(#FFFFFF, #142B2E);
+
+    --ink-strong:           light-dark(#142D31, #F0FAF9);
+    --ink-default:          light-dark(#3F585D, #C7DEDE);
+    --ink-faint:            light-dark(#4D6468, #A6BFC1);
+    --brand-gold:           light-dark(#12615F, #8BDED1);
+    --brand-gold-tint:      light-dark(#E2F2EF, #1B3B3B);
+    --brand-gold-edge:      light-dark(#5B827F, #86B6B2);
+
+    --line-subtle:          light-dark(#D8E5E5, #29454A);
+    --line-default:         light-dark(#CBD9DA, #3F5C61);
+    --line-strong:          light-dark(#9AB0B2, #698A90);
+    --line-control:         light-dark(#738A8A, #8CA9AD);
+
+    --ok:     light-dark(#196148, #5CC997);
+    --ok-ink: light-dark(#196148, #5CC997);
+    --ok-bg:  light-dark(#E9F6EF, #142B20);
+    --ok-line: light-dark(#B7DAC6, #2B5C44);
+
+    --warn:     light-dark(#825024, #F0B254);
+    --warn-ink: light-dark(#825024, #F0B254);
+    --warn-bg:  light-dark(#FFF0DC, #2D2111);
+    --warn-line: light-dark(#E7CF9D, #634822);
+
+    --danger:     light-dark(#A22F42, #F57C73);
+    --danger-ink: light-dark(#A22F42, #F57C73);
+    --danger-bg:  light-dark(#FCECEF, #331917);
+    --danger-line: light-dark(#F1C6C1, #6E322E);
+
+    --info:     light-dark(#285785, #7EC3EB);
+    --info-ink: light-dark(#285785, #7EC3EB);
+    --info-bg:  light-dark(#E8F3FC, #142736);
+    --info-line: light-dark(#BFD6E6, #2E5470);
+
+    --chart-1:     light-dark(#285785, #96C4F4);
+    --chart-2:     light-dark(#196148, #5CC997);
+    --chart-3:     light-dark(#A4602D, #F0B254);
+    --chart-4:     light-dark(#4D6468, #A6BFC1);
+    --chart-5:     light-dark(#A22F42, #F57C73);
+    --chart-track: light-dark(#DCE8E8, #203A3D);
+
+    --scroll-thumb:       light-dark(#A6BDBF, #4F7175);
+    --scroll-thumb-hover: light-dark(#819FA1, #7A9DA1);
+  }
+}
+
+/* Fallback for browsers without light-dark() honoring system preference + explicit dark meta */
+@supports not (color: light-dark(white, black)) {
+  @media (prefers-color-scheme: dark) {
+    :root:not(:has(> head > meta[name="color-scheme"][content="light"])) {
+      --surface-page: #102326;
+      --surface-card: #183236;
+      --surface-sunken: #142B2E;
+      --surface-raised: #213C40;
+      --surface-control: #142B2E;
+      --ink-strong: #F0FAF9;
+      --ink-default: #C7DEDE;
+      --ink-faint: #A6BFC1;
+      --brand-gold: #8BDED1;
+      --brand-gold-tint: #1B3B3B;
+      --brand-gold-edge: #86B6B2;
+      --line-subtle: #29454A;
+      --line-default: #3F5C61;
+      --line-strong: #698A90;
+      --line-control: #8CA9AD;
+      --ok: #5CC997; --ok-ink: #5CC997; --ok-bg: #142B20; --ok-line: #2B5C44;
+      --warn: #F0B254; --warn-ink: #F0B254; --warn-bg: #2D2111; --warn-line: #634822;
+      --danger: #F57C73; --danger-ink: #F57C73; --danger-bg: #331917; --danger-line: #6E322E;
+      --info: #7EC3EB; --info-ink: #7EC3EB; --info-bg: #142736; --info-line: #2E5470;
+      --chart-1: #96C4F4; --chart-2: #5CC997; --chart-3: #F0B254; --chart-4: #A6BFC1; --chart-5: #F57C73;
+      --chart-track: #203A3D;
+      --sh-inset: inset 0 1px 0 rgba(237, 255, 252, 0.06);
+    }
+  }
+  :root:has(> head > meta[name="color-scheme"][content="dark"]) {
+    --surface-page: #102326;
+    --surface-card: #183236;
+    --surface-sunken: #142B2E;
+    --surface-raised: #213C40;
+    --surface-control: #142B2E;
+    --ink-strong: #F0FAF9;
+    --ink-default: #C7DEDE;
+    --ink-faint: #A6BFC1;
+    --brand-gold: #8BDED1;
+    --brand-gold-tint: #1B3B3B;
+    --brand-gold-edge: #86B6B2;
+    --line-subtle: #29454A;
+    --line-default: #3F5C61;
+    --line-strong: #698A90;
+    --line-control: #8CA9AD;
+    --ok: #5CC997; --ok-ink: #5CC997; --ok-bg: #142B20; --ok-line: #2B5C44;
+    --warn: #F0B254; --warn-ink: #F0B254; --warn-bg: #2D2111; --warn-line: #634822;
+    --danger: #F57C73; --danger-ink: #F57C73; --danger-bg: #331917; --danger-line: #6E322E;
+    --info: #7EC3EB; --info-ink: #7EC3EB; --info-bg: #142736; --info-line: #2E5470;
+    --chart-1: #96C4F4; --chart-2: #5CC997; --chart-3: #F0B254; --chart-4: #A6BFC1; --chart-5: #F57C73;
+    --chart-track: #203A3D;
+    --sh-inset: inset 0 1px 0 rgba(237, 255, 252, 0.06);
+  }
+}
+
+/* Forced Colors / Windows High Contrast mode support */
+@media (forced-colors: active) {
+  :root {
+    --surface-page: Canvas;
+    --surface-card: Canvas;
+    --surface-sunken: Canvas;
+    --surface-raised: Canvas;
+    --surface-control: Field;
+    --ink-strong: CanvasText;
+    --ink-default: CanvasText;
+    --ink-faint: GrayText;
+    --line-subtle: CanvasText;
+    --line-default: CanvasText;
+    --line-strong: CanvasText;
+    --line-control: ButtonBorder;
+    --focus-ring: 2px solid Highlight;
+  }
 }

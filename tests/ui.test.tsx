@@ -49,14 +49,14 @@ it('filters insights when the selected period changes', () => {
 it('submits email and password once, displays auth failure, and permits retry', async () => {
   const signIn = vi.fn().mockRejectedValue(new Error('فشل الاختبار'));
   render(<LoginScreen onSignIn={signIn} />);
-  fireEvent.change(
-    screen.getByPlaceholderText('أدخل البريد الإلكتروني للحساب'),
-    { target: { value: 'owner@example.test' } },
-  );
-  fireEvent.change(screen.getByPlaceholderText('••••••••'), {
+  const password = screen.getByLabelText('كلمة المرور', { exact: true });
+  fireEvent.change(screen.getByLabelText('البريد الإلكتروني'), {
+    target: { value: 'owner@example.test' },
+  });
+  fireEvent.change(password, {
     target: { value: 'secret' },
   });
-  fireEvent.submit(screen.getByPlaceholderText('••••••••').closest('form')!);
+  fireEvent.submit(password.closest('form')!);
   expect(await screen.findByText('فشل الاختبار')).toBeTruthy();
   expect(signIn).toHaveBeenCalledWith('owner@example.test', 'secret', true);
 });

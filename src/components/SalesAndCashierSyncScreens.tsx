@@ -1,26 +1,30 @@
-import {unitLabel as displayUnit} from '../lib/units';
-import {ReceiptText as HeaderReceiptText,FolderSync as HeaderFolderSync} from 'lucide-react';
-import {OperationHeader} from './OperationHeader';
-import { businessDate } from "../lib/dates";
-import React, { useState, useMemo } from "react";
-import {ShoppingBag, Users, Search, Trash2, Check, FileSpreadsheet, Upload, Download, CheckCircle2, Coffee, AlertTriangle} from 'lucide-react';
+import { unitLabel as displayUnit } from '../lib/units';
+import { ReceiptText as HeaderReceiptText, FolderSync as HeaderFolderSync } from 'lucide-react';
+import { OperationHeader } from './OperationHeader';
+import { businessDate } from '../lib/dates';
+import React, { useState, useMemo } from 'react';
 import {
-  InventoryItem,
-  Customer,
-  SalesInvoice,
-  SalesInvoiceItem,
-} from "../types/erp";
-import {
-  parseCashierExcelBuffer,
-  downloadSampleCashierExcel,
-  ParsedCashierRow,
-} from "../lib/cashierExcelParser";
+  ShoppingBag,
+  Users,
+  Search,
+  Trash2,
+  Check,
+  FileSpreadsheet,
+  Upload,
+  Download,
+  CheckCircle2,
+  Coffee,
+  AlertTriangle,
+} from 'lucide-react';
+import { InventoryItem, Customer, SalesInvoice, SalesInvoiceItem } from '../types/erp';
+import { parseCashierExcelBuffer, downloadSampleCashierExcel, ParsedCashierRow } from '../lib/cashierExcelParser';
+import { EmptyState } from './EmptyState';
 
 interface SalesPosScreenProps {
   items: InventoryItem[];
   customers: Customer[];
   currentPartnerName: string;
-  onSaveSale: (invoice: Omit<SalesInvoice, "id" | "invoiceNumber">) => void;
+  onSaveSale: (invoice: Omit<SalesInvoice, 'id' | 'invoiceNumber'>) => void;
   onNavigateToCashierSync: () => void;
   onBack: () => void;
 }
@@ -33,28 +37,20 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
   onNavigateToCashierSync,
   onBack,
 }) => {
-  const [saleMode, setSaleMode] = useState<"wholesale" | "retail">("wholesale");
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(
-    customers[0]?.id || "",
-  );
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<
-    "نقدي" | "آجل" | "محفظة/انستا باي"
-  >("نقدي");
-  const [paidAmountInput, setPaidAmountInput] = useState<string>("");
-  const [discountInput, setDiscountInput] = useState<string>("0");
-  const [saleError, setSaleError] = useState("");
+  const [saleMode, setSaleMode] = useState<'wholesale' | 'retail'>('wholesale');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(customers[0]?.id || '');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'نقدي' | 'آجل' | 'محفظة/انستا باي'>('نقدي');
+  const [paidAmountInput, setPaidAmountInput] = useState<string>('');
+  const [discountInput, setDiscountInput] = useState<string>('0');
+  const [saleError, setSaleError] = useState('');
 
-  const sellableItems = useMemo(
-    () => items.filter((i) => i.canSellDirectly),
-    [items],
-  );
+  const sellableItems = useMemo(() => items.filter((i) => i.canSellDirectly), [items]);
 
   const filteredItems = useMemo(() => {
     return sellableItems.filter((i) => {
-      if (categoryFilter !== "all" && i.category !== categoryFilter)
-        return false;
+      if (categoryFilter !== 'all' && i.category !== categoryFilter) return false;
       if (
         searchQuery.trim() &&
         !i.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
@@ -69,34 +65,27 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
   const [cart, setCart] = useState<
     {
       item: InventoryItem;
-      qtyInBaseUnit: number; // بالكيلو للبن أو بالقطعة/الكوب للمشروبات
+      qtyInBaseUnit: number;
       weightLabel: string;
       customUnitPrice: number;
     }[]
   >([]);
 
-  const addToCart = (
-    item: InventoryItem,
-    presetKgOrCount?: number,
-    label?: string,
-  ) => {
-    const defaultPrice =
-      saleMode === "wholesale" ? item.wholesalePrice : item.retailPrice;
-    const qtyToAdd =
-      presetKgOrCount ??
-      (item.baseUnit === "kg" ? (saleMode === "wholesale" ? 5 : 0.25) : 1);
+  const addToCart = (item: InventoryItem, presetKgOrCount?: number, label?: string) => {
+    const defaultPrice = saleMode === 'wholesale' ? item.wholesalePrice : item.retailPrice;
+    const qtyToAdd = presetKgOrCount ?? (item.baseUnit === 'kg' ? (saleMode === 'wholesale' ? 5 : 0.25) : 1);
     const unitLabel =
       label ??
-      (item.baseUnit === "kg"
+      (item.baseUnit === 'kg'
         ? qtyToAdd === 0.125
-          ? "ثمن كيلو (125 جم)"
+          ? 'ثمن كيلو (125 جم)'
           : qtyToAdd === 0.25
-            ? "ربع كيلو (250 جم)"
+            ? 'ربع كيلو (250 جم)'
             : qtyToAdd === 0.5
-              ? "نصف كيلو (500 جم)"
+              ? 'نصف كيلو (500 جم)'
               : `${qtyToAdd} كجم`
-        : item.category === "drink_recipe"
-          ? "كوب"
+        : item.category === 'drink_recipe'
+          ? 'كوب'
           : displayUnit(item.baseUnit));
 
     setCart((prev) => {
@@ -109,7 +98,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                 ...c,
                 qtyInBaseUnit: nextQty,
                 weightLabel:
-                  item.baseUnit === "kg"
+                  item.baseUnit === 'kg'
                     ? `${nextQty} كجم (${Math.round(nextQty * 1000)} جم)`
                     : `${nextQty} ${unitLabel}`,
               }
@@ -128,90 +117,58 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
     });
   };
 
-  const handleModeSwitch = (mode: "wholesale" | "retail") => {
+  const handleModeSwitch = (mode: 'wholesale' | 'retail') => {
     setSaleMode(mode);
     setCart((prev) =>
       prev.map((c) => ({
         ...c,
-        customUnitPrice:
-          mode === "wholesale" ? c.item.wholesalePrice : c.item.retailPrice,
+        customUnitPrice: mode === 'wholesale' ? c.item.wholesalePrice : c.item.retailPrice,
       })),
     );
-    if (mode === "retail") {
-      setSelectedCustomerId("cust-cash");
-      setPaymentMethod("نقدي");
+    if (mode === 'retail') {
+      setSelectedCustomerId('cust-cash');
+      setPaymentMethod('نقدي');
     } else if (customers[0]) {
       setSelectedCustomerId(customers[0].id);
     }
   };
 
   const subtotal = useMemo(
-    () =>
-      cart.reduce(
-        (sum, c) =>
-          sum + Number((c.qtyInBaseUnit * c.customUnitPrice).toFixed(2)),
-        0,
-      ),
+    () => cart.reduce((sum, c) => sum + Number((c.qtyInBaseUnit * c.customUnitPrice).toFixed(2)), 0),
     [cart],
   );
 
-  // منع الخصم السالب أو الخصم الأكبر من إجمالي الفاتورة
-  const discount = Math.min(
-    Math.max(0, parseFloat(discountInput) || 0),
-    subtotal,
-  );
+  const discount = Math.min(Math.max(0, parseFloat(discountInput) || 0), subtotal);
   const totalAmount = Math.max(0, subtotal - discount);
 
   const handleCompleteSale = () => {
     if (cart.length === 0) return;
-    setSaleError("");
+    setSaleError('');
     const enteredDiscount = Number(discountInput);
     const enteredPaid = Number(paidAmountInput);
-    if (
-      !discountInput.trim() ||
-      !Number.isFinite(enteredDiscount) ||
-      enteredDiscount < 0 ||
-      enteredDiscount > subtotal
-    ) {
+    if (!discountInput.trim() || !Number.isFinite(enteredDiscount) || enteredDiscount < 0 || enteredDiscount > subtotal) {
       setSaleError(`أدخل خصمًا صحيحًا بين صفر و${subtotal.toFixed(2)} ج.م`);
       return;
     }
-    if (
-      paymentMethod === "آجل" &&
-      (!Number.isFinite(enteredPaid) ||
-        enteredPaid < 0 ||
-        enteredPaid > totalAmount)
-    ) {
+    if (paymentMethod === 'آجل' && (!Number.isFinite(enteredPaid) || enteredPaid < 0 || enteredPaid > totalAmount)) {
       setSaleError(`أدخل مدفوعًا بين صفر و${totalAmount.toFixed(2)} ج.م`);
       return;
     }
-    const customer =
-      saleMode === "wholesale"
-        ? customers.find((c) => c.id === selectedCustomerId)
-        : undefined;
-    if (saleMode === "wholesale" && !customer) {
-      setSaleError("اختر عميل الجملة قبل حفظ الفاتورة");
+    const customer = saleMode === 'wholesale' ? customers.find((c) => c.id === selectedCustomerId) : undefined;
+    if (saleMode === 'wholesale' && !customer) {
+      setSaleError('اختر عميل الجملة قبل حفظ الفاتورة');
       return;
     }
 
     const invoiceItems: SalesInvoiceItem[] = cart.map((c) => {
-      const linePrice = Number(
-        (c.qtyInBaseUnit * c.customUnitPrice).toFixed(2),
-      );
+      const linePrice = Number((c.qtyInBaseUnit * c.customUnitPrice).toFixed(2));
       const lineCost = Number((c.qtyInBaseUnit * c.item.costPrice).toFixed(2));
       const deductionNote =
-        c.item.category === "drink_recipe" && c.item.recipe
+        c.item.category === 'drink_recipe' && c.item.recipe
           ? `فك وصفة المشروب وخصم: ${c.item.recipe
-              .map(
-                (r) =>
-                  `${r.quantity * c.qtyInBaseUnit} ${
-                    displayUnit(r.unit)
-                  } ${r.ingredientName.split("(")[0]}`,
-              )
-              .join(" + ")}`
-          : `خصم مباشر: ${c.qtyInBaseUnit} ${
-              displayUnit(c.item.baseUnit)
-            } من المخزن`;
+              .map((r) => `${r.quantity * c.qtyInBaseUnit} ${displayUnit(r.unit)} ${r.ingredientName.split('(')[0]}`)
+              .join(' + ')}`
+          : `خصم مباشر: ${c.qtyInBaseUnit} ${displayUnit(c.item.baseUnit)} من المخزن`;
 
       return {
         itemId: c.item.id,
@@ -232,7 +189,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
     const totalCost = invoiceItems.reduce((s, i) => s + i.totalCost, 0);
     const netProfit = Number((totalAmount - totalCost).toFixed(2));
     const paid =
-      paymentMethod === "نقدي" || paymentMethod === "محفظة/انستا باي"
+      paymentMethod === 'نقدي' || paymentMethod === 'محفظة/انستا باي'
         ? totalAmount
         : Math.min(totalAmount, Math.max(0, parseFloat(paidAmountInput) || 0));
 
@@ -240,10 +197,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
       date: businessDate(),
       saleType: saleMode,
       customerId: customer?.id,
-      customerName:
-        saleMode === "retail"
-          ? "عميل نقدي (مبيعات المحل)"
-          : customer?.name || "عميل جملة",
+      customerName: saleMode === 'retail' ? 'عميل نقدي (مبيعات المحل)' : customer?.name || 'عميل جملة',
       items: invoiceItems,
       subtotal,
       discount,
@@ -258,96 +212,88 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-36">
-<OperationHeader title={<>{saleMode === "wholesale"
-              ? "فاتورة بيع جملة (بُن العجوز)"
-              : "نقطة بيع المحل (قطاعي ومشروبات)"}</>} description={<>اختيار الأصناف ومراجعة الفاتورة قبل الاعتماد.</>} icon={HeaderReceiptText} onBack={onBack}><button
-          onClick={onNavigateToCashierSync}
-          className="bg-gradient-to-l from-[#D4AF37] to-[#B38728] text-[#1E1612] px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow"
-          title="استيراد شيت إكسيل الكاشير"
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          شيت الكاشير
-        </button></OperationHeader>
-      {saleError && (
-        <p role="alert" className="text-red-700 bg-red-50 p-3 font-bold">
-          {saleError}
-        </p>
-      )}
-      {/* الهيدر */}
+    <div className="operation-screen min-h-screen bg-surface-page text-ink-strong pb-6">
+      <OperationHeader
+        title={saleMode === 'wholesale' ? 'فاتورة بيع جملة (بُن العجوز)' : 'نقطة بيع المحل (قطاعي ومشروبات)'}
+        description="اختيار الأصناف ومراجعة الفاتورة قبل الاعتماد."
+        icon={HeaderReceiptText}
+        onBack={onBack}
+      >
+        <button type="button" onClick={onNavigateToCashierSync} title="استيراد شيت إكسيل الكاشير">
+          <FileSpreadsheet className="w-4 h-4" aria-hidden="true" />
+          <span>شيت الكاشير</span>
+        </button>
+      </OperationHeader>
 
+      <div className="record-workspace space-y-4">
+        {saleError && (
+          <p role="alert" className="text-status-danger bg-status-danger-bg border border-status-danger-line rounded-md p-3 font-bold">
+            {saleError}
+          </p>
+        )}
 
-      <div className="p-3.5 space-y-3.5">
         {/* التبديل بين بيع الجملة وبيع المحل */}
-        <div className="bg-white p-1.5 rounded-2xl border border-[#E6DEC8] grid grid-cols-2 gap-1.5 shadow-sm">
+        <div className="record-tabs">
           <button
-            onClick={() => handleModeSwitch("wholesale")}
-            className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition ${
-              saleMode === "wholesale"
-                ? "bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] shadow"
-                : "text-[#5C4B3E] hover:bg-[#FAF8F4]"
-            }`}
+            type="button"
+            aria-pressed={saleMode === 'wholesale'}
+            onClick={() => handleModeSwitch('wholesale')}
+            className="inline-flex items-center justify-center gap-1.5"
           >
-            <ShoppingBag className="w-4 h-4 text-[#D4AF37]" />
-            بيع جملة
+            <ShoppingBag className="w-4 h-4" aria-hidden="true" />
+            <span>بيع جملة</span>
           </button>
           <button
-            onClick={() => handleModeSwitch("retail")}
-            className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition ${
-              saleMode === "retail"
-                ? "bg-[#1E1612] text-[#FBF5B7] border border-[#C59B27] shadow"
-                : "text-[#5C4B3E] hover:bg-[#FAF8F4]"
-            }`}
+            type="button"
+            aria-pressed={saleMode === 'retail'}
+            onClick={() => handleModeSwitch('retail')}
+            className="inline-flex items-center justify-center gap-1.5"
           >
-            <Coffee className="w-4 h-4 text-[#D4AF37]" />
-            بيع المحل
+            <Coffee className="w-4 h-4" aria-hidden="true" />
+            <span>بيع المحل</span>
           </button>
         </div>
 
         {/* اختيار عميل الجملة */}
-        {saleMode === "wholesale" && (
-          <div className="bg-white rounded-2xl border border-blue-200 p-3.5 flex items-center gap-3 shadow-sm">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
-              <Users className="w-5 h-5" />
+        {saleMode === 'wholesale' && (
+          <div className="operation-surface flex items-center gap-3">
+            <div className="w-10 h-10 rounded-md bg-gold-tint border border-gold-edge text-gold flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5" aria-hidden="true" />
             </div>
-            <div className="flex-1">
-              <div className="text-[11px] text-slate-400 font-bold">
-                عميل الجملة (كافيه / ماركت / تاجر)
-              </div>
+            <label className="flex-1 min-w-0 text-xs font-bold text-ink-default">
+              عميل الجملة (كافيه / ماركت / تاجر)
               <select
                 value={selectedCustomerId}
                 onChange={(e) => setSelectedCustomerId(e.target.value)}
-                className="w-full text-sm font-extrabold text-slate-900 bg-transparent focus:outline-none"
+                className="operation-input"
               >
                 {customers
-                  .filter((c) => c.id !== "cust-cash")
+                  .filter((c) => c.id !== 'cust-cash')
                   .map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name} ({c.type}) — عليه: {c.balance} ج.م
                     </option>
                   ))}
               </select>
-            </div>
+            </label>
           </div>
         )}
 
         {/* فلاتر الأقسام السريعة */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="filter-pills">
           {[
-            { id: "all", label: "الكل" },
-            { id: "manufactured_blend", label: "☕ توليفات بُن العجوز" },
-            { id: "raw_bean", label: "🫘 حبوب بن محمصة" },
-            { id: "drink_recipe", label: "🥤 مشروبات ساخنة" },
-            { id: "direct_product", label: "💧 مياه ومعلبات" },
+            { id: 'all', label: 'الكل' },
+            { id: 'manufactured_blend', label: 'توليفات بُن العجوز' },
+            { id: 'raw_bean', label: 'حبوب بن محمصة' },
+            { id: 'drink_recipe', label: 'مشروبات ساخنة' },
+            { id: 'direct_product', label: 'مياه ومعلبات' },
           ].map((cat) => (
             <button
               key={cat.id}
+              type="button"
+              aria-pressed={categoryFilter === cat.id}
               onClick={() => setCategoryFilter(cat.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold shrink-0 border transition ${
-                categoryFilter === cat.id
-                  ? "bg-slate-900 text-white border-slate-900"
-                  : "bg-white text-slate-700 border-slate-200"
-              }`}
+              className="filter-pill"
             >
               {cat.label}
             </button>
@@ -355,149 +301,125 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
         </div>
 
         {/* البحث */}
-        <div className="bg-white rounded-xl border border-slate-200 px-3.5 py-2 flex items-center gap-2 shadow-sm">
-          <Search className="w-4 h-4 text-slate-400" />
+        <div className="picker-search">
+          <Search className="w-4 h-4 text-gold shrink-0" aria-hidden="true" />
           <input
-            type="text"
+            type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="ابحث عن توليفة أو بن أو مشروب..."
-            className="w-full text-xs font-bold bg-transparent focus:outline-none"
+            aria-label="ابحث عن صنف للبيع"
+            className="min-h-[44px] w-full text-sm font-bold text-ink-strong"
           />
         </div>
 
-        {/* شبكة الأصناف السريعة للإضافة (مع أزرار ثمن / ربع / نصف / كيلو للبن) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {filteredItems.map((item) => {
-            const activePrice =
-              saleMode === "wholesale" ? item.wholesalePrice : item.retailPrice;
-            const isKg = item.baseUnit === "kg";
+        {/* شبكة الأصناف */}
+        {!filteredItems.length ? (
+          <EmptyState icon={Coffee} title="لا توجد أصناف مطابقة" description="غيّر الفئة المختارة أو عبارة البحث." />
+        ) : (
+          <div className="record-grid">
+            {filteredItems.map((item) => {
+              const activePrice = saleMode === 'wholesale' ? item.wholesalePrice : item.retailPrice;
+              const isKg = item.baseUnit === 'kg';
 
-            return (
-              <div
-                key={item.id}
-                className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm flex flex-col justify-between gap-2"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-extrabold text-slate-900">
-                      {item.name}
+              return (
+                <article key={item.id} className="record-card flex flex-col justify-between gap-3">
+                  <div className="record-heading mb-0">
+                    <div>
+                      <h2>{item.name}</h2>
+                      <p>
+                        {item.category === 'drink_recipe'
+                          ? 'يحضر بالوصفة ويخصم الخامات تلقائيًا'
+                          : `الرصيد المتاح: ${item.stock} ${displayUnit(item.baseUnit)}`}
+                      </p>
                     </div>
-                    <div className="text-[11px] text-slate-400">
-                      {item.category === "drink_recipe"
-                        ? "يحضر بالوصفة ويخصم الخامات تلقائياً"
-                        : `الرصيد المتاح: ${item.stock} ${displayUnit(item.baseUnit)}`}
-                    </div>
+                    <span className="record-badge [font-variant-numeric:tabular-nums]">
+                      {activePrice} ج.م/{isKg ? 'كجم' : 'وحدة'}
+                    </span>
                   </div>
-                  <span className="text-xs font-black text-blue-700 bg-blue-50 px-2 py-1 rounded-lg shrink-0">
-                    {activePrice} ج.م/{isKg ? "كجم" : "وحدة"}
-                  </span>
-                </div>
 
-                {isKg ? (
-                  <div className="grid grid-cols-4 gap-1.5 pt-1">
-                    <button
-                      onClick={() =>
-                        addToCart(item, 0.125, "ثمن كيلو (125 جم)")
-                      }
-                      className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg py-1 text-[11px] font-extrabold"
-                    >
-                      + ثمن
+                  {isKg ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => addToCart(item, 0.125, 'ثمن كيلو (125 جم)')}
+                        className="action-button text-xs"
+                      >
+                        + ثمن
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addToCart(item, 0.25, 'ربع كيلو (250 جم)')}
+                        className="action-button text-xs"
+                      >
+                        + ربع
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addToCart(item, 0.5, 'نصف كيلو (500 جم)')}
+                        className="action-button text-xs"
+                      >
+                        + نصف
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          addToCart(
+                            item,
+                            saleMode === 'wholesale' ? 5 : 1,
+                            saleMode === 'wholesale' ? '5 كجم جملة' : '1 كيلو',
+                          )
+                        }
+                        className="operation-primary text-xs"
+                      >
+                        + {saleMode === 'wholesale' ? '5 كجم' : '1 كجم'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => addToCart(item, 1)} className="operation-primary w-full text-xs">
+                      + إضافة للفاتورة ({activePrice} ج.م)
                     </button>
-                    <button
-                      onClick={() => addToCart(item, 0.25, "ربع كيلو (250 جم)")}
-                      className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg py-1 text-[11px] font-extrabold"
-                    >
-                      + ربع
-                    </button>
-                    <button
-                      onClick={() => addToCart(item, 0.5, "نصف كيلو (500 جم)")}
-                      className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg py-1 text-[11px] font-extrabold"
-                    >
-                      + نصف
-                    </button>
-                    <button
-                      onClick={() =>
-                        addToCart(
-                          item,
-                          saleMode === "wholesale" ? 5 : 1,
-                          saleMode === "wholesale" ? "5 كجم جملة" : "1 كيلو",
-                        )
-                      }
-                      className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-1 text-[11px] font-extrabold"
-                    >
-                      + {saleMode === "wholesale" ? "5 كجم" : "1 كجم"}
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => addToCart(item, 1)}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-1.5 text-xs font-extrabold"
-                  >
-                    + إضافة للفاتورة ({activePrice} ج.م)
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
 
         {/* سلة الفاتورة الحالية */}
         {cart.length > 0 && (
-          <div className="bg-white rounded-2xl p-4 shadow-md border-2 border-blue-600/20 space-y-3.5">
-            <div className="flex items-center justify-between border-b pb-2">
-              <span className="text-sm font-extrabold text-slate-900">
-                أصناف الفاتورة ({cart.length})
-              </span>
-              <span className="text-xs font-black text-emerald-700">
+          <section className="operation-surface space-y-3.5" aria-label="أصناف الفاتورة">
+            <div className="flex items-center justify-between border-b border-line-subtle pb-2.5">
+              <span className="text-sm font-extrabold text-ink-strong">أصناف الفاتورة ({cart.length})</span>
+              <span className="text-xs font-extrabold text-status-ok [font-variant-numeric:tabular-nums]">
                 الربح المتوقع: +
-                {cart
-                  .reduce(
-                    (s, c) =>
-                      s +
-                      c.qtyInBaseUnit * (c.customUnitPrice - c.item.costPrice),
-                    0,
-                  )
-                  .toFixed(1)}{" "}
-                ج.م
+                {cart.reduce((s, c) => s + c.qtyInBaseUnit * (c.customUnitPrice - c.item.costPrice), 0).toFixed(1)} ج.م
               </span>
             </div>
 
             <div className="space-y-2.5">
               {cart.map((c) => (
-                <div
-                  key={c.item.id}
-                  className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-slate-900">
-                      {c.item.name}
-                    </span>
+                <div key={c.item.id} className="p-3 rounded-md bg-surface-sunken border border-line space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-extrabold text-ink-strong">{c.item.name}</span>
                     <button
-                      onClick={() =>
-                        setCart((prev) =>
-                          prev.filter((x) => x.item.id !== c.item.id),
-                        )
-                      }
-                      className="text-red-500 p-1"
+                      type="button"
+                      onClick={() => setCart((prev) => prev.filter((x) => x.item.id !== c.item.id))}
+                      className="action-button min-h-[44px] min-w-[44px] border-status-danger-line bg-status-danger-bg text-status-danger"
+                      aria-label={`حذف ${c.item.name} من السلة`}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" aria-hidden="true" />
                     </button>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-slate-500">
-                        الكمية ({displayUnit(c.item.baseUnit)}):
-                      </span>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="flex items-center gap-1.5 text-xs text-ink-default font-bold">
+                      <span>الكمية ({displayUnit(c.item.baseUnit)}):</span>
                       <input
                         type="number"
                         step="0.125"
                         value={c.qtyInBaseUnit}
                         onChange={(e) => {
-                          const val = Math.max(
-                            0.05,
-                            parseFloat(e.target.value) || 0.125,
-                          );
+                          const val = Math.max(0.05, parseFloat(e.target.value) || 0.125);
                           setCart((prev) =>
                             prev.map((x) =>
                               x.item.id === c.item.id
@@ -505,7 +427,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                                     ...x,
                                     qtyInBaseUnit: val,
                                     weightLabel:
-                                      c.item.baseUnit === "kg"
+                                      c.item.baseUnit === 'kg'
                                         ? `${val} كجم (${Math.round(val * 1000)} جم)`
                                         : `${val} وحدة`,
                                   }
@@ -513,31 +435,22 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                             ),
                           );
                         }}
-                        className="w-16 border border-slate-300 rounded-lg px-2 py-1 text-xs font-extrabold text-center bg-white"
+                        className="w-20 min-h-[44px] border border-line-control rounded-sm px-2 py-1 text-xs font-extrabold text-center bg-surface-control"
                       />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[11px] text-slate-500">السعر:</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-ink-default font-bold">
+                      <span>السعر:</span>
                       <input
                         type="number"
                         value={c.customUnitPrice}
                         onChange={(e) => {
-                          const p = Math.max(
-                            0,
-                            parseFloat(e.target.value) || 0,
-                          );
-                          setCart((prev) =>
-                            prev.map((x) =>
-                              x.item.id === c.item.id
-                                ? { ...x, customUnitPrice: p }
-                                : x,
-                            ),
-                          );
+                          const p = Math.max(0, parseFloat(e.target.value) || 0);
+                          setCart((prev) => prev.map((x) => (x.item.id === c.item.id ? { ...x, customUnitPrice: p } : x)));
                         }}
-                        className="w-16 border border-slate-300 rounded-lg px-2 py-1 text-xs font-extrabold text-center bg-white"
+                        className="w-20 min-h-[44px] border border-line-control rounded-sm px-2 py-1 text-xs font-extrabold text-center bg-surface-control"
                       />
-                    </div>
-                    <div className="text-xs font-black text-blue-800">
+                    </label>
+                    <div className="text-sm font-extrabold text-gold [font-variant-numeric:tabular-nums]">
                       {(c.qtyInBaseUnit * c.customUnitPrice).toFixed(2)} ج.م
                     </div>
                   </div>
@@ -545,75 +458,62 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
               ))}
             </div>
 
-            {/* الخصم وطريقة التحصيل */}
-            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-              <div>
-                <label className="text-[11px] font-bold text-slate-500 block mb-1">
-                  خصم خاص على الفاتورة (ج.م)
-                </label>
+            <div className="operation-fields pt-2 border-t border-line-subtle">
+              <label>
+                خصم خاص على الفاتورة (ج.م)
                 <input
                   type="number"
                   value={discountInput}
                   onChange={(e) => setDiscountInput(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold"
+                  className="operation-input"
                 />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-slate-500 block mb-1">
-                  طريقة الدفع
-                </label>
+              </label>
+              <label>
+                طريقة الدفع
                 <select
                   value={paymentMethod}
-                  onChange={(e) =>
-                    setPaymentMethod(
-                      e.target.value as "نقدي" | "آجل" | "محفظة/انستا باي",
-                    )
-                  }
-                  className="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold bg-white"
+                  onChange={(e) => setPaymentMethod(e.target.value as 'نقدي' | 'آجل' | 'محفظة/انستا باي')}
+                  className="operation-input"
                 >
                   <option value="نقدي">نقدي (كاش)</option>
-                  {saleMode === "wholesale" && (
-                    <option value="آجل">آجل (على حساب العميل)</option>
-                  )}
+                  {saleMode === 'wholesale' && <option value="آجل">آجل (على حساب العميل)</option>}
                   <option value="محفظة/انستا باي">محفظة / إنستا باي</option>
                 </select>
-              </div>
+              </label>
             </div>
 
-            {paymentMethod === "آجل" && (
-              <div className="flex items-center justify-between bg-amber-50 p-2.5 rounded-xl border border-amber-200">
-                <span className="text-xs font-bold text-amber-900">
+            {paymentMethod === 'آجل' && (
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-status-warn-bg p-3 rounded-md border border-status-warn-line">
+                <label className="text-xs font-bold text-status-warn">
                   المبلغ المدفوع تحت الحساب الآن:
-                </span>
-                <input
-                  type="number"
-                  value={paidAmountInput}
-                  onChange={(e) => setPaidAmountInput(e.target.value)}
-                  placeholder="0.00"
-                  className="w-28 border border-amber-300 rounded-lg px-2 py-1 text-xs font-bold text-center bg-white"
-                />
+                  <input
+                    type="number"
+                    value={paidAmountInput}
+                    onChange={(e) => setPaidAmountInput(e.target.value)}
+                    placeholder="0.00"
+                    className="operation-input w-32 text-center"
+                  />
+                </label>
               </div>
             )}
-          </div>
+          </section>
         )}
-      </div>
 
-      {/* شريط الحفظ السفلي فوق شريط القوائم المثبت */}
-      <div className="fixed bottom-[58px] left-0 right-0 bg-white border-t border-[#E6DEC8] p-3 flex items-center gap-2.5 z-30 max-w-[445px] mx-auto shadow-md">
-        <button
-          onClick={handleCompleteSale}
-          disabled={cart.length === 0}
-          className="flex-[2] bg-[#1E1612] hover:bg-[#2E221A] disabled:opacity-50 text-[#FBF5B7] border border-[#C59B27] font-extrabold py-3 rounded-xl shadow-md flex items-center justify-center gap-2 text-xs"
-        >
-          <Check className="w-4 h-4 text-[#D4AF37]" />
-          <span>حفظ الفاتورة ({totalAmount.toLocaleString("ar-EG")} ج.م)</span>
-        </button>
-        <button
-          onClick={onBack}
-          className="flex-1 border border-[#DFD7C6] text-[#5C4B3E] font-bold py-3 rounded-xl text-xs"
-        >
-          إلغاء
-        </button>
+        {/* شريط الحفظ الموحد */}
+        <footer className="action-bar rounded-lg p-3 flex flex-wrap items-center justify-between gap-2.5">
+          <button
+            type="button"
+            onClick={handleCompleteSale}
+            disabled={cart.length === 0}
+            className="operation-primary flex-[2] min-w-[200px]"
+          >
+            <Check className="w-4 h-4" aria-hidden="true" />
+            <span>حفظ الفاتورة ({totalAmount.toLocaleString('ar-EG')} ج.م)</span>
+          </button>
+          <button type="button" onClick={onBack} className="action-button flex-1 min-w-[100px]">
+            إلغاء
+          </button>
+        </footer>
       </div>
     </div>
   );
@@ -624,11 +524,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
 // ============================================================================
 interface CashierSyncScreenProps {
   items: InventoryItem[];
-  onImportCashierRows: (
-    rows: ParsedCashierRow[],
-    sourceFileName: string,
-    saleDate?: string,
-  ) => Promise<boolean>;
+  onImportCashierRows: (rows: ParsedCashierRow[], sourceFileName: string, saleDate?: string) => Promise<boolean>;
   onBack: () => void;
 }
 
@@ -638,12 +534,10 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
   onBack,
 }) => {
   const [parsedRows, setParsedRows] = useState<ParsedCashierRow[]>([]);
-  const [fileName, setFileName] = useState<string>("");
+  const [fileName, setFileName] = useState<string>('');
   const [saleDate, setSaleDate] = useState(businessDate());
-  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string>("");
-  const [syncMsgKind, setSyncMsgKind] = useState<"success" | "error">(
-    "success",
-  );
+  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string>('');
+  const [syncMsgKind, setSyncMsgKind] = useState<'success' | 'error'>('success');
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -654,12 +548,12 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
       const buffer = await file.arrayBuffer();
       const rows = await parseCashierExcelBuffer(buffer, items);
       setParsedRows(rows);
-      setSyncSuccessMsg("");
+      setSyncSuccessMsg('');
     } catch (error) {
       setSyncSuccessMsg((error as Error).message);
-      setSyncMsgKind("error");
+      setSyncMsgKind('error');
     }
-    e.target.value = "";
+    e.target.value = '';
   };
 
   const [importing, setImporting] = useState(false);
@@ -667,38 +561,35 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
     if (!parsedRows.length || importing) return;
     setImporting(true);
     try {
-      if (
-        await onImportCashierRows(
-          parsedRows,
-          fileName || "cashier_sheet.xlsx",
-          saleDate,
-        )
-      ) {
-        setSyncSuccessMsg("تم حفظ المبيعات على السحابة وخصم المخزون.");
-        setSyncMsgKind("success");
+      if (await onImportCashierRows(parsedRows, fileName || 'cashier_sheet.xlsx', saleDate)) {
+        setSyncSuccessMsg('تم حفظ المبيعات على السحابة وخصم المخزون.');
+        setSyncMsgKind('success');
         setParsedRows([]);
       }
     } catch (error) {
       setSyncSuccessMsg((error as Error).message);
-      setSyncMsgKind("error");
+      setSyncMsgKind('error');
     } finally {
       setImporting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F4] text-[#1E1612] pb-24">
-      <OperationHeader title={<>ربط ومزامنة شيت كاشير المحل</>} description={<>خصم تلقائي للمنتجات المباشرة وتوليفات البن ووصفات المشروبات</>} icon={HeaderFolderSync} onBack={onBack}><button
-          onClick={downloadSampleCashierExcel}
-          className="bg-[#C59B27] text-[#1E1612] px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1"
-          title="تحميل نموذج إكسيل الكاشير"
-        >
-          <Download className="w-4 h-4" />
-          قالب Excel
-        </button></OperationHeader>
+    <div className="operation-screen min-h-screen bg-surface-page text-ink-strong pb-10">
+      <OperationHeader
+        title="ربط ومزامنة شيت كاشير المحل"
+        description="خصم تلقائي للمنتجات المباشرة وتوليفات البن ووصفات المشروبات"
+        icon={HeaderFolderSync}
+        onBack={onBack}
+      >
+        <button type="button" onClick={downloadSampleCashierExcel} title="تحميل نموذج إكسيل الكاشير">
+          <Download className="w-4 h-4" aria-hidden="true" />
+          <span>قالب Excel</span>
+        </button>
+      </OperationHeader>
 
-      <div className="p-3.5 space-y-4">
-        <label className="block text-sm font-bold">
+      <div className="record-workspace space-y-4">
+        <label className="block text-sm font-bold text-ink">
           تاريخ مبيعات الملف
           <input
             aria-label="تاريخ مبيعات الملف"
@@ -706,150 +597,108 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
             required
             value={saleDate}
             onChange={(e) => setSaleDate(e.target.value)}
-            className="block border p-2 rounded-lg mt-1"
+            className="operation-input max-w-xs"
           />
         </label>
+
         {/* كارت حالة الربط الأوتوماتيكي للفولدر */}
-        <div className="bg-slate-900 text-white rounded-3xl p-4 shadow-lg space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold text-emerald-400 flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+        <div className="summary-banner-dark space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-extrabold text-gold-highlight flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-status-ok" aria-hidden="true" />
               أداة مراقبة فولدر الكاشير التلقائية (Cashier Watcher)
             </span>
-            <span className="text-[10px] bg-white/10 px-2.5 py-0.5 rounded-full">
-              Supabase Realtime
-            </span>
+            <span className="text-xs bg-white/10 text-gold-soft px-2.5 py-0.5 rounded-full">Supabase Realtime</span>
           </div>
-          <p className="text-xs text-slate-300 leading-relaxed">
-            على جهاز كاشير المحل، شغّل ملف{" "}
-            <code className="bg-black/40 text-amber-300 px-1.5 py-0.5 rounded">
+          <p className="text-xs text-ink-on-dark leading-relaxed">
+            على جهاز كاشير المحل، شغّل ملف{' '}
+            <code className="bg-black/40 text-gold-highlight px-1.5 py-0.5 rounded">
               cashier-watcher/START_CASHIER_SYNC.bat
-            </code>{" "}
-            ليقوم بمراقبة فولدر الكاشير، وبمجرد خروج شيت الإكسيل يرفعه تلقائياً
-            ويخصم الأصناف والوصفات!
+            </code>{' '}
+            ليقوم بمراقبة فولدر الكاشير، وبمجرد خروج شيت الإكسيل يرفعه تلقائيًا ويخصم الأصناف والوصفات.
           </p>
         </div>
 
         {syncSuccessMsg && (
           <div
             role="alert"
-            className={`rounded-2xl p-4 flex items-center gap-3 text-xs font-extrabold border-2 ${
-              syncMsgKind === "success"
-                ? "bg-emerald-50 border-emerald-400 text-emerald-900"
-                : "bg-red-50 border-red-400 text-red-900"
+            className={`rounded-lg p-4 flex items-center gap-3 text-xs font-extrabold border ${
+              syncMsgKind === 'success'
+                ? 'bg-status-ok-bg border-status-ok-line text-status-ok'
+                : 'bg-status-danger-bg border-status-danger-line text-status-danger'
             }`}
           >
-            {syncMsgKind === "success" ? (
-              <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+            {syncMsgKind === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 shrink-0" aria-hidden="true" />
             ) : (
-              <AlertTriangle className="w-6 h-6 text-red-600 shrink-0" />
+              <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
             )}
             <span>{syncSuccessMsg}</span>
           </div>
         )}
 
-        {/* رفع ملف إكسيل أو تجربة فورية */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
-          <div className="text-sm font-extrabold text-slate-800">
-            رفع شيت مبيعات الكاشير:
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <label className="border-2 border-dashed border-emerald-500 bg-emerald-50/50 hover:bg-emerald-50 rounded-2xl p-4 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition">
-              <Upload className="w-6 h-6 text-emerald-700" />
-              <span className="text-xs font-extrabold text-emerald-900">
-                اختر شيت إكسيل الكاشير (.xlsx / .csv)
-              </span>
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-            </label>
-          </div>
-        </div>
+        <section className="operation-surface space-y-3">
+          <h2 className="text-sm font-extrabold text-ink-strong">رفع شيت مبيعات الكاشير:</h2>
+          <label className="border-2 border-dashed border-line-control bg-surface-sunken hover:bg-surface-raised rounded-lg p-5 flex flex-col items-center justify-center gap-2 cursor-pointer transition min-h-[96px]">
+            <Upload className="w-6 h-6 text-gold" aria-hidden="true" />
+            <span className="text-xs font-extrabold text-ink-strong">اختر شيت إكسيل الكاشير (.xlsx / .csv)</span>
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} className="sr-only" />
+          </label>
+        </section>
 
-        {/* معاينة الأصناف المقروءة من الشيت وكيفية خصمها من المخزن والوصفات */}
         {parsedRows.length > 0 && (
-          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3.5">
-            <div className="flex items-center justify-between border-b pb-2.5">
+          <section className="operation-surface space-y-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-subtle pb-2.5">
               <div>
-                <div className="text-sm font-extrabold text-slate-900">
+                <h2 className="text-sm font-extrabold text-ink-strong">
                   معاينة شيت الكاشير قبل الخصم ({parsedRows.length} سطر)
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  الملف: {fileName}
-                </div>
+                </h2>
+                <div className="text-xs text-ink-faint">الملف: {fileName}</div>
               </div>
-              <span className="text-xs font-black text-emerald-700">
-                الإجمالي:{" "}
-                {parsedRows
-                  .reduce((s, r) => s + (r.totalPrice || 0), 0)
-                  .toLocaleString("ar-EG")}{" "}
-                ج.م
+              <span className="text-xs font-extrabold text-status-ok [font-variant-numeric:tabular-nums]">
+                الإجمالي:{' '}
+                {parsedRows.reduce((s, r) => s + (r.totalPrice || 0), 0).toLocaleString('ar-EG')} ج.م
               </span>
             </div>
 
             <div className="space-y-2.5">
               {parsedRows.map((row, idx) => {
                 const matched = row.matchedItem;
-                const isDrink = matched?.category === "drink_recipe";
-                const qtyInBase = ["gram", "ml"].includes(row.unitHint)
-                  ? row.quantity / 1000
-                  : row.quantity;
+                const isDrink = matched?.category === 'drink_recipe';
+                const qtyInBase = ['gram', 'ml'].includes(row.unitHint) ? row.quantity / 1000 : row.quantity;
 
                 return (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-extrabold text-slate-900">
-                        {row.rawName}
-                      </span>
-                      <span className="text-xs font-black text-blue-700">
-                        {row.quantity}{" "}
-                        {displayUnit(row.unitHint)}
+                  <div key={idx} className="p-3 rounded-md bg-surface-sunken border border-line space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-extrabold text-ink-strong">{row.rawName}</span>
+                      <span className="text-xs font-extrabold text-gold [font-variant-numeric:tabular-nums]">
+                        {row.quantity} {displayUnit(row.unitHint)}
                       </span>
                     </div>
 
                     {row.error && (
-                      <div
-                        role="alert"
-                        className="text-xs text-red-700 font-bold"
-                      >
+                      <div role="alert" className="text-xs text-status-danger font-bold">
                         {row.error}
                       </div>
                     )}
                     {matched && !row.error ? (
-                      <div className="text-[11px] bg-white p-2 rounded-lg border border-slate-200/80 space-y-1">
-                        <div className="text-emerald-700 font-bold">
-                          ✓ مطابق لـ: {matched.name}
-                        </div>
+                      <div className="text-xs bg-surface-card p-2.5 rounded-sm border border-line-subtle space-y-1">
+                        <div className="text-status-ok font-bold">مطابق لـ: {matched.name}</div>
                         {isDrink && matched.recipe ? (
-                          <div className="text-amber-800 font-semibold">
-                            ⚡ منتج له وصفة مشروب — سيخصم من المخزون:{" "}
+                          <div className="text-status-warn font-semibold">
+                            منتج له وصفة مشروب — سيخصم من المخزون:{' '}
                             {matched.recipe
-                              .map(
-                                (ing) =>
-                                  `${ing.quantity * qtyInBase} ${
-                                    displayUnit(ing.unit)
-                                  } (${ing.ingredientName.split("(")[0]})`,
-                              )
-                              .join(" + ")}
+                              .map((ing) => `${ing.quantity * qtyInBase} ${displayUnit(ing.unit)} (${ing.ingredientName.split('(')[0]})`)
+                              .join(' + ')}
                           </div>
                         ) : (
-                          <div className="text-blue-800 font-semibold">
-                            📦 منتج / توليفة جاهزة — سيخصم مباشرة: {qtyInBase}{" "}
-                            {displayUnit(matched.baseUnit)} من رصيد
-                            الصنف
+                          <div className="text-status-info font-semibold">
+                            منتج / توليفة جاهزة — سيخصم مباشرة: {qtyInBase} {displayUnit(matched.baseUnit)} من رصيد الصنف
                           </div>
                         )}
                       </div>
                     ) : (
-                      <div className="text-[11px] text-red-600 font-bold">
-                        ⚠️ لم يتم العثور على صنف مطابق تلقائياً
-                      </div>
+                      <div className="text-xs text-status-danger font-bold">لم يتم العثور على صنف مطابق تلقائيًا</div>
                     )}
                   </div>
                 );
@@ -857,18 +706,15 @@ export const CashierSyncScreen: React.FC<CashierSyncScreenProps> = ({
             </div>
 
             <button
+              type="button"
               onClick={handleConfirmImport}
-              disabled={
-                !saleDate ||
-                importing ||
-                parsedRows.some((r) => Boolean(r.error) || !r.matchedItem)
-              }
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2"
+              disabled={!saleDate || importing || parsedRows.some((r) => Boolean(r.error) || !r.matchedItem)}
+              className="operation-primary w-full"
             >
-              <Check className="w-5 h-5" />
+              <Check className="w-5 h-5" aria-hidden="true" />
               <span>اعتماد مبيعات الكاشير وخصم المخزون والوصفات الآن</span>
             </button>
-          </div>
+          </section>
         )}
       </div>
     </div>

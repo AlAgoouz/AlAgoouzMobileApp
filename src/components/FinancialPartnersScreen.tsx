@@ -18,7 +18,7 @@ export function FinancialPartnersScreen({partners,canEdit,onSave,onBack,onReport
   const result=next.map(p=>{const live=partners.find(row=>row.id===p.id);return live?{...live,name:p.name,avatarLetter:p.avatarLetter,sharePercent:p.sharePercent}:p;});
   if(onSave(result))setDraft(null);else setError('لم تُحفظ الحصص؛ راجع الصلاحيات وحالة الحفظ');
  };
- return <main dir="rtl" className="operation-screen min-h-screen pb-28 space-y-4">
+ return <div dir="rtl" className="operation-screen min-h-screen pb-28 space-y-4">
   <OperationHeader title="الشركاء والحصص المالية" description="الملكية والمساهمات والمسحوبات — منفصلة عن حسابات الدخول." icon={Users} onBack={onBack}/>
   <div className="record-workspace">
    <div className="record-grid">{partners.map(p=><article key={p.id} className="record-card space-y-3 min-w-0"><div className="record-heading mb-0"><h2 className="font-black break-words">{p.name}</h2><span className="record-badge text-gold font-black">{p.sharePercent}%</span></div><dl className="record-facts mb-0"><div><dt>مساهمات من جيبه</dt><dd>{p.totalPaidFromPocket.toLocaleString('ar-EG')} ج.م</dd></div><div><dt>مسحوبات</dt><dd>{p.totalWithdrawals.toLocaleString('ar-EG')} ج.م</dd></div></dl></article>)}</div>
@@ -35,5 +35,5 @@ export function FinancialPartnersScreen({partners,canEdit,onSave,onBack,onReport
     <div className="flex flex-wrap gap-3"><button type="button" className="operation-primary" onClick={save}>حفظ الشركاء والحصص</button><button type="button" className="action-button" onClick={()=>setDraft(null)}>إلغاء</button></div>
    </section>}
   </div>
- </main>;
+ </div>;
 }

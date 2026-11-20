@@ -19,6 +19,7 @@ import {
 } from "../types/erp";
 
 interface ProductionAndRecipesScreenProps {
+  canRunProduction?: boolean;
   onOpenRecipes?:()=>void;
   reservedCodes?:string[];
   onDefineRecipe?:(id:string,name:string,definition:RecipeProductDefinition)=>Promise<void>;
@@ -39,6 +40,7 @@ export const ProductionAndRecipesScreen: React.FC<
 > = ({
   items,
   productionBatches,
+  canRunProduction = true,
   onExecuteProduction,
   onOpenRecipes,
   reservedCodes=[],
@@ -247,7 +249,7 @@ export const ProductionAndRecipesScreen: React.FC<
                 ))}
               </div>
 
-              <input
+              {canRunProduction && <><input
                 type="text"
                 value={produceNotes}
                 onChange={(e) => setProduceNotes(e.target.value)}
@@ -268,12 +270,12 @@ export const ProductionAndRecipesScreen: React.FC<
                     ? `مراجعة إنتاج وإضافة ${produceQtyKg} كجم للرصيد`
                     : "الرصيد غير كافٍ لبعض الخامات (راجع النواقص)"}
                 </span>
-              </button>
+              </button></>}
             </section>
           </div>
         )}
 
-        {reviewOpen&&selectedBlend&&<Modal title="مراجعة تشغيلة الإنتاج" description={selectedBlend.name}
+        {canRunProduction&&reviewOpen&&selectedBlend&&<Modal title="مراجعة تشغيلة الإنتاج" description={selectedBlend.name}
           onClose={()=>setReviewOpen(false)}
           footer={<button type="button" className="operation-primary" disabled={!canProduceAll}
             onClick={handleRunProduction}>تأكيد الإنتاج</button>}>
@@ -313,7 +315,7 @@ export const ProductionAndRecipesScreen: React.FC<
                       <span className="text-xs font-black text-status-ok">
                         +{batch.quantityProducedKg} كجم جاهز
                       </span>
-                      {onDeleteBatch && (
+                      {canRunProduction && onDeleteBatch && (
                         <button
                           type="button"
                           onClick={() => onDeleteBatch(batch.id)}

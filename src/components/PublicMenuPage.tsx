@@ -1,5 +1,7 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useId, useState} from 'react';
 import {fetchPublishedMenu, type MenuPublication} from '../lib/shopMenu';
+import {hasMenuTranscript} from '../lib/menuTranscript';
+import {MenuTranscript} from './MenuTranscript';
 import {menuLogo, ShopMenuView} from './ShopMenuView';
 
 export default function PublicMenuPage() {
@@ -7,6 +9,8 @@ export default function PublicMenuPage() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [attempt, setAttempt] = useState(0);
   const [zoomed, setZoomed] = useState(false);
+  const [transcriptImage, setTranscriptImage] = useState<string>();
+  const imageId = useId();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -15,6 +19,12 @@ export default function PublicMenuPage() {
       setMenu(row?.content ?? null);
       setStatus('ready');
       document.title = row && 'name' in row.content ? `منيو ${row.content.name}` : 'منيو بُن العجوز';
+      if (row && 'image' in row.content) {
+        const {image} = row.content;
+        void hasMenuTranscript(image).then(available => {
+          if (available && !controller.signal.aborted) setTranscriptImage(image);
+        });
+      }
     }).catch(() => {
       if (!controller.signal.aborted) setStatus('error');
     });
@@ -26,11 +36,17 @@ export default function PublicMenuPage() {
       <header>
         <h1>منيو بُن العجوز</h1>
         <div className="shop-menu-image-actions">
-          <button type="button" aria-pressed={zoomed} onClick={() => setZoomed(value => !value)}>تكبير الصورة</button>
+          <button type="button" aria-controls={imageId} aria-pressed={zoomed} onClick={() => setZoomed(value => !value)}>تكبير الصورة</button>
           <a href={menu.image} download="agouz-menu.jpg">تحميل الصورة</a>
         </div>
       </header>
-      <div className="shop-menu-image-viewport" data-zoomed={zoomed} tabIndex={zoomed ? 0 : undefined} role={zoomed ? 'region' : undefined} aria-label={zoomed ? 'صورة المنيو المكبرة' : undefined}>
+      {transcriptImage === menu.image && (
+        <details className="menu-transcript-panel">
+          <summary>قراءة المنيو نصيًا</summary>
+          <MenuTranscript />
+        </details>
+      )}
+      <div id={imageId} className="shop-menu-image-viewport" data-zoomed={zoomed} tabIndex={zoomed ? 0 : undefined} role={zoomed ? 'region' : undefined} aria-label={zoomed ? 'صورة المنيو المكبرة' : undefined}>
         <img src={menu.image} alt="صورة منيو بُن العجوز" />
       </div>
     </section> : menu ? <ShopMenuView menu={menu} /> : <section className="shop-menu-notice">

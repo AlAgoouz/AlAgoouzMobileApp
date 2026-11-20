@@ -4,7 +4,6 @@ import type {MenuItem, ShopMenu} from '../lib/shopMenu';
 import './shop-menu.css';
 
 const egp = new Intl.NumberFormat('ar-EG', {style: 'currency', currency: 'EGP', maximumFractionDigits: 2, minimumFractionDigits: 0});
-const number = new Intl.NumberFormat('ar-EG', {minimumIntegerDigits: 2});
 export const menuLogo = '/menu-logo.webp';
 
 export function ShopMenuView({menu, preview = false}: {menu: ShopMenu; preview?: boolean}) {
@@ -48,7 +47,6 @@ export function ShopMenuView({menu, preview = false}: {menu: ShopMenu; preview?:
     </nav>}
     {categories.map(([name, items], index) => <section key={name} id={sectionId(index)} className="shop-menu-section" aria-labelledby={`${sectionId(index)}-title`}>
       <div className="shop-menu-section-title">
-        <span aria-hidden="true">{number.format(index + 1)}</span>
         <SectionHeading id={`${sectionId(index)}-title`}>{name}</SectionHeading>
       </div>
       <ul>{items.map(item => <li key={item.id} className={`shop-menu-product${item.photo && menu.template === 'photos' ? ' has-photo' : ''}`}>

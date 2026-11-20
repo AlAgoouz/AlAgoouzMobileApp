@@ -139,7 +139,7 @@ export const SmartInsightsScreen: React.FC<SmartInsightsProps> = ({
                   </div>
                 </div>
               </div>
-              <span className="record-badge bg-gold-soft text-ink-on-gold border-gold-edge font-black">
+              <span className="record-badge bg-gold-soft text-ink-on-accent border-gold-edge font-black">
                 {profitMarginPercent===null?'بانتظار تكلفة الأصناف':totalSales>0?`هامش مجمل الربح ${profitMarginPercent.toFixed(1)}%`:'الهامش غير متاح دون مبيعات'}
               </span>
             </div>
@@ -377,7 +377,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                     {stats.sales.toLocaleString('ar-EG')} ج.م
                   </div>
                 </div>
-                <div className="text-left">
+                <div className="text-end">
                   <div className="text-gold-soft">تكلفة البضاعة المباعة</div>
                   <div className="text-base font-black text-white">
                     {amountText(stats.cost)}
@@ -391,9 +391,9 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                     {amountText(stats.grossProfit)}
                   </div>
                 </div>
-                <div className="text-left">
+                <div className="text-end">
                   <div className="text-gold-soft">إجمالي المصروفات</div>
-                  <div className="text-base font-black text-amber-300">
+                  <div className="text-base font-black text-gold-soft">
                     - {stats.expenses.toLocaleString('ar-EG')} ج.م
                   </div>
                 </div>
@@ -469,7 +469,7 @@ export const ProfitReportsScreen: React.FC<ProfitReportsProps> = ({
                           <p>حصة الشراكة: {p.sharePercent}%</p>
                         </div>
                       </div>
-                      <div className="text-left">
+                      <div className="text-end">
                         <div className="text-xs text-ink">
                           الصافي المستحق له
                         </div>

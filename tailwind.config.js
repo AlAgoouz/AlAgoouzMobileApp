@@ -35,6 +35,7 @@ export default {
           faint: 'var(--ink-faint)',
           'on-dark': 'var(--ink-on-dark)',
           'on-gold': 'var(--ink-on-gold)',
+          'on-accent': 'var(--ink-on-accent)',
         },
         line: {
           subtle: 'var(--line-subtle)',
