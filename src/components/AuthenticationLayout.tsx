@@ -2,7 +2,7 @@ import React from 'react';
 
 export function AuthenticationLayout({ children }: { children: React.ReactNode }) {
   return (
-    <main dir="rtl" className="agouz-login">
+    <main dir="rtl" className="agouz-login agouz-login--branded">
       <div className="login-layout">
         <section className="login-panel" aria-labelledby="login-title">
           <header className="login-brand">
@@ -14,10 +14,12 @@ export function AuthenticationLayout({ children }: { children: React.ReactNode }
           </header>
           {children}
         </section>
-        <picture className="login-art" aria-hidden="true">
-          <source media="(max-width: 767px)" srcSet="/roaster-portrait-small.webp" width="200" height="300" />
-          <img src="/roaster-portrait.webp" alt="" width="800" height="1200" decoding="async" />
-        </picture>
+        <div className="login-scene" aria-hidden="true">
+          <picture className="login-art">
+            <source media="(max-width: 767px)" srcSet="/roaster-portrait-small.webp" width="480" height="720" />
+            <img src="/roaster-portrait.webp" alt="" width="800" height="1200" decoding="async" />
+          </picture>
+        </div>
       </div>
     </main>
   );

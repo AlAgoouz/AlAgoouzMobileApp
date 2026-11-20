@@ -1004,7 +1004,8 @@ export default function App() {
               : "تعذر تأكيد الحفظ";
 
   return (
-    <div className="agouz-app min-h-screen bg-surface-page flex flex-col items-center justify-start">
+    <div className="agouz-app min-h-screen bg-surface-page flex flex-col items-center justify-start"
+      data-awaiting-summary={activeScreen === 'home' && !dashboard.data && !dashboard.error ? '' : undefined}>
       <a className="workspace-skip" href="#workspace-main" onClick={(event) => {
         event.preventDefault();
         workspaceMain.current?.focus();
