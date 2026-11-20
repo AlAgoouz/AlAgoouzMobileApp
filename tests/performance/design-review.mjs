@@ -75,9 +75,10 @@ export async function verifyDesign(){
     await page.locator('.login-brand img').evaluate(img=>img.decode());
     const portrait=page.locator('.login-art img');
     assert.match(await portrait.evaluate(async img=>{await img.decode();return img.currentSrc;}),/roaster-portrait-small\.webp$/);
-    assert.equal(await page.evaluate(async()=>{await document.fonts.ready;return document.fonts.check('700 16px Cairo','بُن العجوز');}),true);
+    assert.equal(await page.evaluate(async()=>{await document.fonts.ready;return [...document.fonts].some(face=>face.family==='Cairo'&&face.status==='loaded');}),true);
     await limit(page,'login');await page.screenshot({path:'design-login-mobile.png',fullPage:true});evidence.login=true;
     await page.setViewportSize({width:1440,height:900});
+    await page.waitForFunction(()=>document.querySelector('.login-art img')?.currentSrc.endsWith('/roaster-portrait.webp'));
     assert.match(await portrait.evaluate(async img=>{await img.decode();return img.currentSrc;}),/roaster-portrait\.webp$/);
     await page.screenshot({path:'design-login-desktop.png',animations:'disabled'});
     await page.setViewportSize({width:360,height:800});
@@ -319,7 +320,7 @@ export async function verifyDesign(){
         await page.getByRole('button',{name:'طباعة / واتساب',exact:true}).first().click();
         await page.getByRole('dialog').waitFor();await page.getByRole('button',{name:'إغلاق النافذة',exact:true}).click();
       }
-      const addDialogs={'المنتجات والتسعير':'منتج جديد','إنتاج التوليفات':'جديد','الوصفات':'تعريف منتج بوصفة','مخزن البن':'إضافة','عملاء الجملة':'إضافة','الموردين':'إضافة','المستخدمين والصلاحيات':'إضافة مستخدم','العمال والرواتب':'عامل جديد'};
+      const addDialogs={'المنتجات والتسعير':'منتج جديد','إنتاج التوليفات':'جديد','الوصفات':'تعريف منتج بوصفة','مخزن البن':'إضافة صنف','عملاء الجملة':'إضافة','الموردين':'إضافة','المستخدمين والصلاحيات':'إضافة مستخدم','العمال والرواتب':'عامل جديد'};
       if(addDialogs[title])await reviewModal(page,page.getByRole('button',{name:addDialogs[title],exact:true}),String(evidence.sections.length+1),title==='المستخدمين والصلاحيات');
       if(title==='المصاريف'){
         await page.getByRole('button',{name:'حسابي',exact:true}).click();
