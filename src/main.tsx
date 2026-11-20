@@ -10,17 +10,31 @@ import { applyThemeMeta, getStoredThemePreference } from "./lib/theme";
 
 applyThemeMeta(getStoredThemePreference());
 
-const Screen =
+const screenModule =
   window.location.pathname.replace(/\/$/, "") === "/menu"
-    ? React.lazy(() => import("./components/PublicMenuPage"))
-    : React.lazy(() => import("./App"));
+    ? import("./components/PublicMenuPage")
+    : import("./App");
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <AppErrorBoundary>
-      <React.Suspense fallback={<ScreenLoading />}>
-        <Screen />
-      </React.Suspense>
-    </AppErrorBoundary>
-  </React.StrictMode>,
+const root = ReactDOM.createRoot(document.getElementById("root")!);
+
+function renderScreen(screen: React.ReactNode) {
+  root.render(
+    <React.StrictMode>
+      <AppErrorBoundary>
+        <React.Suspense fallback={<ScreenLoading />}>{screen}</React.Suspense>
+      </AppErrorBoundary>
+    </React.StrictMode>,
+  );
+}
+
+function ScreenLoadError({ error }: { error: unknown }): never {
+  throw error;
+}
+
+// Render the route as soon as its module is ready, without waiting for a
+// Suspense retry of the loading screen. Nested screens can still suspend.
+renderScreen(<ScreenLoading />);
+void screenModule.then(
+  ({ default: Screen }) => renderScreen(<Screen />),
+  error => renderScreen(<ScreenLoadError error={error} />),
 );

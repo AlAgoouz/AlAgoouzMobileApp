@@ -254,7 +254,7 @@ export default function App() {
   useEffect(()=>{if(activeScreen!=='sales_invoices')setHistoryEditing(false);},[activeScreen]);
   useEffect(()=>setSelectedFinancialPartnerId(''),[member?.userId,member?.partnerId]);
   useEffect(()=>{setSalesHistoryView(initialSalesHistoryView);setCustomerView({query:'',page:0});setSupplierView({query:'',page:0});},[member?.userId]);
-  const pendingInvoice=useRef<{kind:'purchase'|'sale';id:string;userId:string|undefined;draft:string}>();
+  const pendingInvoice=useRef<{kind:'purchase'|'sale';id:string;userId:string|undefined;draft:string}>(undefined);
   const confirmSave=async()=>{await engine.flush();if(engine.snapshot.status!=='ready')throw Error(engine.snapshot.error||'لم يصل تأكيد اعتماد العملية؛ راجع حالة الحفظ');};
   const loggedPartnerId = member?.partnerId ?? null;
   const {
