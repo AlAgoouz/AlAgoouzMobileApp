@@ -74,12 +74,36 @@ export async function verifyDesign(){
     assert.equal(await page.getByText(/بوابة الدخول الآمن|إنشاء حساب المالك/).count(),0);
     await page.locator('.login-brand img').evaluate(img=>img.decode());
     const portrait=page.locator('.login-art img');
-    assert.match(await portrait.evaluate(async img=>{await img.decode();return img.currentSrc;}),/roaster-portrait-small\.webp$/);
+    const checkPortrait=async filename=>{
+      const image=await portrait.evaluate(async img=>{
+        await img.decode();
+        const canvas=document.createElement('canvas');
+        canvas.width=img.naturalWidth;
+        canvas.height=img.naturalHeight;
+        const pixels=canvas.getContext('2d');
+        pixels.drawImage(img,0,0);
+        const alpha=(x,y)=>pixels.getImageData(x,y,1,1).data[3];
+        const scene=img.closest('.login-scene');
+        return {
+          path:new URL(img.currentSrc).pathname,
+          backgroundAlpha:alpha(Math.floor(canvas.width*.8),Math.floor(canvas.height*.15)),
+          subjectAlpha:alpha(Math.floor(canvas.width*.5),Math.floor(canvas.height*.35)),
+          sceneBackground:getComputedStyle(scene).backgroundImage,
+          sceneColor:getComputedStyle(scene).backgroundColor,
+        };
+      });
+      assert.equal(image.path,`/${filename}`);
+      assert.equal(image.backgroundAlpha,0,'The area around the portrait must be transparent');
+      assert.ok(image.subjectAlpha>245,'The character must be visibly opaque');
+      assert.equal(image.sceneBackground,'none');
+      assert.equal(image.sceneColor,'rgba(0, 0, 0, 0)');
+    };
+    await checkPortrait('roaster-cutout-small.webp');
     assert.equal(await page.evaluate(async()=>{await document.fonts.ready;return [...document.fonts].some(face=>face.family==='Cairo'&&face.status==='loaded');}),true);
     await limit(page,'login');await page.screenshot({path:'design-login-mobile.png',fullPage:true});evidence.login=true;
     await page.setViewportSize({width:1440,height:900});
-    await page.waitForFunction(()=>document.querySelector('.login-art img')?.currentSrc.endsWith('/roaster-portrait.webp'));
-    assert.match(await portrait.evaluate(async img=>{await img.decode();return img.currentSrc;}),/roaster-portrait\.webp$/);
+    await page.waitForFunction(()=>document.querySelector('.login-art img')?.currentSrc.endsWith('/roaster-cutout.webp'));
+    await checkPortrait('roaster-cutout.webp');
     await page.screenshot({path:'design-login-desktop.png',animations:'disabled'});
     await page.setViewportSize({width:360,height:800});
     await page.getByRole('button',{name:'نسيت كلمة المرور؟'}).click();

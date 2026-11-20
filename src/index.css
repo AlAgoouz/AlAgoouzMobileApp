@@ -91,16 +91,6 @@
   grid-row: 1;
   min-height: clamp(9.75rem, 25svh, 13rem);
   overflow: hidden;
-  background: radial-gradient(ellipse at 50% 54%, #A06031 0%, #50301E 34%, #122A29 72%);
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
-}
-
-.login-scene::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, #102829 0%, transparent 40%);
-  pointer-events: none;
 }
 
 .login-art, .login-art img {
@@ -112,12 +102,11 @@
 .login-art {
   position: absolute;
   inset: 0;
-  mask-image: radial-gradient(ellipse 65% 100% at 50% 36%, #000 52%, transparent 100%);
 }
 
 .login-art img {
   object-fit: cover;
-  object-position: center 6%;
+  object-position: center 4%;
 }
 
 .login-layout .login-panel {
@@ -374,17 +363,10 @@
     inset-block: 0;
     inset-inline-start: max(14rem, 33%);
     inset-inline-end: -1rem;
-    border-radius: 0;
-    background: radial-gradient(ellipse at 47% 47%, #8A542F 0%, #4F3828 29%, transparent 72%);
   }
-  .login-scene::after {
-    background: linear-gradient(to top, #0F2425, transparent 27%);
-    mask-image: radial-gradient(ellipse 60% 75%, #000 65%, transparent);
-  }
-  .login-art {
-    mask-image: radial-gradient(ellipse 60% 66% at 50% 44%, #000 55%, transparent 100%);
-    mask-image: linear-gradient(to bottom, transparent, #000 5%), radial-gradient(ellipse 60% 66% at 50% 44%, #000 55%, transparent 100%);
-    mask-composite: intersect;
+  .login-art img {
+    object-fit: contain;
+    object-position: center;
   }
 }
 

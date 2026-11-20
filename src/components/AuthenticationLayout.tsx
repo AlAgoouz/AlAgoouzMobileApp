@@ -16,8 +16,8 @@ export function AuthenticationLayout({ children }: { children: React.ReactNode }
         </section>
         <div className="login-scene" aria-hidden="true">
           <picture className="login-art">
-            <source media="(max-width: 767px)" srcSet="/roaster-portrait-small.webp" width="480" height="720" />
-            <img src="/roaster-portrait.webp" alt="" width="800" height="1200" decoding="async" />
+            <source media="(max-width: 767px)" srcSet="/roaster-cutout-small.webp" width="480" height="720" />
+            <img src="/roaster-cutout.webp" alt="" width="800" height="1200" decoding="async" />
           </picture>
         </div>
       </div>
