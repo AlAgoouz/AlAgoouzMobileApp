@@ -49,24 +49,34 @@ export function LoginScreen({ onSignIn, authError, onRequestPasswordReset, onRes
   };
   const title = mode === 'login' ? 'أهلًا برجوعك' : mode === 'reset' ? 'استعادة كلمة المرور' : 'تأكيد بريد الحساب';
   return <AuthenticationLayout>
-      <form onSubmit={submit} className="login-form" aria-busy={busy}>
-        <div className="space-y-2"><h1 id="login-title" ref={headingRef} tabIndex={-1}>{title}</h1>
+      <form method="post" onSubmit={submit} className="login-form" aria-labelledby="login-title" aria-busy={busy}>
+        <div className="login-heading"><h1 id="login-title" ref={headingRef} tabIndex={-1}>{title}</h1>
           {mode !== 'login' && <p className="login-intro">{mode === 'reset' ? 'أدخل بريد حسابك لإرسال رابط استعادة كلمة المرور.' : 'أدخل بريد حسابك لإعادة إرسال رسالة التأكيد.'}</p>}
         </div>
         {notice && <p role="status" className="login-notice">{notice}</p>}
         {(error || (mode === 'login' && authError)) && <p role="alert" className="login-error">{error || authError}</p>}
-        <label className="login-label" htmlFor="login-email">البريد الإلكتروني</label>
-        <div className="login-input"><Mail aria-hidden="true" size={19} /><input id="login-email" name="email" type="email" dir="ltr" autoComplete="username" spellCheck={false} required value={email} onChange={e => setEmail(e.target.value)} placeholder="name@example.com" disabled={busy} /></div>
+        <div className="login-field">
+          <label className="login-label" htmlFor="login-email">البريد الإلكتروني</label>
+          <div className="login-input">
+            <Mail aria-hidden="true" size={19} />
+            <input id="login-email" name="email" type="email" dir="ltr" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint={mode === 'login' ? 'next' : 'send'} required value={email} onChange={e => setEmail(e.target.value)} placeholder="name@example.com" disabled={busy} />
+          </div>
+        </div>
         {mode === 'login' && <>
-          <div className="login-password-row"><label className="login-label" htmlFor="login-password">كلمة المرور</label>
+          <div className="login-field">
+            <label className="login-label" htmlFor="login-password">كلمة المرور</label>
+            <div className="login-input">
+              <Lock aria-hidden="true" size={19} />
+              <input id="login-password" name="password" dir="ltr" type={visible ? 'text' : 'password'} autoComplete="current-password" enterKeyHint="go" required value={password} onChange={e => setPassword(e.target.value)} disabled={busy} />
+              <button type="button" className="login-eye" aria-label="إظهار كلمة المرور" aria-pressed={visible} disabled={busy} onClick={() => setVisible(!visible)}>{visible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button>
+            </div>
+          </div>
+          <div className="login-options">
+            <label className="login-remember"><input type="checkbox" name="remember" checked={remember} disabled={busy} onChange={e => setRemember(e.target.checked)} />تذكر دخولي على هذا الجهاز</label>
             {onRequestPasswordReset && <button className="login-text-button" type="button" disabled={busy} onClick={() => changeMode('reset')}>نسيت كلمة المرور؟</button>}
           </div>
-          <div className="login-input"><Lock aria-hidden="true" size={19} /><input id="login-password" name="password" dir="ltr" type={visible ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} disabled={busy} />
-            <button type="button" className="login-eye" aria-label={visible ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'} disabled={busy} onClick={() => setVisible(!visible)}>{visible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button>
-          </div>
-          <label className="login-remember"><input type="checkbox" checked={remember} disabled={busy} onChange={e => setRemember(e.target.checked)} />تذكر دخولي على هذا الجهاز</label>
         </>}
-        <button className="login-submit" disabled={busy} type="submit">{busy ? <><Loader2 size={18} className="animate-spin" /><span>{mode === 'login' ? 'جارٍ تسجيل الدخول…' : 'جارٍ إرسال الرسالة…'}</span></> : <><span>{mode === 'login' ? 'تسجيل الدخول' : 'إرسال الرسالة'}</span><ArrowLeft size={18} /></>}</button>
+        <button className="login-submit" disabled={busy} type="submit">{busy ? <><Loader2 aria-hidden="true" size={18} className="animate-spin" /><span>{mode === 'login' ? 'جارٍ تسجيل الدخول…' : 'جارٍ إرسال الرسالة…'}</span></> : <><span>{mode === 'login' ? 'تسجيل الدخول' : 'إرسال الرسالة'}</span><ArrowLeft aria-hidden="true" size={18} /></>}</button>
         {mode !== 'login' && <button className="login-back" type="button" disabled={busy} onClick={() => changeMode('login')}>العودة لتسجيل الدخول</button>}
         {mode === 'login' && onResendConfirmation && <div className="login-help"><span>لم تصلك رسالة تأكيد البريد؟</span><button className="login-text-button" type="button" disabled={busy} onClick={() => changeMode('resend')}><RefreshCw size={14} aria-hidden="true" />إعادة إرسال تأكيد البريد</button></div>}
       </form>
