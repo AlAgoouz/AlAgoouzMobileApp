@@ -36,7 +36,7 @@ export function RecipesScreen({items,drafts,initialTargetId,canManage,onSave,onD
  const target=selected?.target,definition=target?('draft'in target?target.draft.definition!:target.item):null;
  const save=async()=>{if(!target||busy||!canManage||!recipeValid)return;setBusy(true);setError('');setSaved(false);try{await onSave(target,recipe);if('item'in target)setSelected(current=>current?.key===selected?.key?{...current,target:{item:{...target.item,recipe:structuredClone(recipe)}}}:current);setSaved(true);}catch(e){setError(e instanceof Error?e.message:'لم يتأكد حفظ الوصفة');}finally{setBusy(false);}};
  return (
-  <main className="min-h-screen pb-24" dir="rtl">
+  <div className="min-h-screen pb-24" dir="rtl">
    <OperationHeader title="الوصفات" description="تحديد مقادير المشروبات والتحويجات والتوليفات وحساب تكلفتها." icon={BookOpen} onBack={onBack}>
     {canManage&&<button type="button" onClick={()=>setCreate(true)} disabled={busy}><Plus size={17} aria-hidden="true"/>تعريف منتج بوصفة</button>}
    </OperationHeader>
@@ -66,6 +66,6 @@ export function RecipesScreen({items,drafts,initialTargetId,canManage,onSave,onD
     </section>}
    </div>
    {(create||editingDefinition)&&<ItemDefinitionModal items={items} initialName={editingDefinition?.name} initialDefinition={editingDefinition?.definition} draftId={editingDefinition?.id} allowedCategories={['manufactured_blend','drink_recipe','seasoning_recipe']} reservedCodes={drafts.filter(d=>d.id!==editingDefinition?.id).flatMap(d=>d.definition?[d.definition.code]:[])} onSave={()=>false} onSaveRecipeDefinition={async(id,name,definition)=>{await onDefine(id,name,definition,editingDefinition??undefined);setDefinitionSavedId(id);setCreate(false);setEditingDefinition(null);}} onClose={()=>{setCreate(false);setEditingDefinition(null);}}/>}
-  </main>
+  </div>
  );
 }

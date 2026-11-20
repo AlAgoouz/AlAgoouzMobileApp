@@ -20,11 +20,21 @@ describe('Design System v3', () => {
     metaScheme.name = 'color-scheme';
     metaScheme.content = 'light dark';
     document.head.append(metaScheme);
+    for (const [scheme, color] of [['light', '#F2F6F6'], ['dark', '#102326']]) {
+      const meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      meta.dataset.scheme = scheme;
+      meta.media = `(prefers-color-scheme: ${scheme})`;
+      meta.content = color;
+      document.head.append(meta);
+    }
 
     expect(getStoredThemePreference()).toBe('system');
     setThemePreference('dark');
     expect(getStoredThemePreference()).toBe('dark');
     expect(metaScheme.content).toBe('dark');
+    expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#102326');
+    expect(document.querySelector('meta[data-theme-override]')).toBeTruthy();
 
     setThemePreference('light');
     expect(getStoredThemePreference()).toBe('light');
@@ -34,6 +44,7 @@ describe('Design System v3', () => {
     expect(getStoredThemePreference()).toBe('system');
     expect(localStorage.getItem('bon_elagouz_color_scheme')).toBeNull();
     expect(metaScheme.content).toBe('light dark');
+    expect(document.querySelector('meta[data-theme-override]')).toBeNull();
   });
 
   it('renders proportional interactive button points on TrendChart and selects clicked date', () => {

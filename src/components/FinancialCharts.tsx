@@ -112,6 +112,7 @@ export function TrendChart({ points, hide = false }: { points: TrendPoint[]; hid
                     <button
                       type="button"
                       className="trend-point point-sales"
+                      tabIndex={-1}
                       style={{ left: `${leftPct}%`, top: `${salesTopPct}%` }}
                       aria-label={`${p.date}: المبيعات ${money(p.sales)} ج.م`}
                       title={`${p.date}: المبيعات ${money(p.sales)} ج.م`}
@@ -122,6 +123,7 @@ export function TrendChart({ points, hide = false }: { points: TrendPoint[]; hid
                       <button
                         type="button"
                         className={`trend-point ${p.profit < 0 ? 'point-negative' : 'point-profit'}`}
+                        tabIndex={-1}
                         style={{ left: `${leftPct}%`, top: `${(y(p.profit) / 200) * 100}%` }}
                         aria-label={`${p.date}: الصافي ${money(p.profit)} ج.م`}
                         title={`${p.date}: الصافي ${money(p.profit)} ج.م`}

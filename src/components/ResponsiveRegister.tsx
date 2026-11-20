@@ -15,8 +15,9 @@ export function ResponsiveRegister<Row extends { id: string }>({
   rows: readonly Row[];
 }) {
   return (
-    <div tabIndex={0} role="region" aria-label={label} className="overflow-x-auto max-w-full">
-      <table className="responsive-register" aria-label={label} role="table">
+    <div tabIndex={0} role="region" aria-label={label} className="register-scroll">
+      <table className="responsive-register" role="table">
+        <caption className="sr-only">{label}</caption>
         <thead role="rowgroup">
           <tr role="row">
             {columns.map((column) => (
@@ -29,14 +30,15 @@ export function ResponsiveRegister<Row extends { id: string }>({
         <tbody role="rowgroup">
           {rows.map((row) => (
             <tr role="row" key={row.id}>
-              {columns.map((column) => (
-                <td role="cell" key={column.title}>
-                  <span className="register-mobile-label" aria-hidden="true">
-                    {column.title}
-                  </span>
+              {columns.map((column, index) => {
+                const content = <>
+                  <span className="register-mobile-label" aria-hidden="true">{column.title}</span>
                   {column.render(row)}
-                </td>
-              ))}
+                </>;
+                return index === 0
+                  ? <th scope="row" role="rowheader" key={column.title}>{content}</th>
+                  : <td role="cell" key={column.title}>{content}</td>;
+              })}
             </tr>
           ))}
         </tbody>

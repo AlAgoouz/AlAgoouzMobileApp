@@ -8,19 +8,21 @@ export function WorkspaceSidebar({
   name,
   onNavigate,
   isOwner = false,
+  canCreateSale = true,
   counts = {},
 }: {
   screen: string;
   name: string;
   onNavigate: (id: string) => void;
   isOwner?: boolean;
+  canCreateSale?: boolean;
   counts?: Record<string, number>;
 }) {
   const { effective, toggleComfortScheme } = useThemePreference();
   const links = [
     { id: 'home', title: 'نظرة على المحل', icon: Home, group: 'مساحة العمل' },
     { id: 'sections', title: 'الأقسام', icon: LayoutGrid, group: 'مساحة العمل' },
-    ...sectionLinks.filter((link) => !link.ownerOnly || isOwner),
+    ...sectionLinks.filter((link) => (!link.ownerOnly || isOwner) && (link.id !== 'sales_pos' || canCreateSale)),
     { id: 'more', title: 'حسابي', icon: UserRound, group: 'مساحة العمل' },
   ];
 

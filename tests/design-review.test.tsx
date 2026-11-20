@@ -36,12 +36,14 @@ it('sends a recovery request without a password and preserves the email on retur
  render(<LoginScreen onSignIn={signIn} onRequestPasswordReset={reset} authError="خطأ دخول قديم"/>);
  fireEvent.change(screen.getByLabelText('البريد الإلكتروني'),{target:{value:'owner@example.test'}});
  fireEvent.click(screen.getByRole('button',{name:'نسيت كلمة المرور؟'}));
+ expect(document.activeElement).toBe(screen.getByRole('heading',{name:'استعادة كلمة المرور'}));
  expect(screen.queryByLabelText('كلمة المرور')).toBeNull();
  expect(screen.queryByText('خطأ دخول قديم')).toBeNull();
  fireEvent.submit(screen.getByLabelText('البريد الإلكتروني').closest('form')!);
  await waitFor(()=>expect(screen.getByRole('status').textContent).toContain('إذا كان البريد'));
  expect(reset).toHaveBeenCalledExactlyOnceWith('owner@example.test');expect(signIn).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('button',{name:'العودة لتسجيل الدخول'}));
+ expect(document.activeElement).toBe(screen.getByRole('heading',{name:'أهلًا برجوعك'}));
  expect((screen.getByLabelText('البريد الإلكتروني') as HTMLInputElement).value).toBe('owner@example.test');
 });
 it('prevents concurrent recovery requests and mode changes until a response arrives',async()=>{
@@ -56,14 +58,27 @@ it('prevents concurrent recovery requests and mode changes until a response arri
  finish();await waitFor(()=>expect(screen.getByRole('status')).toBeTruthy());
 });
 it('routes every section and searches Arabic section names with a useful empty state',()=>{
- const navigate=vi.fn();render(<SectionsHub counts={{shortages:3}} onNavigate={navigate}/>);
+ const navigate=vi.fn();render(<SectionsHub counts={{shortages:3}} onNavigate={navigate} canCreateSale/>);
  expect(document.querySelectorAll('.section-tile')).toHaveLength(16);
  fireEvent.click(screen.getByRole('button',{name:/المصاريف/}));expect(navigate).toHaveBeenLastCalledWith('expenses');
  fireEvent.click(screen.getByRole('button',{name:/النواقص/}));expect(navigate).toHaveBeenLastCalledWith('shortages');
  fireEvent.change(screen.getByRole('searchbox',{name:'ابحث في الأقسام'}),{target:{value:'انتاج'}});
  expect(screen.getByRole('button',{name:/إنتاج التوليفات/})).toBeTruthy();
- expect(screen.queryByRole('button',{name:/فواتير الجملة/})).toBeNull();
+ expect(screen.queryByRole('button',{name:/^فواتير الجملة/})).toBeNull();
  fireEvent.change(screen.getByRole('searchbox',{name:'ابحث في الأقسام'}),{target:{value:'missing'}});
  expect(screen.getByRole('status').textContent).toContain('مفيش قسم');
  fireEvent.click(screen.getByRole('button',{name:'عرض كل الأقسام'}));expect(document.querySelectorAll('.section-tile')).toHaveLength(16);
+});
+
+it('keeps the catalog and sales history accessible to users with view-only permissions',()=>{
+ const noop=vi.fn();
+ const item=INITIAL_ITEMS.find(i=>i.category==='raw_bean')!;
+ render(<>
+  <ProductsCatalogScreen items={[item]} canManage={false} onAddNewItem={noop} onUpdateItem={noop} onDeleteItem={noop} onNavigateToProduction={noop} onNavigateToInventory={noop} onNavigateToPurchase={noop} onBack={noop}/>
+  <SectionsHub counts={{}} onNavigate={noop}/>
+ </>);
+ expect(screen.getByText(item.name)).toBeTruthy();
+ expect(screen.queryByRole('button',{name:'منتج جديد'})).toBeNull();
+ expect(screen.queryByRole('button',{name:/فواتير الجملة/})).toBeNull();
+ expect(screen.getByRole('button',{name:/سجل البيع/})).toBeTruthy();
 });

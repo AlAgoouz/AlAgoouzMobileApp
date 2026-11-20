@@ -4,7 +4,7 @@ import { readRecoveryDraft, type RecoveryDraftAccess } from "../lib/recoveryDraf
 import { reportBrowserIncident } from "../lib/observability";
 
 export class AppErrorBoundary extends React.Component<
-  { children: React.ReactNode; onReset?: () => void; recoveryAccess?: RecoveryDraftAccess },
+  { children: React.ReactNode; onReset?: () => void; recoveryAccess?: RecoveryDraftAccess; insideWorkspace?: boolean },
   { failed: boolean; updateAvailable: boolean; exportMessage: string }
 > {
   state = { failed: false, updateAvailable: false, exportMessage: "" };
@@ -39,8 +39,9 @@ export class AppErrorBoundary extends React.Component<
   };
   render() {
     if (!this.state.failed) return this.props.children;
+    const Container = this.props.insideWorkspace ? 'div' : 'main';
     return (
-      <main
+      <Container
         dir="rtl"
         className="min-h-screen bg-surface-page text-ink-strong p-6 flex items-center justify-center"
       >
@@ -100,7 +101,7 @@ export class AppErrorBoundary extends React.Component<
             </p>
           )}
         </section>
-      </main>
+      </Container>
     );
   }
 }

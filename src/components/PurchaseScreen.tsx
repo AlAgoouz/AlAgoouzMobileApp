@@ -36,7 +36,7 @@ interface PurchaseScreenProps {
   purchaseInvoices: PurchaseInvoice[];
   initialInvoiceId?: string;
   currentPartnerName: string;
-  onSavePurchase: (
+  onSavePurchase?: (
     invoice: Omit<PurchaseInvoice, "id" | "invoiceNumber">,
   ) => boolean | Promise<boolean>;
   onDeletePurchaseInvoice?: (invoiceId: string) => void;
@@ -358,7 +358,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   };
 
   const confirmPurchase = async () => {
-    if (!reviewInvoice || saving.current) return;
+    if (!reviewInvoice || !onSavePurchase || saving.current) return;
     saving.current = true;
     setSubmitting(true);
     try {
@@ -388,7 +388,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
             } else {
               onBack();
             }
-          }}>{viewMode === "list" ? (
+          }}>{viewMode === "list" ? onSavePurchase && (
           <button
             type="button"
             onClick={handleStartNewInvoice}
@@ -447,7 +447,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
             : inv.remainingAmount>0?<>متبقي {money(inv.remainingAmount)} ج.م</>:'مدفوعة بالكامل'},
           {title:'الإجراءات',render:inv=><div className="register-actions">
             <button type="button" className="record-action" onClick={()=>setSelectedInvoiceDetails(inv)}>عرض تفاصيل الفاتورة</button>
-            {onDeletePurchaseInvoice&&!inv.isCancelled&&<button type="button" className="record-action text-red-700" onClick={()=>setInvoiceToCancel(inv)}>إلغاء</button>}
+            {onDeletePurchaseInvoice&&!inv.isCancelled&&<button type="button" className="record-action text-status-danger" onClick={()=>setInvoiceToCancel(inv)}>إلغاء</button>}
             {onReceiveRefund&&inv.isCancelled&&outstandingPurchaseRefund(inv)>0&&
               <button type="button" className="record-action" onClick={()=>{
                 setRefundInvoiceId(inv.id);
@@ -957,7 +957,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                   ج.م
                 </span>
               </div>
-              <div className="flex justify-between text-amber-300">
+              <div className="flex justify-between text-gold-soft">
                 <span>المتبقي آجل:</span>
                 <span className="font-black">
                   {selectedInvoiceDetails.remainingAmount.toLocaleString(

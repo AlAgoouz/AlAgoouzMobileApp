@@ -29,7 +29,7 @@ export function PagedSalesHistory({onBack,onManage,onOpenCustomer,view=initialSa
  }).catch(()=>{if(alive)setResult({key,data:null,error:'تعذر تحميل السجل؛ أعد المحاولة.'});});},query?250:0);return()=>{alive=false;clearTimeout(timer);};},[key]);
  const data=result.key===key?result.data:null,error=result.key===key?result.error:'',selected=kind??data?.kind;
  const open=async(id:string,kind:'invoice'|'cashier'='invoice')=>{if(detailBusy)return;setDetailBusy(true);setDetailError('');try{const value=await readRpc('bon_erp_sale_detail',{p_id:id,p_kind:kind});if(!value)throw Error();if(kind==='cashier')setDayDetail({day:cashierDayDetail(value),names:z.record(z.string(),z.string()).parse((value as Record<string,unknown>).itemNames??{})});else setReceipt({invoice:invoiceDetail(value),phone:z.object({customerPhone:z.string().optional()}).parse(value).customerPhone??''});}catch{setDetailError('تعذر تحميل تفاصيل الفاتورة. أعد المحاولة.');}finally{setDetailBusy(false);}};
- return <main dir="rtl" className="section-records pb-24">
+ return <div dir="rtl" className="section-records pb-24">
   <OperationHeader title="سجل المبيعات" description="بحث في السجل كاملًا، مع تحميل الصفحة المطلوبة وتفاصيل الفاتورة عند فتحها." icon={FileText} onBack={onBack}><button onClick={()=>window.print()} aria-label="طباعة الصفحة الحالية"><Printer size={18}/></button>{onManage&&<button onClick={onManage}>إدارة المرتجعات</button>}</OperationHeader>
   <div className="record-workspace"><nav className="record-tabs" aria-label="نوع سجل المبيعات">{([{id:'wholesale',label:'فواتير الجملة'},{id:'cashier',label:'مبيعات أيام الكاشير'},{id:'legacy',label:'السجل السابق'}] as const).map(tab=><button type="button" key={tab.id} aria-pressed={selected===tab.id} onClick={()=>{change({kind:tab.id,offset:0});}}>{tab.label}</button>)}</nav>
   <label className="record-search">البحث في السجل<input aria-label="بحث في كل الفواتير" maxLength={150} placeholder="رقم الفاتورة أو العميل أو التاريخ أو الصنف" value={query} onChange={e=>{change({query:e.target.value,offset:0});}}/></label>
@@ -55,5 +55,5 @@ export function PagedSalesHistory({onBack,onManage,onOpenCustomer,view=initialSa
       {title:'التفاصيل',render:invoice=><button type="button" className="record-action" disabled={detailBusy} onClick={()=>void open(invoice.id)}>طباعة / واتساب</button>},
     ]}/>)}</>}
   </div>{dayDetail&&<CashierDayDetail day={dayDetail.day} names={dayDetail.names} onClose={()=>setDayDetail(null)}/>} {receipt&&<React.Suspense fallback={<p role="status">جارٍ فتح الفاتورة…</p>}><InvoiceReceiptModal invoice={receipt.invoice} customerPhone={receipt.phone} onOpenCustomer={onOpenCustomer} onClose={()=>setReceipt(null)}/></React.Suspense>}
- </main>;
+ </div>;
 }

@@ -164,7 +164,7 @@ export function WholesaleInvoiceScreen({items, customers, currentPartnerName, on
   }
 
   const input = 'operation-input';
-  return <main dir="rtl" className="operation-screen invoice-workspace min-h-screen p-4 pb-28 space-y-4">
+  return <div dir="rtl" className="operation-screen invoice-workspace min-h-screen p-4 pb-28 space-y-4">
     <OperationHeader title="إنشاء فاتورة جملة" description="اختار العميل والتوليفات، وحدد السعر المتفق عليه." icon={Receipt} onBack={onBack} busy={busy} />
     <form ref={form} method="post" noValidate className="space-y-4" onSubmit={prepare} aria-busy={busy}>
       <p role="status" className="sr-only">{fieldNotice}</p>
@@ -261,5 +261,5 @@ export function WholesaleInvoiceScreen({items, customers, currentPartnerName, on
         <span>{line.itemName}</span><b>{money(line.quantity)} كجم</b>
       </li>)}</ul>
     </Modal>}
-  </main>;
+  </div>;
 }

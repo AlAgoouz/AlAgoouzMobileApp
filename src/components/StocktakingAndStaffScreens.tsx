@@ -24,6 +24,7 @@ import {
 // ============================================================================
 interface StocktakingScreenProps {
   items: InventoryItem[];
+  canManage?: boolean;
   auditRecords: StocktakingAuditRecord[];
   employees: Employee[];
   currentPartnerName: string;
@@ -37,6 +38,7 @@ interface StocktakingScreenProps {
 
 export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
   items,
+  canManage = true,
   auditRecords,
   employees,
   currentPartnerName,
@@ -47,9 +49,10 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
   const matchingAudits=useMemo(()=>auditRecords.filter(record=>
     matchesRecordSearch(auditQuery,record.auditNumber,record.date,record.partnerName)),[auditRecords,auditQuery]);
   const auditPage=useRecordPage(matchingAudits,auditQuery,20);
-  const [activeTab, setActiveTab] = useState<"new_audit" | "history">(
+  const [selectedTab, setActiveTab] = useState<"new_audit" | "history">(
     "new_audit",
   );
+  const activeTab = canManage ? selectedTab : 'history';
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [search, setSearch] = useState<string>("");
   const [inputMode, setInputMode] = useState<"kg" | "gram">("kg");
@@ -214,7 +217,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
     <div className="operation-screen min-h-screen pb-36">
       {/* الهيدر */}
       <OperationHeader title={<>الجرد الفعلي على الميزان وكشف العجز</>} description={<>مقارنة أرصدة السيستم بالوزن الفعلي بالجرام والكيلو والعدد</>} icon={HeaderScale} onBack={onBack}></OperationHeader>
-      {reviewOpen&&<Modal wide title="مراجعة واعتماد الجرد" onClose={()=>{setReviewOpen(false);setAuditError('');}}
+      {canManage&&reviewOpen&&<Modal wide title="مراجعة واعتماد الجرد" onClose={()=>{setReviewOpen(false);setAuditError('');}}
         footer={<button type="button" className="operation-primary" onClick={handleSaveAudit}>تأكيد الجرد وتحديث المخزون</button>}>
         {auditError&&<p role="alert" className="field-error">{auditError}</p>}
         <p>تم عد {Object.keys(typedActuals).length} من {auditableItems.length} صنف. الأصناف اللي لسه ما اتعدّتش بتحتفظ برصيدها المسجل.</p>
@@ -230,10 +233,10 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       </Modal>}
 
 
-      <div className="operation-tab-strip">
+      {canManage && <div className="operation-tab-strip">
         <RecordTabs label="أقسام الجرد" value={activeTab}
           tabs={[{id:'new_audit',label:'إجراء جرد فعلي الآن'},{id:'history',label:'سجل محاضر الجرد ('+auditRecords.length+')'}]} onChange={setActiveTab}/>
-      </div>
+      </div>}
       <div className="record-workspace">
         {!reviewOpen && auditError && (
           <p role="alert" className="bg-status-danger-bg text-status-danger border border-status-danger-line rounded-md p-3 font-bold">
@@ -260,9 +263,9 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                     type="button"
                     onClick={() => changeInputMode("kg")}
                     aria-pressed={inputMode === "kg"}
-                    className={`min-h-[36px] px-2.5 py-1 rounded-sm text-xs font-black transition ${
+                    className={`min-h-[44px] px-2.5 py-1 rounded-sm text-xs font-black transition ${
                       inputMode === "kg"
-                        ? "bg-gold-soft text-ink-on-gold"
+                        ? "bg-gold-soft text-ink-on-accent"
                         : "text-ink-on-dark"
                     }`}
                   >
@@ -272,9 +275,9 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
                     type="button"
                     onClick={() => changeInputMode("gram")}
                     aria-pressed={inputMode === "gram"}
-                    className={`min-h-[36px] px-2.5 py-1 rounded-sm text-xs font-black transition ${
+                    className={`min-h-[44px] px-2.5 py-1 rounded-sm text-xs font-black transition ${
                       inputMode === "gram"
-                        ? "bg-gold-soft text-ink-on-gold"
+                        ? "bg-gold-soft text-ink-on-accent"
                         : "text-ink-on-dark"
                     }`}
                   >
@@ -587,6 +590,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
 // 2. شاشة شؤون العمال والباريستا: اليوميات، السلف، والمرتبات (StaffAndPayrollScreen)
 // ============================================================================
 interface StaffAndPayrollScreenProps {
+  canManage?: boolean;
   partners?: Partner[];
   selectedFinancialPartnerId?: string;
   onSelectFinancialPartnerId?: (id: string) => void;
@@ -609,6 +613,7 @@ interface StaffAndPayrollScreenProps {
 }
 
 export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
+  canManage = true,
   partners = [],
   selectedFinancialPartnerId,
   onSelectFinancialPartnerId,
@@ -780,13 +785,13 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
   return (
     <div className="operation-screen min-h-screen pb-24">
       {/* الهيدر */}
-      <OperationHeader title={<>شؤون العمال والباريستا والرواتب</>} description={<>متابعة المستحقات وربط صرف السلف والرواتب بالحسابات</>} icon={HeaderUsers} onBack={onBack}><button
+      <OperationHeader title="شؤون العمال والباريستا والرواتب" description="تابع المستحقات والسلف والمدفوعات لكل عامل." icon={HeaderUsers} onBack={onBack}>{canManage && <button
           type="button"
           onClick={() => setShowAddEmpModal(true)}
         >
           <UserPlus className="w-4 h-4" aria-hidden="true" />
           عامل جديد
-        </button></OperationHeader>
+        </button>}</OperationHeader>
 
       <div className="operation-tab-strip">
         <RecordTabs label="أقسام العمال والرواتب" value={activeTab}
@@ -809,7 +814,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
           <div className="summary-banner-stats">
             <div className="summary-stat-box">
               <div className="text-xs text-gold-soft">إجمالي السلف</div>
-              <div className="text-sm font-black text-amber-300 mt-0.5">
+              <div className="text-sm font-black text-gold-soft mt-0.5">
                 {totals.totalAdvances.toLocaleString("ar-EG")} ج.م
               </div>
             </div>
@@ -869,7 +874,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                           {netPayable.toLocaleString("ar-EG")} ج.م
                         </div>
                       </div>
-                      <button
+                      {canManage && <button
                         type="button"
                         onClick={() => onDeleteEmployee(emp.id)}
                         className="action-button text-status-danger border-status-danger-line"
@@ -877,14 +882,14 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                         title="حذف العامل"
                       >
                         <Trash2 className="w-4 h-4" aria-hidden="true" />
-                      </button>
+                      </button>}
                     </div>
                   </div>
 
                   {/* تفصيل الحساب */}
                   {!!emp.openingPayable && <p className="text-xs text-ink">مرحل من الشهر السابق: {emp.openingPayable} ج.م</p>}
                   {payrollBalance(emp).balance < 0 && <p className="text-xs text-status-danger font-bold">على العامل {Math.abs(payrollBalance(emp).balance)} ج.م تُرحّل عند الإقفال.</p>}
-                  {onClosePayrollPeriod && <button type="button" disabled={(emp.payrollPeriod ?? currentPayrollPeriod()) >= currentPayrollPeriod()} className="action-button w-full" onClick={()=>{
+                  {canManage && onClosePayrollPeriod && <button type="button" disabled={(emp.payrollPeriod ?? currentPayrollPeriod()) >= currentPayrollPeriod()} className="action-button w-full" onClick={()=>{
                     if(window.confirm(`إقفال شهر ${emp.payrollPeriod ?? currentPayrollPeriod()} للعامل ${emp.name} وترحيل المستحقات؟`)) {
                       if(!onClosePayrollPeriod(emp.id)) setLedgerError('لم يُقفل الشهر؛ راجع التنبيه');
                       else setLedgerError('');
@@ -910,7 +915,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                   </dl>
 
                   {/* أزرار العمليات السريعة للعامل */}
-                  <div className="staff-quick-actions pt-1">
+                  {canManage && <div className="staff-quick-actions pt-1">
                     <button
                       type="button"
                       onClick={() => openActionModal(emp, "سلفة")}
@@ -955,7 +960,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                       <Banknote className="w-4 h-4 text-gold-soft" aria-hidden="true" />
                       <span>صرف راتب</span>
                     </button>
-                  </div>
+                  </div>}
                 </article>
               );
             })}
@@ -1004,7 +1009,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
                     <div className="register-actions pt-1">
                       {tr.expenseId&&onOpenExpense&&<button type="button" className="record-action" onClick={()=>onOpenExpense(tr.expenseId!)}>فتح قيد المصروف</button>}
                       {tr.closingSummary && <p className="text-xs text-ink">مرحل للشهر التالي: {tr.closingSummary.carryForward} ج.م</p>}
-                      {onReverseEmployeeAction && tr.accountingVersion===1 && tr.type!=='إقفال شهر' && !tr.reversedAt && employees.find((e)=>e.id===tr.employeeId)?.payrollPeriod===tr.payrollPeriod && <button type="button" className="action-button text-status-danger border-status-danger-line" onClick={()=>{
+                      {canManage && onReverseEmployeeAction && tr.accountingVersion===1 && tr.type!=='إقفال شهر' && !tr.reversedAt && employees.find((e)=>e.id===tr.employeeId)?.payrollPeriod===tr.payrollPeriod && <button type="button" className="action-button text-status-danger border-status-danger-line" onClick={()=>{
                         if(window.confirm('عكس حركة العامل ومصروفها مع الاحتفاظ بالأصل؟')) {
                           if(!onReverseEmployeeAction(tr.id)) setLedgerError('لم تُعكس الحركة؛ راجع التنبيه');
                           else setLedgerError('');
@@ -1024,7 +1029,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
 
       {/* نافذة تسجيل حركة للعامل */}
       {ledgerError && <p role="alert" className="field-error p-3">{ledgerError}</p>}
-      {actionModal && (
+      {canManage && actionModal && (
         <Modal title={<>تسجيل ( {actionModal.type} ) —  {actionModal.employee.name}</>}  onClose={()=>setActionModal(null)} footer={<div className="flex gap-2 w-full">
               <button
                 type="button"
@@ -1073,7 +1078,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
       )}
 
       {/* نافذة إضافة عامل جديد */}
-      {showAddEmpModal && (
+      {canManage && showAddEmpModal && (
         <Modal title={<>إضافة عامل أو باريستا جديد</>}  onClose={()=>setShowAddEmpModal(false)} footer={<div className="flex gap-2 w-full">
               <button
                 type="button"

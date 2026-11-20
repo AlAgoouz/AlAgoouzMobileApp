@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 export type ThemePreference = 'system' | 'light' | 'dark';
 
 const STORAGE_KEY = 'bon_elagouz_color_scheme';
+const THEME_CHANGE_EVENT = 'agouz:theme-change';
 
 function readSystemDark(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
@@ -27,12 +28,16 @@ export function applyThemeMeta(pref: ThemePreference): 'light' | 'dark' {
     if (meta) {
       meta.content = pref === 'system' ? 'light dark' : pref;
     }
-    const themeMetas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
-    themeMetas.forEach((m) => {
-      if (!m.media || (effective === 'dark' && m.media.includes('dark')) || (effective === 'light' && m.media.includes('light'))) {
-        m.content = effective === 'dark' ? '#14100D' : '#FBF9F5';
-      }
-    });
+    const colorOverride = document.querySelector<HTMLMetaElement>('meta[data-theme-override]');
+    const systemColor = document.querySelector<HTMLMetaElement>(`meta[name="theme-color"][data-scheme="${effective}"]`);
+    if (pref === 'system') colorOverride?.remove();
+    else if (systemColor) {
+      const tag = colorOverride ?? document.createElement('meta');
+      tag.name = 'theme-color';
+      tag.content = systemColor.content;
+      tag.setAttribute('data-theme-override', '');
+      if (!colorOverride) document.head.insertBefore(tag, document.querySelector('meta[name="theme-color"]'));
+    }
   }
   return effective;
 }
@@ -47,6 +52,9 @@ export function setThemePreference(pref: ThemePreference): void {
     }
   }
   applyThemeMeta(pref);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<ThemePreference>(THEME_CHANGE_EVENT, {detail: pref}));
+  }
 }
 
 /**
@@ -68,7 +76,9 @@ export function useThemePreference() {
         setPreference(getStoredThemePreference());
       }
     };
+    const onThemeChange = (event: Event) => setPreference((event as CustomEvent<ThemePreference>).detail);
     window.addEventListener('storage', onStorage);
+    window.addEventListener(THEME_CHANGE_EVENT, onThemeChange);
 
     const mql = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
     const onMediaChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
@@ -76,29 +86,25 @@ export function useThemePreference() {
 
     return () => {
       window.removeEventListener('storage', onStorage);
+      window.removeEventListener(THEME_CHANGE_EVENT, onThemeChange);
       mql?.removeEventListener?.('change', onMediaChange);
     };
   }, []);
 
   const effective: 'light' | 'dark' = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference;
 
-  const updatePreference = (next: ThemePreference) => {
-    setThemePreference(next);
-    setPreference(next);
-  };
-
   /** Quick 2-state comfort toggle matching system/opposite model without pinning the OS value. */
   const toggleComfortScheme = () => {
     const target: 'light' | 'dark' = effective === 'dark' ? 'light' : 'dark';
     const currentSystem: 'light' | 'dark' = systemDark ? 'dark' : 'light';
-    updatePreference(target === currentSystem ? 'system' : target);
+    setThemePreference(target === currentSystem ? 'system' : target);
   };
 
   return {
     preference,
     effective,
     systemScheme: (systemDark ? 'dark' : 'light') as 'light' | 'dark',
-    setPreference: updatePreference,
+    setPreference: setThemePreference,
     toggleComfortScheme,
   };
 }

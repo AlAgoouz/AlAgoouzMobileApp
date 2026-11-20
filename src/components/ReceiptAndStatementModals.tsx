@@ -365,7 +365,7 @@ interface AccountStatementModalProps {
   purchaseInvoices: PurchaseInvoice[];
   salesInvoices: SalesInvoice[];
   accountPayments: AccountPaymentRecord[];
-  onRecordPayment: (amount: number, notes: string) => boolean;
+  onRecordPayment?: (amount: number, notes: string) => boolean;
   onOpenInvoice?: (id: string) => void;
   onDeletePayment?: (paymentId: string) => void;
   onClose: () => void;
@@ -414,7 +414,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
 
   const handleQuickPay = () => {
     const amt = parseFloat(newPayAmount) || 0;
-    if (amt <= 0) return;
+    if (!onRecordPayment || amt <= 0) return;
     const accepted = onRecordPayment(
       amt,
       newPayNotes.trim() || (mode === 'supplier' ? 'سداد دفعة للمورد' : 'تحصيل دفعة من العميل'),
@@ -590,13 +590,14 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
         )}
 
         {/* تسجيل دفعة سريعة داخل الكشف */}
-        {target.balance > 0 && (
+        {onRecordPayment && target.balance > 0 && (
           <div className="bg-surface-sunken rounded-lg p-3 border border-line space-y-2">
             <div className="text-xs font-extrabold text-ink-strong">
               + تسجيل {mode === 'supplier' ? 'سداد دفعة للمورد' : 'تحصيل دفعة من العميل'}:
             </div>
             <div className="flex flex-wrap gap-2 items-center">
               <input
+                aria-label="مبلغ الدفعة"
                 type="number"
                 value={newPayAmount}
                 onChange={(e) => setNewPayAmount(e.target.value)}
@@ -604,6 +605,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
                 className="w-28 min-h-[44px] border border-line-control rounded-md px-2.5 py-2 text-xs font-extrabold text-center bg-surface-control"
               />
               <input
+                aria-label="ملاحظات الدفعة"
                 type="text"
                 value={newPayNotes}
                 onChange={(e) => setNewPayNotes(e.target.value)}

@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: Cairo;
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/cairo-arabic.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC7, U+10EC9-10EEE, U+10EF0-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+
+@font-face {
+  font-family: Cairo;
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/cairo-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: Cairo;
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/cairo-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 @layer base {
   html {
     scroll-padding-bottom: calc(var(--nav-h) + max(12px, env(safe-area-inset-bottom, 0px)));
@@ -44,46 +71,57 @@
   overflow-x: clip;
 }
 
-.login-orbit {
+.login-layout {
+  position: relative;
+  width: min(100%, 28rem);
+}
+
+.login-art {
   position: absolute;
-  z-index: -1;
-  width: 680px;
-  height: 680px;
-  border: 1px solid color-mix(in srgb, var(--brand-gold-soft) 18%, transparent);
-  border-radius: 50%;
-  top: -390px;
-  inset-inline-start: -220px;
-  box-shadow: 0 0 0 54px color-mix(in srgb, var(--brand-gold-soft) 4%, transparent);
-  pointer-events: none;
+  inset-block-start: 0.8rem;
+  inset-inline-end: 1rem;
+  width: 3.75rem;
+  height: 4.375rem;
+  background: #100D0B;
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.login-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
 }
 
 .login-panel {
   width: 100%;
-  max-width: 430px;
+  max-width: 28rem;
   border: 1px solid var(--line-default);
-  border-radius: 24px;
-  overflow: hidden;
+  border-radius: var(--r-xl);
   background: var(--surface-card);
   box-shadow: var(--sh-2);
 }
 
 .login-brand {
-  text-align: center;
-  padding: 20px 20px 16px;
-  background: var(--surface-card);
-  color: var(--brand-gold);
+  min-height: 6rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  padding-inline-end: 5.5rem;
   border-block-end: 1px solid var(--line-default);
 }
 
 .login-brand img {
-  margin: 0 auto 4px;
   object-fit: contain;
+  flex: none;
   border-radius: var(--r-md);
 }
 
 .login-wordmark {
   display: block;
-  font-size: 23px;
+  font-size: var(--fs-xl);
   font-weight: 800;
   color: var(--ink-strong);
 }
@@ -98,11 +136,12 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 22px 24px;
+  padding: var(--space-6);
 }
 
 .login-form h1 {
-  font-size: 21px;
+  font-size: var(--fs-3xl);
+  line-height: 1.4;
   font-weight: 800;
   color: var(--ink-strong);
 }
@@ -134,8 +173,8 @@
 }
 
 .login-input:focus-within {
-  border-color: var(--brand-gold);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-gold-soft) 24%, transparent);
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .login-input input {
@@ -211,8 +250,8 @@
 .login-submit {
   min-height: 48px;
   border-radius: var(--r-md);
-  background: var(--brand-dark-finish);
-  color: var(--ink-on-dark);
+  background: var(--primary);
+  color: var(--ink-on-gold);
   border: 1px solid var(--brand-gold-edge);
   display: flex;
   align-items: center;
@@ -274,23 +313,44 @@
   border: 1px solid var(--danger-line);
 }
 
-.login-footer {
-  color: var(--ink-faint);
-  margin-top: 16px;
-  font-size: var(--fs-2xs);
-  text-align: center;
+@media (min-width: 768px) {
+  .agouz-login { padding: var(--space-8); }
+  .login-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.04fr) minmax(0, 1fr);
+    width: min(100%, 62rem);
+    padding: var(--space-2);
+    border: 1px solid var(--line-default);
+    border-radius: var(--r-xl);
+    background: var(--surface-card);
+    box-shadow: var(--sh-3);
+  }
+  .login-layout .login-panel { max-width: none; border: 0; box-shadow: none; align-self: center; }
+  .login-brand {
+    min-height: 0;
+    padding: 0 clamp(24px, 4vw, 56px);
+    border: 0;
+  }
+  .login-form { padding: var(--space-8) clamp(24px, 4vw, 56px) var(--space-5); }
+  .login-art {
+    position: relative;
+    inset: auto;
+    width: auto;
+    height: auto;
+    min-height: clamp(34rem, 78svh, 44rem);
+  }
+  .login-art img { position: absolute; inset: 0; object-position: center 32%; }
 }
 
 @media (max-width: 480px) {
-  .agouz-login { padding: 12px; }
-  .login-brand { padding: 14px 16px 12px; }
-  .login-brand img { width: 80px; height: 80px; }
-  .login-form { padding: 16px 18px; gap: 10px; }
-  .login-footer { margin-top: 10px; }
+  .agouz-login { padding: var(--space-3); }
+  .login-brand img { width: 40px; height: 40px; }
+  .login-form { padding: var(--space-4); gap: var(--space-2); }
 }
 
 @media (hover: hover) {
   .login-submit:hover:not(:disabled) {
+    background: var(--primary-hover);
     transform: translateY(-1px);
     box-shadow: var(--sh-2);
   }
@@ -306,6 +366,10 @@
   }
 }
 
+@media print {
+  :root { color-scheme: light !important; }
+}
+
 /* Fallback scrollbars only for engines without standard scrollbar-color */
 @supports not (scrollbar-color: auto) {
   * { scrollbar-width: auto; }
@@ -316,6 +380,6 @@
 }
 
 ::selection {
-  background: var(--brand-gold-soft);
-  color: var(--ink-on-gold);
+  background: var(--accent);
+  color: var(--ink-on-accent);
 }

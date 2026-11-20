@@ -19,6 +19,7 @@ export function SectionsHub({onNavigate, counts, isOwner = false, canManageCashi
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const search = normalize(query);
   const filtered = sectionLinks.filter(link => (!link.ownerOnly || isOwner) &&
+    (link.id !== 'sales_pos' || isOwner || canCreateSale) &&
     normalize(`${link.title} ${link.description} ${link.group}`).includes(search));
 
   return <section className="sections-hub" aria-labelledby="sections-title">

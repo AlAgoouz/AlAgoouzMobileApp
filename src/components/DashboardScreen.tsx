@@ -69,7 +69,6 @@ export function DashboardScreen({
       error={dailyError}
       onRetry={onRetryDaily}
       hideProfit={hide}
-      onToggleProfit={() => setHide((value) => !value)}
     />
   );
   const intro = (
@@ -77,9 +76,17 @@ export function DashboardScreen({
       <div>
         <h1>أهلًا {name}</h1>
       </div>
-      <time dateTime={today}>
-        {new Date(today + 'T12:00:00').toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}
-      </time>
+      <div className="dashboard-heading-tools">
+        <time dateTime={today}>
+          {new Date(today + 'T12:00:00').toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}
+        </time>
+        {(model || dailyModel) && (
+          <button type="button" className="quiet-button" onClick={() => setHide((value) => !value)} aria-pressed={hide}>
+            {hide ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
+            إخفاء الأرباح
+          </button>
+        )}
+      </div>
     </header>
   );
   const tools = (
@@ -91,7 +98,7 @@ export function DashboardScreen({
 
   if (!model || !report) {
     return (
-      <main className="dashboard-screen" dir="rtl">
+      <div className="dashboard-screen" dir="rtl">
         {intro}
         {tools}
         {daily}
@@ -103,7 +110,7 @@ export function DashboardScreen({
         ) : (
           <ScreenLoading label="جارٍ تحميل ملخص المحل…" />
         )}
-      </main>
+      </div>
     );
   }
 
@@ -130,19 +137,17 @@ export function DashboardScreen({
   ];
 
   return (
-    <main className="dashboard-screen" dir="rtl">
+    <div className="dashboard-screen" dir="rtl">
       {intro}
-      {tools}
-      {daily}
       {error && (
         <p role="alert" className="record-state">
           {error} <button onClick={onRetry}>إعادة المحاولة</button>
         </p>
       )}
       <section className="dashboard-attention" aria-labelledby="dashboard-attention-title">
-        <h2 id="dashboard-attention-title">محتاج متابعة</h2>
+        <h2 id="dashboard-attention-title">متابعة الوردية</h2>
         <div className="attention-grid">
-          <button type="button" className="attention-card" onClick={() => onNavigate('cashier_sync')}>
+          <button type="button" className={`attention-card ${queued || pending ? 'attention-warning' : ''}`} onClick={() => onNavigate('cashier_sync')}>
             <span className="attention-icon">
               <FolderSync size={20} aria-hidden="true" />
             </span>
@@ -183,21 +188,13 @@ export function DashboardScreen({
         </div>
       </section>
 
+      {daily}
+      {tools}
       <div className="dashboard-section-heading">
         <div>
           <h2>ملخص الإحصائيات والأرباح المباشر</h2>
           <p>{range.label} · حسب المستندات المسجلة وحالة المرتجعات والإلغاءات الحالية</p>
         </div>
-        <button
-          type="button"
-          className="quiet-button"
-          onClick={() => setHide((v) => !v)}
-          aria-pressed={hide}
-          aria-label={hide ? 'إظهار الأرباح' : 'إخفاء الأرباح'}
-        >
-          {hide ? <Eye size={18} aria-hidden="true" /> : <EyeOff size={18} aria-hidden="true" />}
-          <span>{hide ? 'إظهار' : 'إخفاء'} الأرباح</span>
-        </button>
       </div>
       <section className="metric-grid" aria-label="مؤشرات المحل">
         {metrics.map((m) => (
@@ -381,6 +378,6 @@ export function DashboardScreen({
           </div>
         </div>
       </details>
-    </main>
+    </div>
   );
 }

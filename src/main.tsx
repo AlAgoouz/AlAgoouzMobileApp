@@ -6,6 +6,9 @@ import "./index.css";                // Tailwind layers, base accessibility rule
 import "./styles/layout-shell.css";  // Responsive desktop sidebar, tablet bar, mobile nav, modals, and toasts.
 import "./styles/components.css";    // Shared cards, dashboard layout, charts, tables, forms, and registers.
 import { ScreenLoading } from "./components/ScreenLoading";
+import { applyThemeMeta, getStoredThemePreference } from "./lib/theme";
+
+applyThemeMeta(getStoredThemePreference());
 
 const Screen =
   window.location.pathname.replace(/\/$/, "") === "/menu"

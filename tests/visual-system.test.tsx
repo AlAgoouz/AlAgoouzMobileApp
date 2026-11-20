@@ -21,11 +21,11 @@ it('keeps pending costs distinct from zero and never exposes a hidden daily prof
  const date='2026-11-15';
  const model=dashboardSchema.parse(projectRead(fixture(1),'bon_erp_dashboard_v2',{p_from:date,p_to:date}));
  model.report.entries=[{date,sales:250,profit:null}];
- const {rerender}=render(<TodaySummary date={date} model={model} hideProfit={false} onToggleProfit={vi.fn()}/>);
+ const {rerender}=render(<TodaySummary date={date} model={model} hideProfit={false}/>);
  expect(screen.getByText('بانتظار التكلفة')).toBeTruthy();
  expect(screen.getByText('٢٥٠')).toBeTruthy();
  model.report.entries=[{date,sales:250,profit:45}];
- rerender(<TodaySummary date={date} model={model} hideProfit onToggleProfit={vi.fn()}/>);
+ rerender(<TodaySummary date={date} model={model} hideProfit/>);
  expect(screen.getByText('••••')).toBeTruthy();
  expect(screen.queryByText('٤٥')).toBeNull();
 });

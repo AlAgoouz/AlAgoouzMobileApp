@@ -73,9 +73,17 @@ export async function verifyDesign(){
     await page.goto(origin);await page.getByRole('heading',{name:'أهلًا برجوعك'}).waitFor();
     assert.equal(await page.getByText(/بوابة الدخول الآمن|إنشاء حساب المالك/).count(),0);
     await page.locator('.login-brand img').evaluate(img=>img.decode());
+    const portrait=page.locator('.login-art img');
+    assert.match(await portrait.evaluate(async img=>{await img.decode();return img.currentSrc;}),/roaster-portrait-small\.webp$/);
+    assert.equal(await page.evaluate(async()=>{await document.fonts.ready;return document.fonts.check('700 16px Cairo','بُن العجوز');}),true);
     await limit(page,'login');await page.screenshot({path:'design-login-mobile.png',fullPage:true});evidence.login=true;
+    await page.setViewportSize({width:1440,height:900});
+    assert.match(await portrait.evaluate(async img=>{await img.decode();return img.currentSrc;}),/roaster-portrait\.webp$/);
+    await page.screenshot({path:'design-login-desktop.png',animations:'disabled'});
+    await page.setViewportSize({width:360,height:800});
     await page.getByRole('button',{name:'نسيت كلمة المرور؟'}).click();
     await page.getByRole('heading',{name:'استعادة كلمة المرور'}).waitFor();
+    assert.equal(await page.locator('#login-title').evaluate(el=>document.activeElement===el),true);
     assert.equal(await page.getByLabel('كلمة المرور',{exact:true}).count(),0);
     await page.screenshot({path:'design-recovery-mobile.png',fullPage:true});evidence.recovery=true;
     await page.getByRole('button',{name:'العودة لتسجيل الدخول'}).click();
@@ -88,6 +96,16 @@ export async function verifyDesign(){
       localStorage.setItem('sb-127-auth-token',JSON.stringify({access_token:encode({alg:'HS256',typ:'JWT'})+'.'+encode({sub:user.id,role:'authenticated',aud:'authenticated',iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+3600})+'.fixture',refresh_token:'fixture',expires_at:Math.floor(Date.now()/1000)+3600,token_type:'bearer',user}));
     });
     await page.reload();await page.getByText('ملخص الإحصائيات والأرباح المباشر',{exact:true}).waitFor();
+    const main=page.getByRole('main');
+    assert.equal(await main.count(),1);
+    await page.getByRole('link',{name:'انتقل إلى المحتوى'}).focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await main.evaluate(el=>document.activeElement===el),true);
+    const privacy=page.getByRole('button',{name:'إخفاء الأرباح',exact:true});
+    assert.equal(await privacy.count(),1);
+    await privacy.click();
+    assert.equal(await privacy.getAttribute('aria-pressed'),'true');
+    await privacy.click();
     assert.equal(await page.getByText('تعذر تأكيد الحفظ',{exact:true}).count(),0,'Read-only dashboard must not report a failed save before a write exists');
     assert.equal(await page.getByRole('button',{name:'الأقسام',exact:true}).count(),1,'Home must not duplicate the section directory');
     assert.equal(await page.getByRole('button',{name:'المزيد',exact:true}).count(),0);
@@ -163,6 +181,7 @@ export async function verifyDesign(){
       await limit(page,title);
       assert.equal(await page.locator('.operation-header').count(),1,'Every internal section must share one header');
       assert.equal(await page.locator('.operation-header h1').count(),1);
+      assert.equal(await main.count(),1,'Every internal section must expose one main landmark');
       if(title==='صورة المنيو'){
         const upload=page.getByLabel('صورة المنيو',{exact:true});
         const publish=async()=>{

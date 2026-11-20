@@ -34,7 +34,7 @@ export function ImportJobsPanel({onReview,defaultDate,defaultKind}:{onReview?:(j
   finally{if(mounted.current&&token===selection.current)setInspecting(false);}
  };
  return <section className="record-workspace space-y-3" aria-label="رفع ومعالجة التقارير">
-  <h2 className="font-bold" id={uploadId}>رفع تقرير جديد</h2><p className="operation-note">ارفع كل تقرير على حدة. بعد بدء المعالجة، المالك يقدر يراجع التقريرين ويعتمد اليوم.</p>
+  <h2 className="font-bold" id={uploadId}>رفع تقرير جديد</h2>
   <form method="post" aria-labelledby={uploadId} aria-busy={busy||inspecting} className="cashier-upload-form operation-fields" onSubmit={e=>{e.preventDefault();if(file&&!inspecting)void act(async()=>{await uploadImport(file,kind,date);setFile(null);setSourceDate(null);setSourceKind(null);if(input.current)input.current.value='';setNotice('تم إرسال الملف للمعالجة؛ تابع حالته أدناه.');});}}>
    <label>يوم العمل<input required disabled={busy||inspecting} readOnly={!!sourceDate} type="date" name="business-date" className="operation-input w-full" value={date} onChange={e=>setDate(e.target.value)}/></label>
    <label>نوع التقرير<select name="report-kind" disabled={busy||inspecting||!!sourceKind} className="operation-input w-full" value={kind} onChange={e=>setKind(e.target.value as ImportKind)}><option value="financial">المبيعات — قيمة Begun</option><option value="items">الأصناف المباعة — الكميات</option></select></label>

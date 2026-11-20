@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useId, useState} from 'react';
 import {fetchPublishedMenu, type MenuPublication} from '../lib/shopMenu';
 import {menuLogo, ShopMenuView} from './ShopMenuView';
 
@@ -7,6 +7,7 @@ export default function PublicMenuPage() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [attempt, setAttempt] = useState(0);
   const [zoomed, setZoomed] = useState(false);
+  const imageId = useId();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -26,11 +27,11 @@ export default function PublicMenuPage() {
       <header>
         <h1>منيو بُن العجوز</h1>
         <div className="shop-menu-image-actions">
-          <button type="button" aria-pressed={zoomed} onClick={() => setZoomed(value => !value)}>تكبير الصورة</button>
+          <button type="button" aria-controls={imageId} aria-pressed={zoomed} onClick={() => setZoomed(value => !value)}>تكبير الصورة</button>
           <a href={menu.image} download="agouz-menu.jpg">تحميل الصورة</a>
         </div>
       </header>
-      <div className="shop-menu-image-viewport" data-zoomed={zoomed} tabIndex={zoomed ? 0 : undefined} role={zoomed ? 'region' : undefined} aria-label={zoomed ? 'صورة المنيو المكبرة' : undefined}>
+      <div id={imageId} className="shop-menu-image-viewport" data-zoomed={zoomed} tabIndex={zoomed ? 0 : undefined} role={zoomed ? 'region' : undefined} aria-label={zoomed ? 'صورة المنيو المكبرة' : undefined}>
         <img src={menu.image} alt="صورة منيو بُن العجوز" />
       </div>
     </section> : menu ? <ShopMenuView menu={menu} /> : <section className="shop-menu-notice">
