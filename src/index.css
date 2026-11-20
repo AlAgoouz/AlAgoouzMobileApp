@@ -401,6 +401,8 @@
 }
 
 @media (min-width: 768px) {
+  .agouz-login:not(.agouz-login--branded) { padding: var(--space-8); }
+
   .login-layout {
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
     inline-size: min(100%, 66rem);
@@ -446,6 +448,10 @@
   .login-art img {
     object-position: center 5%;
   }
+}
+
+@media (max-width: 480px) {
+  .agouz-login:not(.agouz-login--branded) { padding: var(--space-3); }
 }
 
 @media (max-width: 370px) {
