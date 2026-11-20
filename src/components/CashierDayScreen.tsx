@@ -1,5 +1,5 @@
 import {unitLabel as displayUnit} from '../lib/units';
-import React,{useState,useMemo,useRef} from 'react';
+import React,{useEffect,useState,useMemo,useRef} from 'react';
 import {FileSpreadsheet, FolderSync, Receipt} from 'lucide-react';
 import type {ImportJob} from '../lib/importJobs';
 import {queuedRows} from '../lib/importJobs';
@@ -19,6 +19,7 @@ export type QueuedCashierReport={id:string;file_name:string;sale_date:string;con
 const needsItems=(day:CashierDay)=>day.status==='pending'&&!!day.financialReport&&!day.itemsReport;
 export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack,canManage=true}: {items:InventoryItem[];days:CashierDay[];queued?:QueuedCashierReport[];onAttach:(date:string,report:Report)=>Promise<void>;onApprove:(id:string)=>Promise<void>;onBack:()=>void;canManage?:boolean}){
  const [date,setDate]=useState(businessDate()),[type,setType]=useState<'financial'|'items'>('financial');
+ const [workDate,setWorkDate]=useState(businessDate);
  const [preview,setPreview]=useState<{name:string;sha256:string;rows:Record<string,unknown>[];sourceQueueId?:string;businessDate?:string;suggestions?:NonNullable<ImportJob['result']>['suggestions']} | null>(null);
  const [confirmedFile,setConfirmedFile]=useState('');
  const [error,setError]=useState(''),[busy,setBusy]=useState(false);
@@ -31,13 +32,24 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
  const [missingItemsOnly,setMissingItemsOnly]=useState(false);
  const [uploadTarget,setUploadTarget]=useState<{date:string;kind:'financial'|'items';key:number}>();
  const uploadSection=useRef<HTMLDivElement>(null);
+ const workflowHeading=useRef<HTMLHeadingElement>(null);
+ const reviewHeading=useRef<HTMLHeadingElement>(null);
+ useEffect(()=>{
+  if(!preview)return;
+  reviewHeading.current?.focus({preventScroll:true});
+  reviewHeading.current?.scrollIntoView?.({block:'start'});
+ },[preview]);
  function openUpload(day:string,kind:'financial'|'items'){
+  setWorkDate(day);
   setUploadTarget(current=>({date:day,kind,key:(current?.key??0)+1}));
   uploadSection.current?.focus({preventScroll:true});
   uploadSection.current?.scrollIntoView?.({block:'start'});
  }
  const [approvalId,setApprovalId]=useState<string>();
  const approval=days.find(day=>day.id===approvalId);
+ const workDay=days.find(day=>day.date===workDate);
+ const savedReports=Number(!!workDay?.financialReport)+Number(!!workDay?.itemsReport);
+ function reviewApproval(id:string){setError('');setApprovalId(id);}
  const missingItems=days.filter(needsItems).length;
  const history=useMemo(()=>days.filter(d=>d.date.includes(historySearch)&&(!missingItemsOnly||needsItems(d))).sort((a,b)=>b.date.localeCompare(a.date)),[days,historySearch,missingItemsOnly]);
  const page=useRecordPage(history,`${historySearch}:${missingItemsOnly}`);
@@ -60,38 +72,53 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
    await onAttach(date,{type,file,lines:parsed.map(r=>({itemId:r.matchedItem!.id,quantity:r.quantity,unitLabel:r.unitHint,normalizedQtyInBaseUnit:convertToBaseUnit(r.quantity,r.unitHint,r.matchedItem!.baseUnit)}))});
   }
   setPreview(null);
+  setWorkDate(date);
+  workflowHeading.current?.focus({preventScroll:true});
+  workflowHeading.current?.scrollIntoView?.({block:'start'});
  };
  const input='operation-input';
  return <div dir="rtl" className="operation-screen min-h-screen pb-28">
   <OperationHeader title="تقارير يوم الكاشير" description="راجع ملفَي كل يوم عمل وحالة اعتماده." icon={FolderSync} onBack={onBack} busy={busy}/>
   <div className="record-workspace">
    {canManage && <section className="cashier-workflow" aria-labelledby="cashier-reports-heading">
-    <h2 id="cashier-reports-heading">ملفّا يوم العمل</h2>
-    <div className="cashier-workflow-grid">
+    <div className="cashier-workflow-header">
      <div>
+      <h2 id="cashier-reports-heading" ref={workflowHeading} tabIndex={-1}>ملفّا يوم العمل</h2>
+      <p className="cashier-workflow-status" role="status">
+       {workDay?.status==='approved'?'تم اعتماد اليوم':savedReports===2?'التقريران جاهزان للاعتماد':`التقارير المحفوظة: ${savedReports.toLocaleString('ar-EG')} من ٢`}
+      </p>
+     </div>
+     <label className="invoice-field cashier-workflow-date">تاريخ يوم العمل
+      <input type="date" className="operation-input" value={workDate} disabled={busy} onChange={event=>setWorkDate(event.target.value)}/>
+     </label>
+    </div>
+    <div className="cashier-workflow-grid">
+     <div data-ready={!!workDay?.financialReport}>
       <Receipt size={20} aria-hidden="true" />
       <div><h3>التقرير المالي</h3><p>يثبت الإيراد والرصيد عند الحفظ.</p>
-       <button type="button" className="record-action" disabled={busy} onClick={()=>openUpload(businessDate(),'financial')}>اختيار الملف المالي</button></div>
+       {workDay?.financialReport?<bdi>{workDay.financialReport.fileName}</bdi>:<button type="button" className="record-action" disabled={busy||!workDate} onClick={()=>openUpload(workDate,'financial')}>اختيار الملف المالي</button>}</div>
      </div>
-     <div>
+     <div data-ready={!!workDay?.itemsReport}>
       <FileSpreadsheet size={20} aria-hidden="true" />
       <div><h3>تقرير الأصناف</h3><p>يكمل التكلفة والربح ويخصم المخزون عند الاعتماد.</p>
-       <button type="button" className="record-action" disabled={busy} onClick={()=>openUpload(businessDate(),'items')}>اختيار ملف الأصناف</button></div>
+       {workDay?.itemsReport?<bdi>{workDay.itemsReport.fileName}</bdi>:<button type="button" className="record-action" disabled={busy||!workDate} onClick={()=>openUpload(workDate,'items')}>اختيار ملف الأصناف</button>}</div>
      </div>
     </div>
+    {workDay?.status==='pending'&&savedReports===2&&<button type="button" className="operation-primary cashier-workflow-approve" disabled={busy} onClick={()=>reviewApproval(workDay.id)}>راجع التقريرين واعتمد اليوم</button>}
    </section>}
    {canManage && !!queued.length&&<section className="operation-surface space-y-2"><h2 className="font-bold">ملفات وصلت من جهاز الكاشير وتنتظر المراجعة</h2><p className="operation-caption">افتح الملف لمراجعته.</p>{queued.some(q=>!q.report_kind)&&<label className="block">نوع الملف القديم<select className={input} value={type} onChange={e=>{setType(e.target.value as typeof type);setPreview(null);}}><option value="financial">تقرير مالي</option><option value="items">تقرير أصناف</option></select></label>}<div className="flex flex-wrap gap-2">{queued.map(q=><button type="button" key={q.id} disabled={busy} className="action-button underline" onClick={()=>void act(async()=>{const rows=q.raw_rows??await queuedRows(q.id);setDate(q.sale_date);if(q.report_kind)setType(q.report_kind);setPreview({name:q.file_name,sha256:q.content_hash,rows,sourceQueueId:q.id});})}>{q.sale_date} — {q.file_name}</button>)}</div></section>}
    {canManage && <div className="cashier-upload-anchor" ref={uploadSection} tabIndex={-1} role="region" aria-label="رفع ملف ليوم العمل"><ImportJobsPanel key={uploadTarget?.key} defaultDate={uploadTarget?.date} defaultKind={uploadTarget?.kind} onReview={job=>{if(!job.result)return;setDate(job.sale_date);setType(job.kind);setPreview({name:job.file_name,sha256:job.result.sha256,rows:job.result.rows,sourceQueueId:job.queue_id??undefined,suggestions:job.result.suggestions,businessDate:job.result.businessDate});}}/></div>}
-   {canManage&&preview&&<section className="operation-surface space-y-3"><h2 className="font-bold">مراجعة {preview.name}</h2>
+   {canManage&&preview&&<section className="operation-surface space-y-3"><h2 className="font-bold cashier-review-heading" ref={reviewHeading} tabIndex={-1}>مراجعة {preview.name}</h2>
     <p className="font-bold text-ink-strong">يوم العمل <bdi>{date}</bdi> · {type==='financial'?'تقرير مالي':'تقرير أصناف'}</p>
     {type==='financial'?<>
      <p className="operation-note">مبيعات اليوم تُقرأ تلقائيًا من قيمة Begun في ملف المبيعات.</p>
      {revenue===undefined?<p role="alert" className="field-error">لم يتأكد وجود قيمة Begun واحدة صحيحة لنفس يوم العمل؛ أعد معالجة الملف.</p>:<p className="text-lg font-bold text-ink-strong">مبيعات اليوم — Begun: {revenue.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2})} ج.م</p>}
     </>:<><p>{parsed.length} صف أصناف؛ {parsed.filter(r=>r.error).length} تحتاج تصحيحًا.</p><p className="operation-note">{printed?'الكود والكمية والوحدة مقروءة من التقرير. استكمل المنتجات وأكواد الكاشير والوصفات في الكتالوج؛ البنود الناقصة تحتاج تقريرًا تفصيليًا قبل الاعتماد.':'اقتراحات تشابه الاسم للمساعدة فقط. اختيار الصنف ووحدة الكمية يحتاج تأكيدك؛ الكميات والأسعار الأصلية تظل تحت التحقق.'}</p>{sourceDateError&&<p role="alert" className="field-error">{sourceDateError}</p>}<RecordPagination {...matchPage}/><div className="record-grid">{matchPage.visible.map((r,n)=>{const i=matchPage.page*matchPage.pageSize+n,suggestions=preview.suggestions?.find(s=>s.row===i)?.candidates??[];return <article key={i} className="record-card space-y-2"><p className="font-bold">{r.rawName||r.rawCode}: {r.quantity} {displayUnit(r.unitHint)}</p>{r.packFactor!==undefined&&<p className="text-xs">وزن العبوة الواحدة {r.packFactor} كجم حسب وحدة الملف.</p>}{r.sourceFormat&&<p className="text-xs">{r.sourceRow!==undefined&&Number.isInteger(r.sourceRow)&&r.sourceRow>0&&<>السطر {r.sourceRow} · </>}كود الكاشير: {r.rawCode} · عدد مرات البيع: {r.saleCount} · الكمية أعلاه هي المعتمدة للخصم.</p>}<p>{r.matchedItem?.name} {r.error}</p>{!r.sourceFormat&&(r.error||choices[i])&&<CashierRowReview index={i} choice={choices[i]} items={items} suggestions={suggestions} busy={busy} onChange={change=>choose(i,change)}/>}</article>;})}</div></>}
     {dateConfirmation&&<label className="flex items-center gap-2 min-h-[44px]"><input type="checkbox" checked={confirmedFile===dateKey} onChange={e=>setConfirmedFile(e.target.checked?dateKey:'')}/>الملف لا يتضمن تاريخًا مقروءًا. أؤكد أن يوم البيع هو {date}.</label>}
-    <button type="button" disabled={busy||!!(dateConfirmation&&confirmedFile!==dateKey)||(type==='financial'&&revenue===undefined)||!!sourceDateError||!!(printed&&parsed.some(row=>row.error||!row.matchedItem))} onClick={()=>void act(attach)} className="operation-primary">حفظ التقرير لهذا اليوم</button>
+    {error&&<p role="alert" className="field-error">{error}</p>}
+    <button type="button" disabled={busy||!!(dateConfirmation&&confirmedFile!==dateKey)||(type==='financial'&&revenue===undefined)||!!sourceDateError||!!(printed&&parsed.some(row=>row.error||!row.matchedItem))} onClick={()=>void act(attach)} className="operation-primary cashier-review-save">حفظ التقرير لهذا اليوم</button>
    </section>}
-   {!approval&&error&&<p role="alert" className="field-error">{error}</p>}
+   {!approval&&!preview&&error&&<p role="alert" className="field-error">{error}</p>}
    <h2 className="font-bold">الأيام المسجلة</h2>
    {(missingItems>0||missingItemsOnly)&&<div className="operation-note flex flex-wrap items-center justify-between gap-2">
     <span>أيام اتسجّل إيرادها وتنتظر تقرير الأصناف: {missingItems.toLocaleString('ar-EG')}</span>
@@ -112,7 +139,7 @@ export function CashierDayScreen({items,days,queued=[],onAttach,onApprove,onBack
          </div>;
        })}
      </div><p className="text-xs text-ink">الإيراد: {d.financialReport?.totalRevenue.toLocaleString('ar-EG')??'لم يحدد'}؛ التكلفة: {d.status==='approved'?(d.correctedTotalCost??d.totalCost)?.toLocaleString('ar-EG'):'تُحدد عند الاعتماد'}</p>
-     {canManage&&d.status==='pending'&&<button type="button" disabled={busy||!d.financialReport||!d.itemsReport} className="operation-primary w-full" onClick={()=>{setError('');setApprovalId(d.id);}}>مراجعة واعتماد اليوم</button>}
+     {canManage&&d.status==='pending'&&<button type="button" disabled={busy||!d.financialReport||!d.itemsReport} className="operation-primary w-full" onClick={()=>reviewApproval(d.id)}>مراجعة واعتماد اليوم</button>}
      {!!d.shortages?.length&&<div className="text-status-danger text-xs"><p className="font-bold">عجز مخزون بعد الاعتماد:</p>{d.shortages.map(s=><p key={s.itemId}>{items.find(i=>i.id===s.itemId)?.name??s.itemId}: {s.shortage}</p>)}</div>}
     </article>)}
    </div>

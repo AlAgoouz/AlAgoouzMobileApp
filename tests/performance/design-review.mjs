@@ -586,17 +586,31 @@ export async function verifyDesign(){
       await operator.getByRole('button',{name:'إغلاق النافذة',exact:true}).click();
       await operator.getByRole('button',{name:'الأقسام',exact:true}).last().click();
       await operator.locator('.section-tile').filter({has:operator.locator('.section-tile-title',{hasText:'تقارير يوم الكاشير'})}).click();
+      await operator.setViewportSize({width:320,height:700});
+      await limit(operator,'cashier-day-compact');
+      const workDay=operator.getByRole('region',{name:'ملفّا يوم العمل'});
+      await workDay.getByLabel('تاريخ يوم العمل').fill(day);
+      await workDay.getByRole('button',{name:'اختيار ملف الأصناف',exact:true}).click();
+      const upload=operator.getByRole('region',{name:'رفع ملف ليوم العمل'});
+      assert.equal(await upload.getByLabel('يوم العمل',{exact:true}).inputValue(),day);
+      assert.equal(await upload.getByLabel('نوع التقرير',{exact:true}).inputValue(),'items');
       for(const row of rows){
         await operator.getByRole('article').filter({hasText:row.file_name}).getByRole('button',{name:'مراجعة التقرير'}).click();
-        await operator.getByRole('heading',{name:'مراجعة '+row.file_name,exact:true}).waitFor();
+        const review=operator.getByRole('heading',{name:'مراجعة '+row.file_name,exact:true});
+        await review.waitFor();
+        assert.equal(await review.evaluate(heading=>heading===document.activeElement),true);
         await operator.getByRole('button',{name:'حفظ التقرير لهذا اليوم',exact:true}).click();
-        await operator.getByRole('heading',{name:'مراجعة '+row.file_name,exact:true}).waitFor({state:'hidden'});
+        await review.waitFor({state:'hidden'});
+        assert.equal(await workDay.getByRole('heading',{name:'ملفّا يوم العمل'}).evaluate(heading=>heading===document.activeElement),true);
       }
-      await operator.getByRole('button',{name:'مراجعة واعتماد اليوم',exact:true}).click();
+      await workDay.getByText('التقريران جاهزان للاعتماد',{exact:true}).waitFor();
+      await operator.screenshot({path:'design-cashier-approval-ready-mobile.png'});
+      await workDay.getByRole('button',{name:'راجع التقريرين واعتمد اليوم',exact:true}).click();
       const cashierSaved=operator.waitForResponse(response=>response.url().endsWith('/rpc/bon_erp_save_store')&&response.ok());
       await operator.getByRole('button',{name:'تأكيد الاعتماد وخصم الأصناف',exact:true}).click();
       await cashierSaved;
       await operator.getByRole('heading',{name:day+' — معتمد',exact:true}).waitFor();
+      await workDay.getByText('تم اعتماد اليوم',{exact:true}).waitFor();
       assert.equal(ledgerState.cashier_days.length,1);
       assert.equal(ledgerState.cashier_days[0].financialReport.totalRevenue,120);
       assert.equal(ledgerState.cashier_days[0].consumption[0].quantity,2);
