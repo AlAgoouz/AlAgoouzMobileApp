@@ -505,7 +505,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
             type="button"
             onClick={handleCompleteSale}
             disabled={cart.length === 0}
-            className="operation-primary flex-[2] min-w-[200px]"
+            className="operation-primary flex-2 min-w-[200px]"
           >
             <Check className="w-4 h-4" aria-hidden="true" />
             <span>حفظ الفاتورة ({totalAmount.toLocaleString('ar-EG')} ج.م)</span>

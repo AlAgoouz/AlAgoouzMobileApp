@@ -37,7 +37,10 @@ export function ImportJobsPanel({onReview,defaultDate,defaultKind}:{onReview?:(j
   <h2 className="font-bold" id={uploadId}>رفع تقرير جديد</h2>
   <form method="post" aria-labelledby={uploadId} aria-busy={busy||inspecting} className="cashier-upload-form operation-fields" onSubmit={e=>{e.preventDefault();if(file&&!inspecting)void act(async()=>{await uploadImport(file,kind,date);setFile(null);setSourceDate(null);setSourceKind(null);if(input.current)input.current.value='';setNotice('تم إرسال الملف للمعالجة؛ تابع حالته أدناه.');});}}>
    <label>يوم العمل<input required disabled={busy||inspecting} readOnly={!!sourceDate} type="date" name="business-date" className="operation-input w-full" value={date} onChange={e=>setDate(e.target.value)}/></label>
-   <label>نوع التقرير<select name="report-kind" disabled={busy||inspecting||!!sourceKind} className="operation-input w-full" value={kind} onChange={e=>setKind(e.target.value as ImportKind)}><option value="financial">المبيعات — قيمة Begun</option><option value="items">الأصناف المباعة — الكميات</option></select></label>
+   <div className="invoice-field">
+    <label htmlFor={uploadId+'-kind'}>نوع التقرير</label>
+    <select id={uploadId+'-kind'} name="report-kind" disabled={busy||inspecting||!!sourceKind} className="operation-input w-full" value={kind} onChange={e=>setKind(e.target.value as ImportKind)}><option value="financial">المبيعات — قيمة Begun</option><option value="items">الأصناف المباعة — الكميات</option></select>
+   </div>
    <div className="invoice-field cashier-file-field">
     <label htmlFor={uploadId+'-file'}>ملف التقرير</label>
     <input id={uploadId+'-file'} name="report-file" ref={input} disabled={busy} type="file" accept=".csv,.xls,.xlsx" aria-invalid={Boolean(fileError)} aria-describedby={uploadId+'-file-hint'+(fileError?' '+uploadId+'-file-error':'')} className="block w-full min-w-0 max-w-full" onChange={e=>void selectFile(e.target.files?.[0]??null)}/>
@@ -50,7 +53,7 @@ export function ImportJobsPanel({onReview,defaultDate,defaultKind}:{onReview?:(j
   {file&&<p className="operation-note">{sourceDate?`يوم البيع ${sourceDate} مقروء من داخل التقرير؛ تاريخ الطباعة واسم الملف لا يغيّرانه.`:'التقرير لا يحمل تاريخًا داخليًا واضحًا؛ راجع يوم العمل ونوع التقرير قبل الرفع.'}</p>}
   {notice&&<p role="status">{notice}</p>}{(error||refreshError)&&<div role="alert" className="record-state"><p>{error||refreshError}</p><button disabled={busy} onClick={()=>void refresh()}>تحديث الحالة</button></div>}
   <h3 className="font-bold">آخر الملفات</h3>{jobs===null&&!error&&!refreshError&&<p role="status">جارٍ تحميل حالة الملفات…</p>}{jobs?.length===0&&<p className="record-state">لا توجد ملفات مرفوعة بعد.</p>}
-  <div className="record-grid">{jobs?.map(job=><article key={job.id} className="record-card"><div className="record-heading"><h4 className="break-words">{job.file_name}</h4><span className="record-badge">{job.reviewed&&job.status==='ready'?'مرتبط بيوم مسجل':labels[job.status]}</span></div><p>{job.sale_date} · {job.kind==='financial'?'تقرير مالي':'تقرير أصناف'}</p>
+  <div className="record-grid">{jobs?.map(job=><article key={job.id} className="record-card"><div className="record-heading"><h4 className="wrap-break-word">{job.file_name}</h4><span className="record-badge">{job.reviewed&&job.status==='ready'?'مرتبط بيوم مسجل':labels[job.status]}</span></div><p>{job.sale_date} · {job.kind==='financial'?'تقرير مالي':'تقرير أصناف'}</p>
    {job.status==='failed'&&<p>{job.error_code==='UPLOAD_EXPIRED'?'لم يكتمل الرفع؛ ارفع الملف مجددًا.':importError(job.error_code??'')}</p>}
    {(['queued','processing'] as string[]).includes(job.status)&&Date.now()-Date.parse(job.updated_at)>10*60*1000&&<p>المعالجة متأخرة؛ أعد إرسال الطلب.</p>}
    <div className="record-actions">{job.status==='ready'&&!job.reviewed&&onReview&&<button disabled={busy} className="record-action" onClick={()=>void act(async()=>onReview(await readImport(job.id)))}>مراجعة التقرير</button>}

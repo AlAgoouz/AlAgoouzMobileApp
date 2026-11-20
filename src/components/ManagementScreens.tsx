@@ -506,7 +506,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="sections-search flex-1 min-w-[14rem]">
+          <div className="sections-search flex-1 min-w-56">
             <Search className="w-4 h-4 shrink-0" aria-hidden="true" />
             <input
               type="search"

@@ -40,12 +40,17 @@ jobs:
           trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT
           for attempt in {1..30}; do curl -fsS http://127.0.0.1:5284/__perf__/metrics && break || sleep 1; done
           node tests/performance/measure.mjs baseline
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then node tests/performance/compare-layouts.mjs base; fi
           kill "$fixture_pid"
           wait "$fixture_pid" || true
           node tests/performance/server.mjs dist > current-server.log 2>&1 &
           fixture_pid=$!
           for attempt in {1..30}; do curl -fsS http://127.0.0.1:5284/__perf__/metrics && break || sleep 1; done
           node tests/performance/measure.mjs current
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            node tests/performance/compare-layouts.mjs current
+            node tests/performance/compare-layouts.mjs compare
+          fi
       - name: Report comparison against the pull request base
         if: github.event_name == 'pull_request'
         run: |
@@ -70,4 +75,5 @@ jobs:
           path: |
             *-performance.json
             *-mobile.png
+            layout-comparison/
           if-no-files-found: error
