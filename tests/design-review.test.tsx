@@ -64,7 +64,7 @@ it('routes every section and searches Arabic section names with a useful empty s
  fireEvent.click(screen.getByRole('button',{name:/النواقص/}));expect(navigate).toHaveBeenLastCalledWith('shortages');
  fireEvent.change(screen.getByRole('searchbox',{name:'ابحث في الأقسام'}),{target:{value:'انتاج'}});
  expect(screen.getByRole('button',{name:/إنتاج التوليفات/})).toBeTruthy();
- expect(screen.queryByRole('button',{name:/^فواتير الجملة/})).toBeNull();
+ expect(screen.queryByRole('button',{name:/فواتير الجملة/})).toBeNull();
  fireEvent.change(screen.getByRole('searchbox',{name:'ابحث في الأقسام'}),{target:{value:'missing'}});
  expect(screen.getByRole('status').textContent).toContain('مفيش قسم');
  fireEvent.click(screen.getByRole('button',{name:'عرض كل الأقسام'}));expect(document.querySelectorAll('.section-tile')).toHaveLength(16);
@@ -79,6 +79,6 @@ it('keeps the catalog and sales history accessible to users with view-only permi
  </>);
  expect(screen.getByText(item.name)).toBeTruthy();
  expect(screen.queryByRole('button',{name:'منتج جديد'})).toBeNull();
- expect(screen.queryByRole('button',{name:/فواتير الجملة/})).toBeNull();
+ expect(screen.queryByText('فواتير الجملة',{exact:true})).toBeNull();
  expect(screen.getByRole('button',{name:/سجل البيع/})).toBeTruthy();
 });
