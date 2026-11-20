@@ -15,7 +15,7 @@ export function RecipesScreen({items,drafts,initialTargetId,canManage,onSave,onD
  const [selected,setSelected]=useState<{key:string;target:RecipeTarget}|null>(null),[recipe,setRecipe]=useState<RecipeIngredient[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(false),[create,setCreate]=useState(false);
  const [recipeValid,setRecipeValid]=useState(true),[editingDefinition,setEditingDefinition]=useState<CatalogNameDraft|null>(null);
  const [definitionSavedId,setDefinitionSavedId]=useState<string>();
- const appliedInitial=useRef<string>();
+ const appliedInitial=useRef<string>(undefined);
  const select=(key:string)=>{const found=targets.find(t=>t.key===key);setSelected(found?{key,target:found.target}:null);setRecipe(found&&'item'in found.target?structuredClone(found.target.item.recipe??[]):[]);setError('');setSaved(false);};
  useEffect(()=>{
   if(definitionSavedId){

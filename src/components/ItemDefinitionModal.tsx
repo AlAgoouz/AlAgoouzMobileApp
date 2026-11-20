@@ -14,7 +14,7 @@ export function ItemDefinitionModal({items,onSave,onClose,allowedCategories,init
  const [baseUnit,setBaseUnit]=useState<InventoryItem['baseUnit']|''>(initialDefinition?.baseUnit??(requireDetails?'':'kg'));
  const [stock,setStock]=useState(initialDefinition?String(initialDefinition.openingStock):requireDetails?'':'0'),[minimum,setMinimum]=useState(initialDefinition?String(initialDefinition.minStock):requireDetails?'':'0'),[cost,setCost]=useState(requireDetails?'':'0'),[retail,setRetail]=useState(initialDefinition?String(initialDefinition.retailPrice):requireDetails?'':'0');
  const newDraftId=useRef(crypto.randomUUID());
- const submittedCode=useRef<string>();
+ const submittedCode=useRef<string>(undefined);
  const needsRecipe=!!category&&requiresRecipe(category),onUse=!!category&&isRecipeOnUse({category});
  const actualUnit=category==='drink_recipe'?'piece':category==='manufactured_blend'?'kg':baseUnit;
  const inputClass='operation-input';

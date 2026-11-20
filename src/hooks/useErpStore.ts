@@ -29,10 +29,10 @@ export function useErpStore(loadFull=true) {
   });
   const generation = useRef(0);
   const activeUser = useRef<string | null>(null);
-  const draftTabId = useRef<string>();
+  const draftTabId = useRef<string>(undefined);
   draftTabId.current ??= crypto.randomUUID();
   const tabId = draftTabId.current;
-  const engineRef = useRef<StoreEngine>();
+  const engineRef = useRef<StoreEngine>(undefined);
   if (!engineRef.current) {
     engineRef.current = new StoreEngine(
       {
