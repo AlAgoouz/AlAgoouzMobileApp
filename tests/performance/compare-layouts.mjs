@@ -43,6 +43,9 @@ async function capture(browser) {
         await page.evaluate(async () => {
           await document.fonts.ready;
           await Promise.all([...document.images].filter(img => img.loading !== 'lazy').map(img => img.decode().catch(() => {})));
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          window.scrollTo(0, 0);
+          document.querySelector('.app-workspace')?.scrollTo(0, 0);
         });
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), name + ' page overflows');
         await page.screenshot({ path: join(directory, [name, viewport.width, colorScheme].join('-') + '.png'), animations: 'disabled' });
