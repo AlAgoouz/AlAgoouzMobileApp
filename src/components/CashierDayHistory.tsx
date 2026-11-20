@@ -58,7 +58,7 @@ export function CashierDayHistory({ days }: { days: CashierDay[] }) {
                 </div>
               )}
             </dl>
-            <p className="text-xs text-ink break-words">
+            <p className="text-xs text-ink wrap-break-word">
               المالي: {d.financialReport?.fileName ?? 'ناقص'} — الأصناف: {d.itemsReport?.fileName ?? 'ناقص'}
             </p>
             {!!d.shortages?.length && (

@@ -21,7 +21,7 @@ export function FinancialPartnersScreen({partners,canEdit,onSave,onBack,onReport
  return <div dir="rtl" className="operation-screen min-h-screen pb-28 space-y-4">
   <OperationHeader title="الشركاء والحصص المالية" description="الملكية والمساهمات والمسحوبات — منفصلة عن حسابات الدخول." icon={Users} onBack={onBack}/>
   <div className="record-workspace">
-   <div className="record-grid">{partners.map(p=><article key={p.id} className="record-card space-y-3 min-w-0"><div className="record-heading mb-0"><h2 className="font-black break-words">{p.name}</h2><span className="record-badge text-gold font-black">{p.sharePercent}%</span></div><dl className="record-facts mb-0"><div><dt>مساهمات من جيبه</dt><dd>{p.totalPaidFromPocket.toLocaleString('ar-EG')} ج.م</dd></div><div><dt>مسحوبات</dt><dd>{p.totalWithdrawals.toLocaleString('ar-EG')} ج.م</dd></div></dl></article>)}</div>
+   <div className="record-grid">{partners.map(p=><article key={p.id} className="record-card space-y-3 min-w-0"><div className="record-heading mb-0"><h2 className="font-black wrap-break-word">{p.name}</h2><span className="record-badge text-gold font-black">{p.sharePercent}%</span></div><dl className="record-facts mb-0"><div><dt>مساهمات من جيبه</dt><dd>{p.totalPaidFromPocket.toLocaleString('ar-EG')} ج.م</dd></div><div><dt>مسحوبات</dt><dd>{p.totalWithdrawals.toLocaleString('ar-EG')} ج.م</dd></div></dl></article>)}</div>
    <p className="operation-note">تعريف شريك مالي أو تعديل حصته لا ينشئ مستخدمًا ولا يمنحه صلاحية الدخول. الأرباح والحركات المالية تظل مرتبطة بسجلاتها الأصلية.</p>
    <div className="flex flex-wrap gap-2">
     <button type="button" className="action-button" onClick={onReports}>التقارير والأرباح وحسابات الشركاء</button>
