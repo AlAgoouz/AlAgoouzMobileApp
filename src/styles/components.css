@@ -1338,6 +1338,7 @@
 .purchase-field-label { display: block; color: var(--ink-default); font-size: var(--fs-2xs); font-weight: 700; }
 
 .cashier-workflow {
+  container: cashier-workflow / inline-size;
   border: 1px solid var(--line-default);
   border-radius: var(--r-lg);
   background: var(--surface-card);
@@ -1345,6 +1346,10 @@
 }
 
 .cashier-workflow h2 { font-size: var(--fs-lg); font-weight: 800; }
+.cashier-workflow-header { display: grid; gap: var(--space-3); align-items: end; }
+.cashier-workflow-status { margin-block-start: 2px; color: var(--ink-default); font-size: var(--fs-xs); }
+.cashier-workflow-date { color: var(--ink-default); font-size: var(--fs-xs); font-weight: 700; }
+.cashier-workflow-date .operation-input { min-block-size: 48px; font-size: max(1rem, 1em); }
 .cashier-workflow-grid { display: grid; gap: var(--space-3); margin-block-start: var(--space-3); }
 .cashier-workflow-grid > div {
   display: flex;
@@ -1358,12 +1363,22 @@
 .cashier-workflow-grid svg { flex: none; color: var(--brand-gold); margin-block-start: 0.2rem; }
 .cashier-workflow-grid h3 { font-weight: 800; }
 .cashier-workflow-grid p { color: var(--ink-default); font-size: var(--fs-xs); }
-.cashier-workflow-grid .record-action { margin-block-start: var(--space-2); }
-@media (min-width: 620px) {
+.cashier-workflow-grid > div > div { flex: 1; min-inline-size: 0; }
+.cashier-workflow-grid > [data-ready="true"] { background: var(--ok-bg); border-color: var(--ok-line); }
+.cashier-workflow-grid bdi { display: block; margin-block-start: var(--space-2); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.cashier-workflow-grid .record-action { inline-size: 100%; min-block-size: 48px; margin-block-start: var(--space-2); }
+.cashier-workflow-approve { margin-block-start: var(--space-3); }
+.cashier-workflow-approve, .cashier-review-save { inline-size: 100%; min-block-size: 48px; }
+@container cashier-workflow (min-width: 36rem) {
+  .cashier-workflow-header { grid-template-columns: minmax(0, 1fr) minmax(11rem, max-content); }
   .cashier-workflow-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cashier-workflow-grid .record-action, .cashier-workflow-approve { inline-size: auto; }
+}
+@media (min-width: 620px) {
+  .cashier-review-save { inline-size: auto; }
 }
 
-.cashier-upload-anchor { scroll-margin-block-start: 3rem; }
+.cashier-upload-anchor, .cashier-review-heading, #cashier-reports-heading { scroll-margin-block-start: 3rem; }
 .cashier-report-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .cashier-report-slot {
   display: grid;
