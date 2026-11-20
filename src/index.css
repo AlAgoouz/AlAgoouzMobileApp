@@ -54,6 +54,9 @@
 /* Single high-visibility focus ring across light, dark, and forced colors */
 :focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
 
+/* Keep the session and application loaders independent of the web font. */
+#root > [role="status"] { font-family: system-ui, sans-serif; }
+
 /* ==========================================================================
    AUTHENTICATION & RECOVERY SHELL
    ========================================================================== */
