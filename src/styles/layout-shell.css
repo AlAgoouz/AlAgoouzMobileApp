@@ -824,7 +824,7 @@
   .workspace-sidebar nav button:hover:not([aria-current="page"]) {
     background: rgb(170 190 241 / 0.12);
     color: var(--ink-on-dark);
-    border-color: rgb(170 190 241 / 0.35);
+    border-color: var(--gold-trim-line);
   }
   .workspace-nav button:not([aria-current="page"]):hover > div {
     color: var(--ink-strong);

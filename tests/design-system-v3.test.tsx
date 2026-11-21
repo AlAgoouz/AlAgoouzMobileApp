@@ -20,7 +20,7 @@ describe('Design System v3', () => {
     metaScheme.name = 'color-scheme';
     metaScheme.content = 'light dark';
     document.head.append(metaScheme);
-    for (const [scheme, color] of [['light', '#F3F5F9'], ['dark', '#101726']]) {
+    for (const [scheme, color] of [['light', '#EAF2FF'], ['dark', '#101726']]) {
       const meta = document.createElement('meta');
       meta.name = 'theme-color';
       meta.dataset.scheme = scheme;
