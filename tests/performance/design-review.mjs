@@ -98,7 +98,7 @@ export async function verifyDesign(){
       assert.equal(image.sceneBackground,'none');
       assert.equal(image.sceneColor,'rgba(0, 0, 0, 0)');
     };
-    await checkPortrait('roaster-sign-in-small.webp');
+    await checkPortrait('roaster-welcome-small.webp');
     assert.equal(await page.evaluate(async()=>{await document.fonts.ready;return [...document.fonts].some(face=>face.family==='Cairo'&&face.status==='loaded');}),true);
     await limit(page,'login');await page.screenshot({path:'design-login-mobile.png',fullPage:true});evidence.login=true;
     await page.setViewportSize({width:320,height:568});
@@ -119,8 +119,8 @@ export async function verifyDesign(){
     await page.mouse.move(0,0);
     await togglePassword.blur();
     await page.setViewportSize({width:1440,height:900});
-    await page.waitForFunction(()=>document.querySelector('.login-art img')?.currentSrc.endsWith('/roaster-sign-in.webp'));
-    await checkPortrait('roaster-sign-in.webp');
+    await page.waitForFunction(()=>document.querySelector('.login-art img')?.currentSrc.endsWith('/roaster-welcome.webp'));
+    await checkPortrait('roaster-welcome.webp');
     await page.screenshot({path:'design-login-desktop.png',animations:'disabled'});
     await page.setViewportSize({width:360,height:800});
     await page.getByRole('button',{name:'نسيت كلمة المرور؟'}).click();
