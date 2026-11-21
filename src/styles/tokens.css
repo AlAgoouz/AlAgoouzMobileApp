@@ -21,9 +21,12 @@
     --brand-gold-shade: #3459A4;
     --brand-gold-finish: var(--primary);
     --brand-dark-finish: #192A4D;
+    --gold-trim-line: #9B702F;
+    --gold-trim-space: ;
+    --gold-trim-gradient: linear-gradient(132deg var(--gold-trim-space), #9B702F 0%, #D9AE64 23%, #FFF0C0 36%, #A77A37 55%, #EDCD85 76%, #9B702F 100%);
 
   /* Surfaces (Daylight Default) */
-  --surface-page:         #F3F5F9;
+  --surface-page:         #EAF2FF;
   --surface-card:         #FFFFFF;
   --surface-sunken:       #EBEEF5;
   --surface-raised:       #E0E6F2;
@@ -143,6 +146,10 @@
   --shadow:         var(--sh-1);
 }
 
+@supports (background: linear-gradient(132deg in oklab, white, black)) {
+  :root { --gold-trim-space: in oklab; }
+}
+
 /* Override mapping from <meta name="color-scheme"> */
 :root:has(> head > meta[name="color-scheme"][content="dark"]) {
   color-scheme: dark;
@@ -154,7 +161,7 @@
 /* Resolve color tokens using the active color scheme. */
 @supports (color: light-dark(white, black)) {
   :root {
-    --surface-page:         light-dark(#F3F5F9, #101726);
+    --surface-page:         light-dark(#EAF2FF, #101726);
     --surface-card:         light-dark(#FFFFFF, #1A2335);
     --surface-sunken:       light-dark(#EBEEF5, #141E31);
     --surface-raised:       light-dark(#E0E6F2, #25324B);

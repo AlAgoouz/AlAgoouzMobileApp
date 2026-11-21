@@ -3,7 +3,7 @@
    ========================================================================== */
 
 .screen-stage button {
-  transition: background-color var(--t-fast), border-color var(--t-fast), box-shadow var(--t-fast), opacity var(--t-fast);
+  transition: background-color var(--t-fast), border-color var(--t-fast), box-shadow var(--t-fast), opacity var(--t-fast), transform var(--t-fast) var(--ease-out);
   touch-action: manipulation;
 }
 
@@ -125,10 +125,21 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .screen-stage :is(.action-button, .quiet-button, .operation-primary):hover:not(:disabled):not([aria-disabled="true"]) {
+    border-color: var(--gold-trim-line);
+    box-shadow: var(--sh-2);
+  }
+
   .screen-stage :is(.metric-card, .visual-card, .attention-card, .section-tile, .record-card):hover:not(:disabled):not(:active):not(:has(:is(.metric-card, .visual-card, .attention-card, .section-tile, .record-card):hover)) {
     transform: translateY(-2px);
-    border-color: var(--brand-gold-edge);
+    border-color: var(--gold-trim-line);
     box-shadow: var(--sh-2);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .screen-stage :is(.action-button, .quiet-button, .operation-primary):hover:not(:active):not(:disabled):not([aria-disabled="true"]) {
+    transform: translateY(-2px);
   }
 }
 

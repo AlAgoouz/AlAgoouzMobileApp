@@ -174,8 +174,10 @@
   inline-size: min(100%, 30rem);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  background: var(--surface-card);
-  border: 1px solid var(--line-subtle);
+  background:
+    linear-gradient(var(--surface-card), var(--surface-card)) padding-box,
+    var(--gold-trim-gradient) border-box;
+  border: 1px solid transparent;
   border-radius: var(--login-radius);
   box-shadow: var(--sh-3);
 }
@@ -203,7 +205,7 @@
   inset-block: 14% -1px;
   inset-inline-end: 3%;
   inline-size: calc(var(--portrait-size) * 0.78);
-  border: 1px solid rgb(170 190 241 / 0.46);
+  border: 1px solid rgb(224 181 106 / 0.64);
   border-start-start-radius: 50% 44%;
   border-start-end-radius: 50% 44%;
   background: radial-gradient(ellipse at 50% 36%, #354E80, var(--brand-espresso) 74%);
@@ -364,7 +366,7 @@
   background: var(--surface-control);
   background: color-mix(in srgb, var(--surface-control) 65%, var(--surface-sunken));
   color: var(--brand-gold);
-  transition: border-color var(--t-fast), background-color var(--t-fast);
+  transition: border-color var(--t-fast), background-color var(--t-fast), box-shadow var(--t-fast);
 }
 
 .login-input:focus-within {
@@ -406,6 +408,7 @@
   padding: 6px 8px;
   border-radius: var(--r-sm);
   text-underline-offset: 4px;
+  transition: transform var(--t-fast) var(--ease-out), background-color var(--t-fast);
 }
 
 .login-text-button:hover:not(:disabled) {
@@ -446,9 +449,10 @@
 }
 
 .login-submit {
+  --login-button-fill: var(--primary);
   min-height: 48px;
   border-radius: var(--r-md);
-  background: var(--primary);
+  background: var(--login-button-fill);
   color: var(--ink-on-gold);
   border: 1px solid var(--brand-gold-edge);
   display: flex;
@@ -463,8 +467,14 @@
 
 .login-form .login-submit {
   position: relative;
+  isolation: isolate;
+  overflow: clip;
   min-block-size: 54px;
   padding-inline: 42px;
+  border-color: transparent;
+  background:
+    linear-gradient(var(--login-button-fill), var(--login-button-fill)) padding-box,
+    var(--gold-trim-gradient) border-box;
 }
 
 .login-submit-arrow {
@@ -586,12 +596,47 @@
   .login-heading { padding-block-end: 8px; }
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
+  .login-input:hover:not(:focus-within):not(:has(input:disabled)) {
+    border-color: var(--gold-trim-line);
+    box-shadow: 0 0 0 2px rgb(217 174 100 / 0.17);
+  }
+
   .login-submit:hover:not(:disabled) {
-    background: var(--primary-hover);
-    transform: translateY(-1px);
+    --login-button-fill: var(--primary-hover);
     box-shadow: var(--sh-2);
   }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .login-submit:hover:not(:active):not(:disabled),
+  .login-text-button:hover:not(:active):not(:disabled) {
+    transform: translateY(-2px);
+  }
+
+  .login-form .login-submit:hover:not(:disabled)::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(110deg, transparent 35%, rgb(255 236 178 / 0.26) 50%, transparent 65%);
+    animation: login-gold-glint 560ms ease-out both;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .login-submit:active:not(:disabled) { transform: translateY(1px); }
+}
+
+@keyframes login-gold-glint {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(110%); }
+}
+
+@media (forced-colors: active) {
+  .login-layout { border-color: CanvasText; }
+  .login-form .login-submit { border-color: ButtonText; }
 }
 
 @media (prefers-reduced-motion: reduce) {

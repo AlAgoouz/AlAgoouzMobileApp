@@ -4,7 +4,7 @@
   "description": "نظام إدارة محل بُن العجوز للمشروبات والبن التركي والوصفات والإنتاج ومبيعات الكاشير والجملة",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F3F5F9",
+  "background_color": "#EAF2FF",
   "theme_color": "#24438C",
   "dir": "rtl",
   "lang": "ar",
