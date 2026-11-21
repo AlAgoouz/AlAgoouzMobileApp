@@ -589,10 +589,10 @@
   color: var(--ink-on-dark);
 }
 
-.metric-gold > p { color: #DAF0EE; }
+.metric-gold > p { color: var(--ink-on-dark); }
 .metric-gold > strong { color: var(--brand-gold-highlight); }
 .metric-gold > strong small,
-.metric-gold .metric-detail { color: #ACCFCD; border-block-start-color: rgba(115, 208, 194, 0.2); }
+.metric-gold .metric-detail { color: var(--brand-gold-soft); border-block-start-color: rgb(170 190 241 / 0.2); }
 .metric-gold .metric-icon {
   background: var(--brand-gold-finish);
   color: var(--ink-on-gold);
@@ -602,7 +602,7 @@
 .metric-gold .quiet-button {
   background: rgba(255, 255, 255, 0.08);
   color: var(--brand-gold-highlight);
-  border-color: rgba(115, 208, 194, 0.35);
+  border-color: rgb(170 190 241 / 0.35);
 }
 
 .metric-card.metric-positive { border-block-start-color: var(--ok); }

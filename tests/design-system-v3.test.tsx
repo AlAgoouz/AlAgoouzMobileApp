@@ -20,7 +20,7 @@ describe('Design System v3', () => {
     metaScheme.name = 'color-scheme';
     metaScheme.content = 'light dark';
     document.head.append(metaScheme);
-    for (const [scheme, color] of [['light', '#F2F6F6'], ['dark', '#102326']]) {
+    for (const [scheme, color] of [['light', '#F3F5F9'], ['dark', '#101726']]) {
       const meta = document.createElement('meta');
       meta.name = 'theme-color';
       meta.dataset.scheme = scheme;
@@ -33,7 +33,7 @@ describe('Design System v3', () => {
     setThemePreference('dark');
     expect(getStoredThemePreference()).toBe('dark');
     expect(metaScheme.content).toBe('dark');
-    expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#102326');
+    expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#101726');
     expect(document.querySelector('meta[data-theme-override]')).toBeTruthy();
 
     setThemePreference('light');
