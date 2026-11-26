@@ -36,9 +36,20 @@ try{
  const storageURL='http://127.0.0.1:'+port(storageAPI,5000);await wait(async()=> (await fetch(storageURL+'/status')).ok);
  sql('create role agouz_backup nologin bypassrls;grant pg_read_all_data to agouz_backup;grant usage on schema storage to service_role;grant all on all tables in schema storage to service_role;grant usage,select on all sequences in schema storage to service_role;create publication supabase_realtime;');
  sql(fs.readFileSync('supabase/schema.sql','utf8'));
- for(const file of fs.readdirSync('supabase/migrations').filter(x=>x.endsWith('.sql')).sort())sql(fs.readFileSync('supabase/migrations/'+file,'utf8'));
+ const migrations=fs.readdirSync('supabase/migrations').filter(file=>file.endsWith('.sql')).sort();
+ const cutover=migrations.findIndex(file=>file.endsWith('_make_erp_records_authoritative.sql'));
+ if(cutover<0)throw Error('STORAGE_CUTOVER_MIGRATION_MISSING');
+ for(const file of migrations.slice(0,cutover))sql(fs.readFileSync('supabase/migrations/'+file,'utf8'));
  const partner={id:'p1',name:'Synthetic Owner',username:'owner',role:'مدير',avatarLetter:'O',phone:'',sharePercent:100,totalPaidFromPocket:0,totalWithdrawals:0};
- sql(`insert into public.bon_elagouz_store(id,partners)values('main_store','${JSON.stringify([partner])}'::jsonb);insert into public.erp_members(user_id,username,partner_id,role)values('${user.id}','owner','p1','partner');insert into bon_erp_private.owner_config(id,email)values(true,'backup-smoke@example.test');insert into bon_erp_private.storage_backup_principal(id,user_id)values(true,'${user.id}');`);
+ const preMigrationItems=[
+   {id:'green-beans',name:'Synthetic beans',code:'B1',stock:4,costPrice:8,costHistory:[{id:'initial-cost',sourceId:'opening',sourceType:'opening',date:'2026-11-25',postedAt:'2026-11-25T00:00:00Z',quantity:4,unitCost:8,averageCost:8}]},
+   {id:'retail-item',name:'Synthetic retail item',code:'R1',stock:2,costPrice:5},
+ ];
+ sql(`insert into public.bon_elagouz_store(id,partners,items)values('main_store','${JSON.stringify([partner])}'::jsonb,'${JSON.stringify(preMigrationItems)}'::jsonb);insert into public.erp_members(user_id,username,partner_id,role)values('${user.id}','owner','p1','partner');insert into bon_erp_private.owner_config(id,email)values(true,'backup-smoke@example.test');insert into bon_erp_private.storage_backup_principal(id,user_id)values(true,'${user.id}');`);
+ const fingerprint="select md5(to_jsonb(store)::text) from public.bon_elagouz_store store where id='main_store'";
+ const beforeMigration=sql(fingerprint);
+ for(const file of migrations.slice(cutover))sql(fs.readFileSync('supabase/migrations/'+file,'utf8'));
+ if(!beforeMigration||sql(fingerprint)!==beforeMigration)throw Error('ERP_RECORDS_CHANGED_DURING_CUTOVER');
  await api(storageURL,'/bucket',{id:'agouz-test-private',name:'agouz-test-private',public:false});
  const files=[['nested/image.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aB1sAAAAASUVORK5CYII=','base64'),'image/png'],['documents/test file.bin',randomBytes(256*1024),'application/octet-stream'],['empty.txt',Buffer.alloc(0),'text/plain']];
  for(const [name,bytes,type]of files)await api(storageURL,'/object/'+storagePath('agouz-test-private',name),bytes,type);

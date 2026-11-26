@@ -260,9 +260,8 @@ it.skipIf(!active)('updates a blend recipe without rewriting its inventory avera
 it.skipIf(!active)('drops withdrawn price metadata from stale clients and restores without altering manually entered product prices',()=>{
  const existing=stockState();seed(existing);
  const pending={...existing,catalogNameDrafts:[nameDraft]},stale={...pending,catalogNameDrafts:[{...nameDraft,legacyPrices:{purchasePrice:45,salePrice:65,sourceKind:'github_seed'}}]};
- // Reproduce data written before the compensating migration in this disposable
- // validation database. All triggers are re-enabled on transaction completion.
- sql(`begin;set local session_replication_role=replica;update public.bon_elagouz_store set catalog_name_drafts=${literal(stale.catalogNameDrafts)};commit;`);
+ // Seed the historic payload directly in the isolated record table.
+ sql(`insert into bon_erp_private.erp_documents(store_id,section,document_id,position,payload) values('main_store','catalog_name_drafts','${nameDraft.id}',1,${literal(stale.catalogNameDrafts[0])});`);
  const payload={...toCloud(pending),catalog_name_drafts:stale.catalogNameDrafts};
  const result=readJson(`select public.bon_erp_save_store(0,${literal(payload)},'${crypto.randomUUID()}');select jsonb_build_object('drafts',catalog_name_drafts,'items',items,'partners',partners,'sales',sales_invoices,'expenses',expenses) from public.bon_elagouz_store`);
  expect(result).toEqual({drafts:pending.catalogNameDrafts,items:existing.items,partners:existing.partners,sales:[],expenses:[]});
@@ -834,6 +833,9 @@ it.skipIf(!active)('projects store documents by section and archives overflow au
   const activeItems=JSON.parse(sql("select payload::text from bon_erp_private.erp_documents where store_id='main_store' and section='items'"));
   expect(activeItems.id).toBe(bean.id);
   expect(activeItems.costHistory).toBeUndefined();
+  expect(JSON.parse(sql("select items->0->'costHistory' from public.bon_elagouz_store where id='main_store'"))).toEqual(stock.costHistory);
+  expect(sql("select relkind from pg_class where oid='public.bon_elagouz_store'::regclass")).toBe('v');
+  expect(sql("select string_agg(attname,',' order by attnum) from pg_attribute where attrelid='bon_erp_private.erp_store_header'::regclass and attnum>0 and not attisdropped")).toBe('id,updated_at,updated_by,version');
   const auditPage=readJson("select public.bon_erp_history_archive('audit',null,1)");
   expect(auditPage).toHaveLength(1);
   const earlier=readJson(`select public.bon_erp_history_archive('audit',${auditPage[0].sequence},40)`);

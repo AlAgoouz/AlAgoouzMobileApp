@@ -67,7 +67,10 @@ begin
     if (select count(*) from auth.users where lower(email)=member->>'email')<>1 then raise exception 'Missing or ambiguous Auth account: %',member->>'email'; end if;
   end loop;
 end $setup$;
-insert into public.bon_elagouz_store(id,partners) values('main_store',${literal(JSON.stringify(profiles))}::jsonb) on conflict(id) do nothing;
+select pg_advisory_xact_lock(72938101);
+insert into public.bon_elagouz_store(id,partners)
+select 'main_store',${literal(JSON.stringify(profiles))}::jsonb
+where not exists(select 1 from public.bon_elagouz_store where id='main_store');
 do $setup$
 begin
   if not exists(select 1 from public.bon_elagouz_store where id='main_store' and partners @> ${literal(JSON.stringify(profiles.map((p) => ({ id: p.id }))))}::jsonb) then raise exception 'Existing store profiles must be reviewed before assigning members'; end if;
