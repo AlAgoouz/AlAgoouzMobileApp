@@ -42,7 +42,9 @@ def is_uws_items(matrix):
 def parse_uws_items(matrix,row_numbers,expected_date,invalid,localized_number):
     business_date=report_date(matrix,invalid,expected_date)
     entries=[]; current=None; totals={}; codes=set()
-    def number(value):
+    def number(value, *, weight=False):
+        if weight and re.fullmatch(r'\d{1,3},\d{3}', value):
+            raise invalid('UWS_AMBIGUOUS_WEIGHT')
         parsed=localized_number(value)
         if parsed is None: raise invalid('UWS_NUMBER_INVALID')
         result=Decimal(parsed)
@@ -73,7 +75,7 @@ def parse_uws_items(matrix,row_numbers,expected_date,invalid,localized_number):
                     if current is None: raise invalid('UWS_ORPHAN_DETAIL')
                     key='amount' if money else 'weight'
                     if key in current: raise invalid('UWS_DUPLICATE_DETAIL')
-                    current[key]=number((money or weight).group(1))
+                    current[key]=number((money or weight).group(1), weight=key=='weight')
                     if key=='weight' and current[key]<=0: raise invalid('UWS_NUMBER_INVALID')
                     continue
                 sales=re.fullmatch(r'TOTAL SLS\s+(\d+)\s+([\d,]+\.\d{2})',line,re.I)
@@ -82,7 +84,7 @@ def parse_uws_items(matrix,row_numbers,expected_date,invalid,localized_number):
                     finish();current=None
                     key='sales' if sales else 'weight'
                     if key in totals: raise invalid('UWS_DUPLICATE_TOTAL')
-                    totals[key]=(number(sales.group(1)),number(sales.group(2))) if sales else number(weight_total.group(1))
+                    totals[key]=(number(sales.group(1)),number(sales.group(2))) if sales else number(weight_total.group(1), weight=True)
                     continue
                 if re.match(r'^(Menu\s+Item\s+Sales\s+Report|Item\s|Revenue Center\s|Time Period\s|PC\s|Employee\s|Transaction Type\s|Sales Type\s|Date Range\s|Printed on\s|Printed By\s|TOTAL ITEMS DISC\s|TOTAL OTHER DISC\s|TOTAL NET SALES\s|-+$)',line,re.I): continue
                 raise invalid('UWS_UNRECOGNIZED_LINE')

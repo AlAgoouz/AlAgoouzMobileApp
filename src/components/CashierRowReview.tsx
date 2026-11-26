@@ -1,4 +1,4 @@
-import React,{useMemo,useState} from 'react';
+import { useMemo, useState } from 'react';
 import type {InventoryItem} from '../types/erp';
 import type {CashierReview} from '../lib/cashierRows';
 import {ActionButton} from './ActionButton';

@@ -1,4 +1,3 @@
-import React from 'react';
 import {menuTranscript} from '../lib/menuTranscript';
 
 const price = new Intl.NumberFormat('ar-EG');

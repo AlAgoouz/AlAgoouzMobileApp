@@ -17,7 +17,7 @@ export function scrubLegacyPasswords(
     return false;
   value.partners = value.partners.map((partner: Record<string, unknown>) => {
     if(!partner||typeof partner!=='object')return partner;
-    const { password: removed, ...profile } = partner;
+    const { password: _removed, ...profile } = partner;
     return profile;
   });
   storage.setItem(key, JSON.stringify(value));

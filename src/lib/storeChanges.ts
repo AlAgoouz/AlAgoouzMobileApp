@@ -1,3 +1,9 @@
+export const STORE_CHANGE_LIMIT = 10 * 1024 * 1024;
+
+export function jsonBytes(value: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
 type Row = {id: string};
 type CollectionChange = {upsert: Row[]; remove: string[]; order?: string[]};
 

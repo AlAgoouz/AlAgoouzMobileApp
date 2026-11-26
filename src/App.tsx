@@ -1,3 +1,4 @@
+import {divideMoney, multiplyMoney, roundMoney, sumMoney} from './lib/money';
 import {unitLabel as displayUnit} from './lib/units';
 import {useDashboardRead} from './hooks/useDashboardRead';
 import {saveFinancialOpening} from './lib/financialOpening';
@@ -24,37 +25,8 @@ import {SectionsHub} from './components/SectionsHub';
 import type {QueuedCashierReport} from './components/CashierDayScreen';
 import {cashierCostDetails,correctedCashierCost} from './lib/cashierCosts';
 import {attachCashierReport,approveCashierDay,salesForReports} from './lib/cashierDays';
-import {isStockItem} from './lib/itemPolicy';
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import {
-  LayoutGrid,
-  Search,
-  AlertTriangle,
-  ChevronLeft,
-  Calculator,
-  FileText,
-  Package,
-  ShoppingBag,
-  Truck,
-  Users,
-  RotateCcw,
-  BarChart3,
-  Calendar,
-  TrendingUp,
-  Lock,
-  Unlock,
-  Flame,
-  FolderSync,
-  CheckCircle2,
-  AlertCircle,
-  Info,
-  X,
-  Home,
-  ShieldCheck,
-  Scale,
-  UserCheck,
-  Tag,
-} from "lucide-react";
+import { LayoutGrid, AlertTriangle, BarChart3, Lock, CheckCircle2, AlertCircle, Info, X, Home, UserCheck } from "lucide-react";
 import {
   InventoryItem,
   ProductionBatch,
@@ -64,7 +36,6 @@ import {
   Supplier,
   Partner,
   AuditLogEntry,
-  RecipeIngredient,
   Employee,
   EmployeeTransaction,
   StocktakingAuditRecord,
@@ -81,16 +52,7 @@ import { getSupabaseClient, getSupabaseCredentials } from "./lib/supabaseSync";
 import { useErpStore } from "./hooks/useErpStore";
 import { parseBackup, createBackup, type StoreState } from "./lib/storeState";
 import { deductInventory, productionNeeds } from "./lib/inventory";
-import {
-  reversePayment,
-  saveSaleReturn,
-  recordPayment,
-  cancelPurchase,
-  receivePurchaseRefund,
-  recordExpense,
-  cancelExpense,
-  operatingExpenses,
-} from "./lib/ledger";
+import { reversePayment, saveSaleReturn, recordPayment, cancelPurchase, receivePurchaseRefund, recordExpense, cancelExpense } from "./lib/ledger";
 import { businessDate } from "./lib/dates";
 import {
   documentNumberPrefix,
@@ -100,6 +62,7 @@ import { recordEmployeeAction, reverseEmployeeAction, closePayrollPeriod, curren
 import { adjustCatalogItem, canDeleteCatalogItem } from './lib/catalogAdjustments';
 import {checkCustomerDetails,checkSupplierDetails} from './lib/contactDetails';
 import {receiveStock} from './lib/costing';
+import {receivePurchaseInventory} from './lib/purchaseInventory';
 import {
   downloadFullBackupJson,
   exportFullStoreExcel,
@@ -219,7 +182,6 @@ export default function App() {
       lastScreen.current = screenKey;
     }
   }, [screenKey]);
-  const [hideProfits, setHideProfits] = useState<boolean>(false);
   const [reportPeriod,setReportPeriod]=useState(initialPeriod);
   const [toastNotification, setToastNotification] = useState<{
     id: number;
@@ -508,8 +470,8 @@ export default function App() {
       const needed = needs.get(item.id);
       if (needed !== undefined) {
         const usedInBase = Number(needed.toFixed(6));
-        const ingCost = Number((usedInBase * item.costPrice).toFixed(2));
-        totalBatchCost = Number((totalBatchCost + ingCost).toFixed(2));
+        const ingCost = multiplyMoney(usedInBase, item.costPrice);
+        totalBatchCost = sumMoney([totalBatchCost, ingCost]);
         consumedDetails.push({
           ingredientId: item.id,
           ingredientName: item.name,
@@ -528,7 +490,7 @@ export default function App() {
       return item;
     });
 
-    const unitCostPerKg = Number((totalBatchCost / quantityKg).toFixed(2));
+    const unitCostPerKg = divideMoney(totalBatchCost, quantityKg);
 
     const batchId = crypto.randomUUID();
     const finalCatalog = updatedCatalog.map((item) => {
@@ -550,7 +512,7 @@ export default function App() {
       blendName: blend.name,
       quantityProducedKg: quantityKg,
       unitCostPerKg,
-      totalBatchCost: Number(totalBatchCost.toFixed(2)),
+      totalBatchCost: totalBatchCost,
       ingredientsConsumed: consumedDetails,
       partnerName: currentPartner.name,
       notes,
@@ -614,42 +576,8 @@ export default function App() {
       id: crypto.randomUUID(),
       invoiceNumber: invNum,
       createdAt: new Date().toISOString(),
-      inventoryBefore: engine.state.items
-        .filter((i) => invoiceData.items.some((l) => l.itemId === i.id))
-        .map((i) => structuredClone(i)),
     };
-
-    const nextItems = engine.state.items.map((item) => {
-      const purchasedLine = invoiceData.items.find((l) => l.itemId === item.id);
-      if (!purchasedLine) return item;
-
-      const received = receiveStock(item,purchasedLine.quantity,purchasedLine.purchasePrice,{id:newInvoice.id,date:invoiceData.date,type:'purchase'});
-
-      const updatedSupplierPrices = [
-        {
-          supplierId: invoiceData.supplierId,
-          supplierName: invoiceData.supplierName,
-          price: purchasedLine.purchasePrice,
-          date: invoiceData.date,
-          invoiceId: invNum,
-        },
-        ...item.supplierPrices,
-      ];
-
-      return {
-        ...received,
-        lastPurchasePrice: purchasedLine.purchasePrice,
-        retailPrice: purchasedLine.newRetailPrice ?? item.retailPrice,
-        wholesalePrice: purchasedLine.newWholesalePrice ?? item.wholesalePrice,
-        supplierPrices: updatedSupplierPrices,
-      };
-    });
-
-    const cascadedCatalog = recalculateAllRecipeCosts(nextItems);
-    newInvoice.inventoryAfter = cascadedCatalog
-      .filter((i) => invoiceData.items.some((l) => l.itemId === i.id))
-      .map((i) => structuredClone(i));
-    setItems(cascadedCatalog);
+    setItems(receivePurchaseInventory(engine.state.items, newInvoice));
     setPurchaseInvoices((prev) => [newInvoice, ...prev]);
 
     setSuppliers((prev) =>
@@ -657,8 +585,8 @@ export default function App() {
         sup.id === invoiceData.supplierId
           ? {
               ...sup,
-              balance: Number((sup.balance + invoiceData.remainingAmount).toFixed(2)),
-              totalPurchases: Number((sup.totalPurchases + invoiceData.totalAmount).toFixed(2)),
+              balance: sumMoney([sup.balance, invoiceData.remainingAmount]),
+              totalPurchases: sumMoney([sup.totalPurchases, invoiceData.totalAmount]),
               invoicesCount: sup.invoicesCount + 1,
             }
           : sup,
@@ -737,7 +665,7 @@ export default function App() {
       invoiceNumber: invNum,
       items: invoiceItems,
       totalCost: liveTotalCost,
-      netProfit: Number((saleData.totalAmount - liveTotalCost).toFixed(2)),
+      netProfit: sumMoney([saleData.totalAmount, -liveTotalCost]),
     };
 
     setItems(updatedInventory);
@@ -749,8 +677,8 @@ export default function App() {
           c.id === saleData.customerId
             ? {
                 ...c,
-                balance: Number((c.balance + saleData.remainingAmount).toFixed(2)),
-                totalSales: Number((c.totalSales + saleData.totalAmount).toFixed(2)),
+                balance: sumMoney([c.balance, saleData.remainingAmount]),
+                totalSales: sumMoney([c.totalSales, saleData.totalAmount]),
                 invoicesCount: c.invoicesCount + 1,
                 lastPurchaseDate: saleData.date,
               }
@@ -812,9 +740,9 @@ export default function App() {
       date,
       partnerName: currentPartner.name,
       notes,
-      totalShortageValue: Number(totalShortage.toFixed(2)),
-      totalSurplusValue: Number(totalSurplus.toFixed(2)),
-      netVarianceValue: Number((totalSurplus - totalShortage).toFixed(2)),
+      totalShortageValue: roundMoney(totalShortage),
+      totalSurplusValue: roundMoney(totalSurplus),
+      netVarianceValue: sumMoney([totalSurplus, -totalShortage]),
       itemsAudited: variances,
     };
 
@@ -825,7 +753,7 @@ export default function App() {
       handleRecordEmployeeAction(
         chargeShortageToEmployeeId,
         "خصم/عجز",
-        Number(totalShortage.toFixed(2)),
+        roundMoney(totalShortage),
         `تحميل عجز محضر الجرد #${newRecord.auditNumber}`,
       );
     }
@@ -937,13 +865,6 @@ export default function App() {
     showToast("بيانات العرض التجريبية متاحة في بيئة الاختبار المنفصلة فقط.");
   };
 
-  const shortagesCount = useMemo(
-    () =>
-      items.filter(
-        (i) => isStockItem(i) && i.stock <= i.minStock,
-      ).length,
-    [items],
-  );
 
   async function saveInvoice<T extends {id:string;invoiceNumber:string}>(kind:'purchase'|'sale',data:unknown,create:()=>T,records:()=>T[]){
     if(engine.hasPending)await confirmSave();
@@ -1594,7 +1515,7 @@ export default function App() {
                 showToast(error instanceof Error?error.message:'تعذر تأكيد حفظ المرتجع', 'danger');
               } finally {returnBusy.current=false;}
             }}
-            onDeleteInvoice={(invId) => {
+            onDeleteInvoice={() => {
               showToast(
                 "هذه فاتورة معتمدة؛ استخدم المرتجع لعكس أثرها مع الاحتفاظ بالأصل.",
               );

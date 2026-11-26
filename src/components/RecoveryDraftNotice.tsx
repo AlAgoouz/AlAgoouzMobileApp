@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import { useEffect, useState } from 'react';
 import {downloadRecoverySnapshot} from '../lib/backupExport';
 import {listRecoveryDrafts, recoveryDraftState, type RecoveryDraftAccess} from '../lib/recoveryDraft';
 

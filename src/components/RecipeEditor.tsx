@@ -1,9 +1,9 @@
-import React,{useEffect,useId,useMemo,useState} from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import {Package,Plus,Trash2} from 'lucide-react';
 import type {InventoryItem,ItemCategory,RecipeIngredient,UnitType} from '../types/erp';
 import {quantityUnits,unitLabel} from '../lib/units';
 import {calculateRecipeTotalCost,getIngredientCostContribution,convertToBaseUnit} from '../lib/itemCosts';
-import {parseLocalizedNumber} from '../lib/cashierRows';
+import {parseDecimalInput} from '../lib/cashierRows';
 import {RecordPickerField} from './RecordPickerField';
 import {Money} from './Money';
 
@@ -12,7 +12,7 @@ export function RecipeEditor({items,category,baseUnit,targetId,value,onChange,di
  const [error,setError]=useState<{message:string;location:'add'|'edit'}>();
  const [quantityDrafts,setQuantityDrafts]=useState<Record<string,string>>({});
  const headingId=useId();
- const invalidQuantity=(quantity:string|number)=>{const q=parseLocalizedNumber(quantity);return q===undefined||q<=0;};
+ const invalidQuantity=(quantity:string|number)=>{const q=parseDecimalInput(quantity);return q===undefined||q<=0;};
  const invalidQuantities=value.some(line=>invalidQuantity(quantityDrafts[line.ingredientId]??line.quantity));
  const validInputs=!invalidQuantities&&!ingredientId&&!quantity.trim();
  useEffect(()=>onValidityChange?.(validInputs),[validInputs,onValidityChange]);
@@ -21,7 +21,7 @@ export function RecipeEditor({items,category,baseUnit,targetId,value,onChange,di
  const basis=category==='drink_recipe'?'كوب واحد':category==='manufactured_blend'?'كيلو واحد من التوليفة':`1 ${unitLabel(baseUnit)} من التحويجة`;
  const total=useMemo(()=>{try{const cost=value.length&&!invalidQuantities?calculateRecipeTotalCost(value,items):null;return cost!==null&&Number.isFinite(cost)?cost:null;}catch{return null;}},[value,items,invalidQuantities]);
  const change=(id:string,q:string,u:UnitType,location:'add'|'edit'='edit')=>{
-  const amount=parseLocalizedNumber(q);
+  const amount=parseDecimalInput(q);
   const item=available.find(i=>i.id===id);
   if(!item){setError({message:'اختر مكونًا موجودًا بالمخزن',location});return;}
   if(amount===undefined||amount<=0){setError({message:'كمية المكون يجب أن تكون أكبر من صفر',location});return;}

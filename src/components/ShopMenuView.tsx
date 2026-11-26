@@ -1,4 +1,4 @@
-import React, {useId} from 'react';
+import { useId } from 'react';
 import {ArrowDownLeft, ArrowUp, Coffee, MapPin, MessageCircle, Phone} from 'lucide-react';
 import type {MenuItem, ShopMenu} from '../lib/shopMenu';
 import './shop-menu.css';

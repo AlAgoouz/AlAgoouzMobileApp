@@ -1303,6 +1303,42 @@
               "additionalProperties": {}
             }
           },
+          "inventoryHistory": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "itemId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "costEntries": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 2147483646
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "supplierEntries": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 2147483646
+                }
+              },
+              "required": [
+                "itemId",
+                "costEntries",
+                "supplierEntries"
+              ],
+              "additionalProperties": false
+            }
+          },
           "items": {
             "type": "array",
             "items": {

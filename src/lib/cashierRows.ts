@@ -38,6 +38,16 @@ export function parseLocalizedNumber(value: unknown): number | undefined {
   return Number.isFinite(number) ? number : undefined;
 }
 
+// A single comma followed by three digits can indicate either decimals or thousands.
+export function ambiguousDecimal(value: unknown): boolean {
+  return typeof value === 'string' &&
+    /^[+-]?[٠-٩۰-۹\d]{1,3},[٠-٩۰-۹\d]{3}$/.test(value.trim().replace(/[\u200e\u200f]/g, ''));
+}
+
+export function parseDecimalInput(value: unknown): number | undefined {
+  return ambiguousDecimal(value) ? undefined : parseLocalizedNumber(value);
+}
+
 const normalize = (text: string) =>
   text
     .toLowerCase()
@@ -118,8 +128,8 @@ export function mapRawCashierRows(
       const rawName = String(values.name ?? '').trim();
       const rawCode = String(values.code ?? '').trim();
       const rawQuantity = parseLocalizedNumber(values.qty);
-      const totalPrice = parseLocalizedNumber(values.total);
-      const unitPrice = parseLocalizedNumber(values.price);
+      const totalPrice = parseDecimalInput(values.total);
+      const unitPrice = parseDecimalInput(values.price);
       let error: string | undefined;
       if (!rawName && !rawCode) error = 'عمود اسم الصنف أو الكود غير موجود';
       if (rawQuantity === undefined || rawQuantity === 0)
@@ -136,13 +146,13 @@ export function mapRawCashierRows(
         String(values.total).trim() !== '' &&
         totalPrice === undefined
       )
-        error = 'الإجمالي غير صالح';
+        error = 'الإجمالي غير صالح؛ اكتب الرقم بنقطة عشرية أو بدون فاصل آلاف';
       if (
         values.price !== undefined &&
         String(values.price).trim() !== '' &&
         unitPrice === undefined
       )
-        error = 'سعر الوحدة غير صالح';
+        error = 'سعر الوحدة غير صالح؛ اكتب الرقم بنقطة عشرية أو بدون فاصل آلاف';
       let dataError = error;
       let candidates = rawCode
         ? [...new Set([...(codes.get(normalize(rawCode))??[]),...(barcodes.get(rawCode)??[])])]
@@ -192,8 +202,7 @@ export function mapRawCashierRows(
       else if (matchedItem && ['kg','liter'].includes(matchedItem.baseUnit))
         error = 'حدد وحدة الكمية صراحةً لتجنب خصم كمية خاطئة';
       const sourceUnit = unit && !error?.startsWith('وحدة غير معروفة') ? unitHint : undefined;
-      if (typeof values.qty === 'string' && /^[+-]?[٠-٩۰-۹\d]{1,3},[٠-٩۰-۹\d]{3}$/.test(values.qty.trim())
-        && (sourceUnit === undefined || ['kg','liter','gram','ml'].includes(sourceUnit))) {
+      if (ambiguousDecimal(values.qty)) {
         dataError = 'صيغة الكمية ملتبسة؛ استخدم نقطة عشرية أو رقمًا دون فاصل آلاف';
         error = dataError;
       }

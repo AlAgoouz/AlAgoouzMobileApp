@@ -14,7 +14,7 @@ import {isStockItem} from '../lib/itemPolicy';
 import { operatingExpenses } from '../lib/ledger';
 import React, { useState, useMemo } from 'react';
 import {RecordPagination,useRecordPage} from './RecordPagination';
-import {Share2, Users, TrendingUp, PiggyBank, FileText, Package, Download, LayoutGrid, Sparkles, Award} from 'lucide-react';
+import { Share2, Users, TrendingUp, PiggyBank, FileText, Package, Download, Sparkles, Award } from 'lucide-react';
 import {
   InventoryItem,
   Expense,

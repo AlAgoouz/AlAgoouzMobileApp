@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { getSupabaseClient } from '../lib/supabaseSync';
 import { StoreEngine } from '../lib/storeEngine';
 import { cloudStoreInput, toCloud } from '../lib/storeState';
-import {storeChanges} from '../lib/storeChanges';
+import {jsonBytes, STORE_CHANGE_LIMIT, storeChanges} from '../lib/storeChanges';
 import { scrubLegacyPasswords } from '../lib/legacyCache';
 import { authErrorMessage } from '../lib/authErrors';
 import { StoreWriteFailure,storeWriteError } from '../lib/storeErrors';
@@ -38,13 +38,16 @@ export function useErpStore(loadFull=true) {
       {
         async saveChanges(before, state, version, operationId, queueId) {
           const payload = toCloud(state);
-          if (JSON.stringify(payload).length <= 512 * 1024 && !state.purchaseInvoices.some(i=>i.refundReceipts?.length))
+          if (jsonBytes(payload) <= 512 * 1024 && !state.purchaseInvoices.some(i=>i.refundReceipts?.length))
             return this.save(state, version, operationId, queueId);
           const sb = getSupabaseClient();
           if (!sb) throw new Error('اتصال التخزين غير متاح.');
+          const changes = storeChanges(toCloud(before), payload);
+          if (jsonBytes(changes) > STORE_CHANGE_LIMIT)
+            throw new StoreWriteFailure('STORE_TOO_LARGE', storeWriteError('STORE_TOO_LARGE'));
           const {data,error,status} = await sb.rpc('bon_erp_save_store_changes', {
             p_expected_version: version,
-            p_changes: storeChanges(toCloud(before), payload),
+            p_changes: changes,
             p_operation_id: operationId,
             p_queue_id: queueId ?? null,
           });

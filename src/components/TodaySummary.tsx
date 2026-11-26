@@ -1,4 +1,3 @@
-import React from 'react';
 import type {DashboardModel} from '../lib/readModels';
 import {ActionButton} from './ActionButton';
 import {Money} from './Money';

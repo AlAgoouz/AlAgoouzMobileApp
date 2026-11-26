@@ -1,3 +1,4 @@
+import {multiplyMoney, sumMoney} from '../lib/money';
 import { unitLabel as displayUnit } from '../lib/units';
 import { ReceiptText as HeaderReceiptText, FolderSync as HeaderFolderSync } from 'lucide-react';
 import { OperationHeader } from './OperationHeader';
@@ -134,7 +135,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
   };
 
   const subtotal = useMemo(
-    () => cart.reduce((sum, c) => sum + Number((c.qtyInBaseUnit * c.customUnitPrice).toFixed(2)), 0),
+    () => sumMoney(cart.map(c => multiplyMoney(c.qtyInBaseUnit, c.customUnitPrice))),
     [cart],
   );
 
@@ -161,8 +162,8 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
     }
 
     const invoiceItems: SalesInvoiceItem[] = cart.map((c) => {
-      const linePrice = Number((c.qtyInBaseUnit * c.customUnitPrice).toFixed(2));
-      const lineCost = Number((c.qtyInBaseUnit * c.item.costPrice).toFixed(2));
+      const linePrice = multiplyMoney(c.qtyInBaseUnit, c.customUnitPrice);
+      const lineCost = multiplyMoney(c.qtyInBaseUnit, c.item.costPrice);
       const deductionNote =
         c.item.category === 'drink_recipe' && c.item.recipe
           ? `فك وصفة المشروب وخصم: ${c.item.recipe
@@ -181,13 +182,13 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
         unitCost: c.item.costPrice,
         totalPrice: linePrice,
         totalCost: lineCost,
-        profit: Number((linePrice - lineCost).toFixed(2)),
+        profit: sumMoney([linePrice, -lineCost]),
         deductionDetails: deductionNote,
       };
     });
 
     const totalCost = invoiceItems.reduce((s, i) => s + i.totalCost, 0);
-    const netProfit = Number((totalAmount - totalCost).toFixed(2));
+    const netProfit = sumMoney([totalAmount, -totalCost]);
     const paid =
       paymentMethod === 'نقدي' || paymentMethod === 'محفظة/انستا باي'
         ? totalAmount
@@ -205,7 +206,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
       totalCost,
       netProfit,
       paidAmount: paid,
-      remainingAmount: Number((totalAmount - paid).toFixed(2)),
+      remainingAmount: sumMoney([totalAmount, -paid]),
       paymentMethod,
       partnerName: currentPartnerName,
     });
@@ -451,7 +452,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                       />
                     </label>
                     <div className="text-sm font-extrabold text-gold [font-variant-numeric:tabular-nums]">
-                      {(c.qtyInBaseUnit * c.customUnitPrice).toFixed(2)} ج.م
+                      {multiplyMoney(c.qtyInBaseUnit, c.customUnitPrice).toFixed(2)} ج.م
                     </div>
                   </div>
                 </div>

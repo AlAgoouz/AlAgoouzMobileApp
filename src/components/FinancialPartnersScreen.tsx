@@ -1,16 +1,16 @@
-import React,{useState} from 'react';
+import { useState } from 'react';
 import {Users} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
-import {parseLocalizedNumber} from '../lib/cashierRows';
+import {parseDecimalInput} from '../lib/cashierRows';
 import type {Partner} from '../types/erp';
 
 export function FinancialPartnersScreen({partners,canEdit,onSave,onBack,onReports}:{partners:Partner[];canEdit:boolean;onSave:(next:Partner[])=>boolean;onBack:()=>void;onReports:()=>void}){
  const [draft,setDraft]=useState<Partner[]|null>(null),[shares,setShares]=useState<Record<string,string>>({}),[error,setError]=useState('');
- const totalShare=draft?.reduce((sum,partner)=>sum+(parseLocalizedNumber(shares[partner.id])??0),0);
+ const totalShare=draft?.reduce((sum,partner)=>sum+(parseDecimalInput(shares[partner.id])??0),0);
  const edit=()=>{setDraft(partners.map(p=>({...p})));setShares(Object.fromEntries(partners.map(p=>[p.id,String(p.sharePercent)])));setError('');};
  const save=()=>{
   if(!draft)return;
-  const next=draft.map(p=>({...p,name:p.name.trim(),sharePercent:parseLocalizedNumber(shares[p.id])??NaN,avatarLetter:partners.find(live=>live.id===p.id)?.name===p.name.trim()?p.avatarLetter:p.name.trim().charAt(0)}));
+  const next=draft.map(p=>({...p,name:p.name.trim(),sharePercent:parseDecimalInput(shares[p.id])??NaN,avatarLetter:partners.find(live=>live.id===p.id)?.name===p.name.trim()?p.avatarLetter:p.name.trim().charAt(0)}));
   if(next.some(p=>!p.name||!shares[p.id]?.trim()||!Number.isFinite(p.sharePercent)||p.sharePercent<0||p.sharePercent>100)||Math.abs(next.reduce((s,p)=>s+p.sharePercent,0)-100)>0.001){setError('أدخل أسماء صحيحة ونسبًا من صفر إلى 100، ومجموع الحصص يجب أن يساوي 100%');return;}
   // Rebase only the explicitly edited metadata. Financial totals may have moved
   // while this form was open and must never be replaced by the draft snapshot.

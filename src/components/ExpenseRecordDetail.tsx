@@ -1,4 +1,3 @@
-import React from 'react';
 import type {Expense} from '../types/erp';
 import {money} from '../lib/reporting';
 import {Modal} from './Modal';

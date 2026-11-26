@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function ScreenLoading({ label = 'جارٍ تحميل الشاشة…' }: { label?: string }) {
   return (

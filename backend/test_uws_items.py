@@ -54,6 +54,18 @@ class UwsItemsTests(unittest.TestCase):
             else:rows[index]=replacement
             with self.subTest(index=index,replacement=replacement),self.assertRaisesRegex(InvalidReport,code):self.parse(rows)
 
+    def test_ambiguous_weight_is_rejected_even_when_rows_and_total_match(self):
+        rows=['Menu Item Sales Report (UWS)\nDate Range 01 11 2026 - 01 11 2026',
+              '1234 Beans 1 100.00%', '100.00 100.00%', '1,500 KG 100.00%',
+              'TOTAL SLS 1 100.00', 'TOTAL WEIGHT 1,500 KG']
+        with self.assertRaisesRegex(InvalidReport, 'UWS_AMBIGUOUS_WEIGHT'):
+            self.parse(rows)
+        rows[3]='1.500 KG 100.00%'
+        with self.assertRaisesRegex(InvalidReport, 'UWS_AMBIGUOUS_WEIGHT'):
+            self.parse(rows)
+        rows[5]='TOTAL WEIGHT 1.500 KG'
+        self.assertEqual(self.parse(rows)['rows'][0]['quantity'], '1.500')
+
     def test_zero_price_does_not_automatically_turn_a_real_product_into_an_ignored_option(self):
         rows=['Menu Item Sales Report (UWS)\nDate Range 01 11 2026 - 01 11 2026',line('100099 Complimentary Water 2 100.00%'),line('0.00 0.00%'),line('TOTAL SLS 2 0.00')]
         result=self.parse(rows)

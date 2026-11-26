@@ -3,7 +3,7 @@ import {Plus, Receipt, Search, Trash2} from 'lucide-react';
 import {ActionButton} from './ActionButton';
 import {OperationHeader} from './OperationHeader';
 import {RecordPicker} from './RecordPicker';
-import {parseLocalizedNumber} from '../lib/cashierRows';
+import {parseDecimalInput} from '../lib/cashierRows';
 import {inventoryDeductions} from '../lib/inventory';
 import {Modal} from './Modal';
 import type {Customer, InventoryItem, SalesInvoice, SalesInvoiceItem} from '../types/erp';
@@ -19,7 +19,7 @@ interface InvoiceLine {
   price: string;
 }
 
-const numeric = (value: string) => parseLocalizedNumber(value) ?? NaN;
+const numeric = (value: string) => parseDecimalInput(value) ?? NaN;
 function quantityError(value: string) {
   const quantity = numeric(value);
   return Number.isFinite(quantity) && quantity > 0 ? '' : 'أدخل كمية أكبر من صفر.';

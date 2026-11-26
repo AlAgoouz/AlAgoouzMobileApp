@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import { useState } from 'react';
 import type {supplierPurchaseHistory} from '../lib/supplierPurchases';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 export function SupplierPurchasePanels({data,onOpenInvoice}:{data:ReturnType<typeof supplierPurchaseHistory>;onOpenInvoice?:(id:string)=>void}){

@@ -1,16 +1,17 @@
+import {multiplyMoney} from '../lib/money';
 import {Modal} from './Modal';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import {matchesRecordSearch} from '../lib/recordSearch';
 import {RecordTabs} from './RecordTabs';
 import {RecordPickerField} from './RecordPickerField';
-import {parseLocalizedNumber} from '../lib/cashierRows';
+import {parseDecimalInput} from '../lib/cashierRows';
 import {Flame as HeaderFlame} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
 import {productionNeeds} from '../lib/inventory';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
 import {unitLabel as displayUnit} from '../lib/units';
 import React, { useEffect, useState, useMemo } from "react";
-import {Flame, Plus, Trash2, CheckCircle2, AlertTriangle, Layers, History, Scale} from 'lucide-react';
+import { Flame, Plus, Trash2, CheckCircle2, AlertTriangle, Layers } from 'lucide-react';
 import {
   InventoryItem,
   ProductionBatch,
@@ -69,7 +70,7 @@ export const ProductionAndRecipesScreen: React.FC<
     blendItems[0]?.id || "",
   );
   const [produceQuantity, setProduceQuantity] = useState('10');
-  const produceQtyKg = parseLocalizedNumber(produceQuantity) ?? 0;
+  const produceQtyKg = parseDecimalInput(produceQuantity) ?? 0;
   const [produceNotes, setProduceNotes] = useState<string>("");
   const [bannerMessage, setBannerMessage] = useState<{
     type: "success" | "error";
@@ -88,7 +89,7 @@ export const ProductionAndRecipesScreen: React.FC<
       const needs=productionNeeds(selectedBlend,produceQtyKg,items,{checkStock:false});
       return [...needs].map(([id,totalRequiredInBase])=>{
         const rawItem=items.find(i=>i.id===id)!;
-        return {ingredientId:id,ingredientName:rawItem.name,perKgQty:totalRequiredInBase/produceQtyKg,perKgUnit:rawItem.baseUnit as UnitType,rawItem,baseUnit:rawItem.baseUnit,totalRequiredInBase,totalRequiredGrams:Math.round(totalRequiredInBase*1000),availableInBase:rawItem.stock,isEnough:rawItem.stock+0.0000001>=totalRequiredInBase,invalidUnit:false,cost:Number((totalRequiredInBase*rawItem.costPrice).toFixed(2))};
+        return {ingredientId:id,ingredientName:rawItem.name,perKgQty:totalRequiredInBase/produceQtyKg,perKgUnit:rawItem.baseUnit as UnitType,rawItem,baseUnit:rawItem.baseUnit,totalRequiredInBase,totalRequiredGrams:Math.round(totalRequiredInBase*1000),availableInBase:rawItem.stock,isEnough:rawItem.stock+0.0000001>=totalRequiredInBase,invalidUnit:false,cost:multiplyMoney(Number(totalRequiredInBase.toFixed(6)),rawItem.costPrice)};
       });
     }catch{return [];}
   },[selectedBlend,produceQtyKg,items]);

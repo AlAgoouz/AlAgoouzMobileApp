@@ -1,4 +1,3 @@
-import React from 'react';
 import { FolderSync } from 'lucide-react';
 import { OperationHeader } from './OperationHeader';
 import { ImportJobsPanel } from './ImportJobsPanel';

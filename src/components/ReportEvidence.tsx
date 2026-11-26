@@ -1,4 +1,4 @@
-import React,{useMemo,useState} from 'react';
+import { useMemo, useState } from 'react';
 import {Modal} from './Modal';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import {buildReport,money,previousReportRange,type ReportRange} from '../lib/reporting';

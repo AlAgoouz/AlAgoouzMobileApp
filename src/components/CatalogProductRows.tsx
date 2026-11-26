@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import { useState } from 'react';
 import {Pencil,Trash2,ChevronDown} from 'lucide-react';
 import {Money} from './Money';
 import type {InventoryItem} from '../types/erp';

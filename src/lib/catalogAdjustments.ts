@@ -1,3 +1,4 @@
+import {multiplyMoney} from './money';
 import type {InventoryItem,StocktakingItemVariance} from '../types/erp';
 import type {StoreState} from './storeState';
 import {businessDate} from './dates';
@@ -33,7 +34,7 @@ export function adjustCatalogItem(state:StoreState,id:string,patch:Partial<Inven
   const previousStock=isRecipeOnUse(before)?0:before.stock;
   if(!isRecipeOnUse(next)&&Math.abs(next.stock-previousStock)>0.0000001){
     const difference=Number((next.stock-previousStock).toFixed(6));
-    const line:StocktakingItemVariance={itemId:id,itemName:next.name,baseUnit:next.baseUnit,systemStock:previousStock,actualStock:next.stock,difference,unitCost:next.costPrice,financialDifference:Number((difference*next.costPrice).toFixed(2))};
+    const line:StocktakingItemVariance={itemId:id,itemName:next.name,baseUnit:next.baseUnit,systemStock:previousStock,actualStock:next.stock,difference,unitCost:next.costPrice,financialDifference:multiplyMoney(difference,next.costPrice)};
     records=[{id:crypto.randomUUID(),auditNumber:'ADJ-'+crypto.randomUUID().slice(0,8),date:businessDate(),partnerName:actor,notes:'تعديل رصيد الصنف من الكتالوج',totalShortageValue:Math.max(0,-line.financialDifference),totalSurplusValue:Math.max(0,line.financialDifference),netVarianceValue:line.financialDifference,itemsAudited:[line]},...records];
   }
   return {...state,items:recalculateRecipeCosts(state.items.map((item)=>item.id===id?next:item)),stocktakingRecords:records};

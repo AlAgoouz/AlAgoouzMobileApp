@@ -1,4 +1,4 @@
-import React, {useMemo} from 'react';
+import { useMemo } from 'react';
 import type {CashierDay, InventoryItem} from '../types/erp';
 import {cashierDayImpact} from '../lib/cashierDays';
 import {money} from '../lib/reporting';
