@@ -31,3 +31,7 @@ export function parseDecimalInput(value: unknown): number | undefined {
 export function decimalValue(value: unknown): number {
   return parseDecimalInput(value) ?? NaN;
 }
+
+export function hasInvalidNumbers(values: (number | undefined)[]): boolean {
+  return values.some(value => value !== undefined && (!Number.isFinite(value) || value < 0));
+}

@@ -260,9 +260,8 @@ it.skipIf(!active)('updates a blend recipe without rewriting its inventory avera
 it.skipIf(!active)('drops withdrawn price metadata from stale clients and restores without altering manually entered product prices',()=>{
  const existing=stockState();seed(existing);
  const pending={...existing,catalogNameDrafts:[nameDraft]},stale={...pending,catalogNameDrafts:[{...nameDraft,legacyPrices:{purchasePrice:45,salePrice:65,sourceKind:'github_seed'}}]};
- // Reproduce data written before the compensating migration in this disposable
- // validation database. All triggers are re-enabled on transaction completion.
- sql(`update bon_erp_private.erp_documents set payload=${literal(stale.catalogNameDrafts[0])} where store_id='main_store' and section='catalog_name_drafts';`);
+ // Seed the historic payload directly in the isolated record table.
+ sql(`insert into bon_erp_private.erp_documents(store_id,section,document_id,position,payload) values('main_store','catalog_name_drafts','${nameDraft.id}',1,${literal(stale.catalogNameDrafts[0])});`);
  const payload={...toCloud(pending),catalog_name_drafts:stale.catalogNameDrafts};
  const result=readJson(`select public.bon_erp_save_store(0,${literal(payload)},'${crypto.randomUUID()}');select jsonb_build_object('drafts',catalog_name_drafts,'items',items,'partners',partners,'sales',sales_invoices,'expenses',expenses) from public.bon_elagouz_store`);
  expect(result).toEqual({drafts:pending.catalogNameDrafts,items:existing.items,partners:existing.partners,sales:[],expenses:[]});
