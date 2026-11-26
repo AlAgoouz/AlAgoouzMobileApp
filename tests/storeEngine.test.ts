@@ -1,3 +1,4 @@
+import {packOfflineJournal, unpackOfflineJournal} from '../src/lib/offlineJournal';
 import {StoreWriteFailure} from '../src/lib/storeErrors';
 import { it, expect, vi, afterEach } from 'vitest';
 import { StoreEngine, type StoreTransport } from '../src/lib/storeEngine';
@@ -473,11 +474,11 @@ it('holds a sent payload intact when the network drops and additional edits arri
   engine.replace(emptyStore);
   const persisted=journal.mock.lastCall![0];
   expect(persisted.pending.id).toBe(save.mock.calls[0][2]);
-  expect(persisted.queued.id).not.toBe(persisted.pending.id);
+  expect(persisted.queued[0].id).not.toBe(persisted.pending.id);
   engine.setConnectivity(true);
   await engine.reconnect();
   expect(save.mock.calls.map(call=>call.slice(1,3))).toEqual([
-    [1,persisted.pending.id],[1,persisted.pending.id],[2,persisted.queued.id]
+    [1,persisted.pending.id],[1,persisted.pending.id],[2,persisted.queued[0].id]
   ]);
 });
 
@@ -495,4 +496,32 @@ it('keeps a conflicting offline draft for review instead of applying it to a new
   expect(engine.hasPending).toBe(true);
   expect(journal.mock.lastCall![0]).not.toBeNull();
   expect(save).toHaveBeenCalledTimes(1);
+});
+
+
+it('keeps multiple offline transactions separate and advances their versions in order',async()=>{
+  vi.useFakeTimers();
+  const journal=vi.fn();
+  const save=vi.fn().mockResolvedValueOnce(6).mockResolvedValueOnce(7).mockResolvedValueOnce(8);
+  const transport={load:async()=>({state:emptyStore,version:5}),save};
+  const engine=new StoreEngine(transport,undefined,undefined,undefined,journal);
+  await engine.load();
+  engine.setConnectivity(false);
+  for(const id of ['one','two','three']){
+    engine.field('auditLogs',current=>[{id,timestamp:'2026-11-26T00:00:00Z',partnerName:'Owner',actionType:'شراء',description:id},...current]);
+  }
+  const draft=structuredClone(journal.mock.lastCall![0]);
+  const packed=packOfflineJournal(draft);
+  expect(packed.queued[0].changes.auditLogs.upsert.map(row=>row.id)).toEqual(['two']);
+  expect(packed.queued[0]).not.toHaveProperty('state');
+  const saved=unpackOfflineJournal(JSON.parse(JSON.stringify(packed)));
+  expect(saved).toEqual(draft);
+  expect(saved.queued).toHaveLength(2);
+  const reopened=new StoreEngine(transport,undefined,undefined,undefined,journal);
+  reopened.resumeJournal(saved);
+  await reopened.reconnect();
+  expect(save.mock.calls.map(call=>[call[1],call[0].auditLogs.map((entry:{id:string})=>entry.id)])).toEqual([
+    [5,['one']],[6,['two','one']],[7,['three','two','one']],
+  ]);
+  expect(reopened.snapshot.status).toBe('ready');
 });

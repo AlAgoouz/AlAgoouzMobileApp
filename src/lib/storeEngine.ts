@@ -41,7 +41,7 @@ function activeAuditWindow(state: StoreState): StoreState {
 
 type QueuedWrite = {state: StoreState; id: string; queueId?: string};
 type PendingWrite = QueuedWrite & {version: number; sent?: boolean; restore?: boolean; cashierAttachment?: boolean};
-export type StoreJournal = {pending: PendingWrite; confirmed: StoreState; queued?: QueuedWrite};
+export type StoreJournal = {pending: PendingWrite; confirmed: StoreState; queued: QueuedWrite[]};
 
 export class StoreEngine {
   snapshot: StoreSnapshot = {
@@ -55,7 +55,7 @@ export class StoreEngine {
   private retryCount=0;
   private canRetryOnReconnect = false;
   private pending: PendingWrite | undefined;
-  private queued: QueuedWrite | undefined;
+  private queued: QueuedWrite[] = [];
   private online = true;
   private journalActive = false;
   private epoch = 0;
@@ -85,7 +85,7 @@ export class StoreEngine {
   }
   get isOffline() { return !this.online; }
 
-  private journal(pending: PendingWrite, queued: QueuedWrite | undefined, confirmed = this.confirmedState) {
+  private journal(pending: PendingWrite, queued: QueuedWrite[], confirmed = this.confirmedState) {
     this.saveJournal({pending, queued, confirmed});
     this.journalActive = true;
   }
@@ -97,7 +97,7 @@ export class StoreEngine {
         (this.snapshot.status === 'error' && this.canRetryOnReconnect))) {
       clearTimeout(this.timer);
       let recoveryWarning=this.snapshot.recoveryWarning;
-      if(this.pending && !this.pending.restore && !this.pending.cashierAttachment && !this.pending.queueId && !this.queued?.queueId){
+      if(this.pending && !this.pending.restore && !this.pending.cashierAttachment && !this.pending.queueId && !this.queued.some(write=>write.queueId)){
         try { this.journal(this.pending,this.queued); }
         catch(error) { recoveryWarning=(error as Error).message; }
       }
@@ -112,25 +112,28 @@ export class StoreEngine {
     const {pending, queued} = journal;
     if (!Number.isSafeInteger(pending.version) || pending.version < 0 ||
         !/^[0-9a-f-]{36}$/i.test(pending.id) ||
-        (queued && !/^[0-9a-f-]{36}$/i.test(queued.id)) ||
-        pending.restore || pending.cashierAttachment || pending.queueId || queued?.queueId) {
+        !Array.isArray(queued) || queued.some(write=>write.queueId || !/^[0-9a-f-]{36}$/i.test(write.id)) ||
+        pending.restore || pending.cashierAttachment || pending.queueId) {
       throw Error('مسودة المزامنة غير صالحة');
     }
     const confirmed = validateStore(journal.confirmed);
     const state = validateStore(pending.state);
     this.authorize(confirmed, state);
     validateNewInvoiceQuantities(confirmed, state);
-    const next = queued && validateStore(queued.state);
-    if (next) {
-      this.authorize(state, next);
-      validateNewInvoiceQuantities(state, next);
-    }
+    let projected=state;
+    const reviewed=queued.map(write=>{
+      const next=validateStore(write.state);
+      this.authorize(projected,next);
+      validateNewInvoiceQuantities(projected,next);
+      projected=next;
+      return {...write,state:next};
+    });
     this.confirmedState = confirmed;
     this.pending = {...pending, state};
-    this.queued = queued && next ? {...queued, state: next} : undefined;
+    this.queued = reviewed;
     this.hydrated = true;
     this.journalActive = true;
-    this.publish({state: next ?? state, version: pending.version,
+    this.publish({state: projected, version: pending.version,
       status: this.online ? 'dirty' : 'offline', error: ''});
     return true;
   }
@@ -155,7 +158,7 @@ export class StoreEngine {
         this.journalActive = false;
       }
       this.pending = undefined;
-      this.queued = undefined;
+      this.queued = [];
       this.hydrated = true;
       this.confirmedState = state;
       this.publish({
@@ -180,7 +183,7 @@ export class StoreEngine {
     this.retryCount=0;
     clearTimeout(this.timer);
     this.pending = undefined;
-    this.queued = undefined;
+    this.queued = [];
     this.flushInFlight = undefined;
     this.refreshInFlight = undefined;
     this.canRetryOnReconnect = false;
@@ -247,8 +250,9 @@ export class StoreEngine {
       return;
     }
     const saving = this.snapshot.status === 'saving';
-    const keepSent = saving || this.pending?.sent === true;
-    const draft = keepSent ? this.queued : this.pending;
+    const sequential = !this.online || this.journalActive;
+    const keepPending = saving || this.pending?.sent === true || (sequential && Boolean(this.pending));
+    const draft = keepPending ? (sequential ? undefined : this.queued[0]) : this.pending;
     if (queueId && ((saving && queueId === this.pending?.queueId) ||
       (draft?.queueId && queueId !== draft.queueId)))
       throw new Error('انتظر تأكيد حفظ تقرير الكاشير الحالي قبل إرفاق تقرير آخر');
@@ -257,10 +261,10 @@ export class StoreEngine {
     const validated = validateStore(state);
     if (!restore) validateNewInvoiceQuantities(this.snapshot.state, validated);
     const next = {state: validated, id: draft?.id ?? crypto.randomUUID(), queueId: queueId ?? draft?.queueId};
-    const pending = keepSent && this.pending ? this.pending :
+    const pending = keepPending && this.pending ? this.pending :
       {...next, version: this.snapshot.version, cashierAttachment, restore};
-    const queued = keepSent ? next : undefined;
-    if ((!this.online || this.journalActive) && !pending.restore && !pending.cashierAttachment && !pending.queueId && !queued?.queueId)
+    const queued = keepPending ? (sequential ? [...this.queued,next] : [next]) : [];
+    if (sequential && !pending.restore && !pending.cashierAttachment && !pending.queueId && !queued.some(write=>write.queueId))
       this.journal(pending, queued);
     let recoveryWarning:string|undefined;
     try { this.preserve(validated); }
@@ -349,18 +353,18 @@ export class StoreEngine {
       if (epoch !== this.epoch) return;
       this.retryCount=0;
       const confirmed=activeAuditWindow(pending.state);
-      if (this.queued) {
-        const state=this.queued.state;
+      if (this.queued.length) {
         const archived=new Set(pending.state.auditLogs.slice(ACTIVE_AUDIT_COUNT).map(entry=>entry.id));
-        const next = {...this.queued, version, state: archived.size
-          ? {...state,auditLogs:state.auditLogs.filter(entry=>!archived.has(entry.id))} : state};
-
-        if (this.journalActive) this.journal(next, undefined, confirmed);
+        const [first,...remaining] = this.queued.map(write => archived.size
+          ? {...write,state:{...write.state,auditLogs:write.state.auditLogs.filter(entry=>!archived.has(entry.id))}}
+          : write);
+        const next={...first,version};
+        if (this.journalActive) this.journal(next, remaining, confirmed);
         this.confirmedState = confirmed;
         this.pending = next;
-        this.queued = undefined;
+        this.queued = remaining;
         this.publish({
-          state: next.state, version,
+          state: remaining[remaining.length-1]?.state ?? next.state, version,
           status: this.online ? 'dirty' : 'offline',
           error: '', recoveryWarning: this.snapshot.recoveryWarning,
         });
@@ -396,7 +400,7 @@ export class StoreEngine {
       }
       let recoveryWarning=this.snapshot.recoveryWarning;
       if(!this.online && this.canRetryOnReconnect && !pending.restore && !pending.cashierAttachment &&
-         !pending.queueId && !this.queued?.queueId){
+         !pending.queueId && !this.queued.some(write=>write.queueId)){
         try {this.journal(pending,this.queued);}
         catch(failure) {recoveryWarning=(failure as Error).message;}
       }
@@ -474,7 +478,7 @@ export class StoreEngine {
     }
   }
   get hasPending() {
-    return Boolean(this.pending || this.queued);
+    return Boolean(this.pending || this.queued.length);
   }
   get hasLoaded() {
     return this.hydrated;
