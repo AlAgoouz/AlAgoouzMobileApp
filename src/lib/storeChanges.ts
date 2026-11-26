@@ -28,3 +28,35 @@ export function storeChanges<T extends Record<string, unknown>>(before: T, after
   }
   return changes;
 }
+
+export function applyStoreChanges<T extends Record<string,unknown>>(
+  before: T,
+  changes: Record<string, CollectionChange>,
+): T {
+  const after: Record<string,unknown> = {...before};
+  for(const [field,change] of Object.entries(changes)){
+    if(!Object.prototype.hasOwnProperty.call(before,field) || !Array.isArray(before[field]) ||
+       !Array.isArray(change?.upsert) || !Array.isArray(change?.remove)){
+      throw Error('مسودة المزامنة تحتوي تغييرات غير صالحة');
+    }
+    const rows=before[field] as Row[];
+    const previousIds=new Set(rows.map(row=>row.id));
+    const removed=new Set(change.remove);
+    const updated=new Map(change.upsert.map(row=>[row.id,row]));
+    const natural=[
+      ...change.upsert.filter(row=>!previousIds.has(row.id)),
+      ...rows.filter(row=>!removed.has(row.id)).map(row=>updated.get(row.id)??row),
+    ];
+    if(!change.order){
+      after[field]=natural;
+      continue;
+    }
+    const byId=new Map(natural.map(row=>[row.id,row]));
+    if(!Array.isArray(change.order) || change.order.length!==natural.length ||
+       new Set(change.order).size!==natural.length || change.order.some(id=>!byId.has(id))){
+      throw Error('ترتيب سجلات مسودة المزامنة غير صالح');
+    }
+    after[field]=change.order.map(id=>byId.get(id)!);
+  }
+  return after as T;
+}

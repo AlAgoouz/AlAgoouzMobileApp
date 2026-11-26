@@ -1,3 +1,5 @@
+import {DecimalNumberField} from './DecimalNumberField';
+import {decimalValue} from '../lib/decimalInput';
 import {multiplyMoney,roundMoney,sumMoney} from '../lib/money';
 import {unitLabel as displayUnit} from '../lib/units';
 import {ShoppingBag as HeaderShoppingBag} from 'lucide-react';
@@ -113,7 +115,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   const [showSupplierPicker,setShowSupplierPicker]=useState(false);
   const [showItemPickerModal, setShowItemPickerModal] = useState(false);
   const [taxInput,setTaxInput]=useState('0');
-  const taxAmount=Number(taxInput);
+  const taxAmount=decimalValue(taxInput);
   const [compareModalItem, setCompareModalItem] =
     useState<InventoryItem | null>(null);
 
@@ -274,6 +276,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   }
 
   const handleStartNewInvoice = () => {
+    invalidCartNumbers.current.clear();
     setCart([]);
     setSelectedSupplierId(suppliers[0]?.id || "");
     setInvoiceDate(businessDate());
@@ -281,7 +284,17 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
     setViewMode("create");
   };
 
+  const invalidCartNumbers = useRef(new Set<string>());
+  const trackCartNumber = (id: string, field: 'quantity'|'price', valid: boolean) => {
+    const key = id + ':' + field;
+    if (valid) invalidCartNumbers.current.delete(key);
+    else invalidCartNumbers.current.add(key);
+  };
   const handleSave = () => {
+    if (cart.some(line => invalidCartNumbers.current.has(line.item.id+':quantity') || invalidCartNumbers.current.has(line.item.id+':price'))) {
+      setInvoiceError('راجع الكمية والسعر. اكتب الرقم بنقطة عشرية أو بدون فاصل آلاف.');
+      return;
+    }
     if (cart.length === 0) return;
     setInvoiceError("");
     if (
@@ -289,10 +302,10 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
         (c) =>
           !c.newRetailPrice.trim() ||
           !c.newWholesalePrice.trim() ||
-          !Number.isFinite(Number(c.newRetailPrice)) ||
-          Number(c.newRetailPrice) < 0 ||
-          !Number.isFinite(Number(c.newWholesalePrice)) ||
-          Number(c.newWholesalePrice) < 0,
+          !Number.isFinite(decimalValue(c.newRetailPrice)) ||
+          decimalValue(c.newRetailPrice) < 0 ||
+          !Number.isFinite(decimalValue(c.newWholesalePrice)) ||
+          decimalValue(c.newWholesalePrice) < 0,
       )
     ) {
       setInvoiceError("أكمل أسعار البيع بأرقام صحيحة غير سالبة");
@@ -330,8 +343,8 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
         unit:
           displayUnit(c.item.baseUnit),
         purchasePrice: c.purchasePrice,
-        newRetailPrice: Number(c.newRetailPrice),
-        newWholesalePrice: Number(c.newWholesalePrice),
+        newRetailPrice: decimalValue(c.newRetailPrice),
+        newWholesalePrice: decimalValue(c.newWholesalePrice),
         previousLastPrice: c.item.lastPurchasePrice,
         previousWacCost: c.item.costPrice,
         cheapestSupplierPrice: cheapest.price,
@@ -586,7 +599,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                   </div>
                 </dl>
                 <label className="block">الضريبة (مبلغ منفصل)
-                  <input aria-label="ضريبة فاتورة الشراء" type="number" min="0" step="0.01" value={taxInput} onChange={e=>setTaxInput(e.target.value)} className="operation-input font-black" />
+                  <input aria-label="ضريبة فاتورة الشراء" type="text" inputMode="decimal" value={taxInput} onChange={e=>setTaxInput(e.target.value)} className="operation-input font-black" />
                 </label>
                 <p className="operation-note">مدفوعة بالكامل — لا تُضاف مديونية جديدة للمورد.</p>
               </section>
@@ -719,22 +732,12 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                               </label>
                               <div className="flex items-center gap-1 mt-1">
                                 <Edit3 className="w-3.5 h-3.5 text-gold shrink-0" aria-hidden="true" />
-                                <input
+                                <DecimalNumberField
                                   id={controlId + "-price"}
                                   name="purchase-price"
-                                  type="number"
-                                  inputMode="decimal"
-                                  min="0"
-                                  step="any"
                                   value={purchasePrice}
-                                  onChange={(e) =>
-                                    updateCartItem(item.id, {
-                                      purchasePrice: Math.max(
-                                        0,
-                                        parseFloat(e.target.value) || 0,
-                                      ),
-                                    })
-                                  }
+                                  onValue={number => updateCartItem(item.id, {purchasePrice: number})}
+                                  onValidity={valid => trackCartNumber(item.id, 'price', valid)}
                                   className="w-full text-sm font-black text-ink-strong bg-transparent"
                                 />
                                 <span className="text-xs text-ink font-bold">
@@ -763,22 +766,13 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                                 >
                                   <Minus className="w-4 h-4" aria-hidden="true" />
                                 </button>
-                                <input
+                                <DecimalNumberField
                                   id={controlId + "-quantity"}
                                   name="purchase-quantity"
-                                  type="number"
-                                  inputMode="decimal"
-                                  step="any"
-                                  min="0.1"
                                   value={quantity}
-                                  onChange={(e) =>
-                                    updateCartItem(item.id, {
-                                      quantity: Math.max(
-                                        0.1,
-                                        parseFloat(e.target.value) || 0.1,
-                                      ),
-                                    })
-                                  }
+                                  onValue={number => updateCartItem(item.id, {quantity: number})}
+                                  positive
+                                  onValidity={valid => trackCartNumber(item.id, 'quantity', valid)}
                                   className="w-16 text-center font-black text-sm text-ink-strong bg-transparent"
                                 />
                                 <button
@@ -804,7 +798,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                                 <Tag className="w-3.5 h-3.5 text-gold" aria-hidden="true" />
                                 <span>بيع قطاعي:</span>
                                 <input
-                                  type="number"
+                                  type="text" inputMode="decimal"
                                   value={newRetailPrice}
                                   onChange={(e) =>
                                     updateCartItem(item.id, {
@@ -817,7 +811,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                               <label className="flex items-center gap-1.5 text-xs font-bold text-ink">
                                 <span>بيع جملة:</span>
                                 <input
-                                  type="number"
+                                  type="text" inputMode="decimal"
                                   value={newWholesalePrice}
                                   onChange={(e) =>
                                     updateCartItem(item.id, {

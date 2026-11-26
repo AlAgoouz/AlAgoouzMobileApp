@@ -1,3 +1,4 @@
+import {decimalValue} from '../lib/decimalInput';
 import {Modal} from './Modal';
 import { useRef, useState } from 'react';
 import type {InventoryItem,ItemCategory,RecipeProductDefinition} from '../types/erp';
@@ -23,16 +24,16 @@ export function ItemDefinitionModal({items,onSave,onClose,allowedCategories,init
   try{
    if(!name.trim())throw Error('اسم الصنف مطلوب');
    if(!category||!actualUnit)throw Error('اختر نوع الصنف ووحدته الأساسية');
-   if(![retail,...(!onUse?[stock,minimum]:[]),...(!needsRecipe?[cost]:[])].every(v=>v.trim()&&Number.isFinite(Number(v))&&Number(v)>=0))throw Error('أكمل الأرقام بقيم صحيحة غير سالبة؛ أدخل صفرًا فقط عند تأكيده');
+   if(![retail,...(!onUse?[stock,minimum]:[]),...(!needsRecipe?[cost]:[])].every(v=>v.trim()&&Number.isFinite(decimalValue(v))&&decimalValue(v)>=0))throw Error('أكمل الأرقام بقيم صحيحة غير سالبة؛ أدخل صفرًا فقط عند تأكيده');
    const finalCode=code.trim()||nextItemCode([...items,...reservedCodes.map(code=>({code}))],'IT',1);
    if(items.some(i=>i.code.trim().toUpperCase()===finalCode.toUpperCase())||submittedCode.current!==finalCode&&reservedCodes.some(c=>c.toUpperCase()===finalCode.toUpperCase()))throw Error('كود الصنف مستخدم أو محجوز لمنتج تحت الاستكمال');
    setCode(finalCode);setSaving(true);
    if(needsRecipe){
     if(!onSaveRecipeDefinition)throw Error('عرّف المنتج من قسم المنتجات ثم أكمل مكونات الوصفة من قسم الوصفات');
     submittedCode.current=finalCode;
-    await onSaveRecipeDefinition(draftId??newDraftId.current,name.trim(),{code:finalCode,category:category as RecipeProductDefinition['category'],baseUnit:actualUnit,retailPrice:Number(retail),openingStock:onUse?0:Number(stock),minStock:onUse?0:Number(minimum)});
+    await onSaveRecipeDefinition(draftId??newDraftId.current,name.trim(),{code:finalCode,category:category as RecipeProductDefinition['category'],baseUnit:actualUnit,retailPrice:decimalValue(retail),openingStock:onUse?0:decimalValue(stock),minStock:onUse?0:decimalValue(minimum)});
    }else{
-    const costPrice=Number(cost),accepted=await onSave({code:finalCode,name:name.trim(),category,baseUnit:actualUnit,stock:Number(stock),openingStock:Number(stock),minStock:Number(minimum),costPrice,lastPurchasePrice:costPrice,retailPrice:Number(retail),wholesalePrice:0,canSellDirectly:true,hasRecipe:false,recipe:[],supplierPrices:[]});
+    const costPrice=decimalValue(cost),accepted=await onSave({code:finalCode,name:name.trim(),category,baseUnit:actualUnit,stock:decimalValue(stock),openingStock:decimalValue(stock),minStock:decimalValue(minimum),costPrice,lastPurchasePrice:costPrice,retailPrice:decimalValue(retail),wholesalePrice:0,canSellDirectly:true,hasRecipe:false,recipe:[],supplierPrices:[]});
     if(accepted===false)throw Error('لم يتم حفظ الصنف؛ راجع البيانات والتنبيه');
    }
    onClose();
@@ -44,9 +45,9 @@ export function ItemDefinitionModal({items,onSave,onClose,allowedCategories,init
   <label className="block">كود الصنف (اختياري)<input className={inputClass} value={code} onChange={e=>setCode(e.target.value)}/></label>
   {category!=='drink_recipe'&&category!=='manufactured_blend'&&<label className="block">الوحدة الأساسية<select className={inputClass} value={baseUnit} onChange={e=>setBaseUnit(e.target.value as InventoryItem['baseUnit'])}>{requireDetails&&<option value="">اختر الوحدة</option>}<option value="kg">كيلو</option><option value="piece">قطعة</option><option value="count">عدد</option><option value="liter">لتر</option></select></label>}
   {needsRecipe&&<p className="record-state">{category==='drink_recipe'?'وصفة لكل كوب؛ مكوناتها تُخصم عند البيع، دون إنتاج.':category==='manufactured_blend'?'وصفة لكل كيلو توليفة؛ مكوناتها تُخصم عند تنفيذ الإنتاج.':'وصفة لكل وحدة تحويجة؛ تُخصم المكونات عند استخدامها أو بيعها.'} ستُدخل المكونات وتحسب تكلفتها في قسم الوصفات، ويظل المنتج غير جاهز للاستخدام حتى اعتمادها.</p>}
-  {!onUse&&<><label className="block">الرصيد الافتتاحي<input className={inputClass} type="number" min="0" step="any" value={stock} onChange={e=>setStock(e.target.value)}/></label><label className="block">حد النواقص<input className={inputClass} type="number" min="0" step="any" value={minimum} onChange={e=>setMinimum(e.target.value)}/></label></>}
-  {!needsRecipe&&<label className="block">تكلفة الوحدة قبل الضريبة<input className={inputClass} type="number" min="0" step="any" value={cost} onChange={e=>setCost(e.target.value)}/></label>}
-  <label className="block">سعر البيع المباشر<input className={inputClass} type="number" min="0" step="any" value={retail} onChange={e=>setRetail(e.target.value)}/></label>
+  {!onUse&&<><label className="block">الرصيد الافتتاحي<input className={inputClass} type="text" inputMode="decimal" value={stock} onChange={e=>setStock(e.target.value)}/></label><label className="block">حد النواقص<input className={inputClass} type="text" inputMode="decimal" value={minimum} onChange={e=>setMinimum(e.target.value)}/></label></>}
+  {!needsRecipe&&<label className="block">تكلفة الوحدة قبل الضريبة<input className={inputClass} type="text" inputMode="decimal" value={cost} onChange={e=>setCost(e.target.value)}/></label>}
+  <label className="block">سعر البيع المباشر<input className={inputClass} type="text" inputMode="decimal" value={retail} onChange={e=>setRetail(e.target.value)}/></label>
   {category==='manufactured_blend'&&<p className="operation-note">سعر الجملة يُكتب يدويًا في كل فاتورة. الرصيد الافتتاحي يُضاف عند استكمال الوصفة فقط.</p>}
   {error&&<p role="alert" className="text-red-700">{error}</p>}
  </fieldset></Modal>;

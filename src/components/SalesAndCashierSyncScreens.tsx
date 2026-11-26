@@ -1,9 +1,11 @@
+import {DecimalNumberField} from './DecimalNumberField';
+import {decimalValue} from '../lib/decimalInput';
 import {multiplyMoney, sumMoney} from '../lib/money';
 import { unitLabel as displayUnit } from '../lib/units';
 import { ReceiptText as HeaderReceiptText, FolderSync as HeaderFolderSync } from 'lucide-react';
 import { OperationHeader } from './OperationHeader';
 import { businessDate } from '../lib/dates';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   ShoppingBag,
   Users,
@@ -139,14 +141,24 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
     [cart],
   );
 
-  const discount = Math.min(Math.max(0, parseFloat(discountInput) || 0), subtotal);
+  const discount = Math.min(Math.max(0, decimalValue(discountInput) || 0), subtotal);
   const totalAmount = Math.max(0, subtotal - discount);
 
+  const invalidCartNumbers = useRef(new Set<string>());
+  const trackCartNumber = (id: string, field: 'quantity'|'price', valid: boolean) => {
+    const key = id + ':' + field;
+    if (valid) invalidCartNumbers.current.delete(key);
+    else invalidCartNumbers.current.add(key);
+  };
   const handleCompleteSale = () => {
+    if (cart.some(line => invalidCartNumbers.current.has(line.item.id+':quantity') || invalidCartNumbers.current.has(line.item.id+':price'))) {
+      setSaleError('راجع الكمية والسعر. اكتب الرقم بنقطة عشرية أو بدون فاصل آلاف.');
+      return;
+    }
     if (cart.length === 0) return;
     setSaleError('');
-    const enteredDiscount = Number(discountInput);
-    const enteredPaid = Number(paidAmountInput);
+    const enteredDiscount = decimalValue(discountInput);
+    const enteredPaid = paidAmountInput.trim() ? decimalValue(paidAmountInput) : 0;
     if (!discountInput.trim() || !Number.isFinite(enteredDiscount) || enteredDiscount < 0 || enteredDiscount > subtotal) {
       setSaleError(`أدخل خصمًا صحيحًا بين صفر و${subtotal.toFixed(2)} ج.م`);
       return;
@@ -192,7 +204,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
     const paid =
       paymentMethod === 'نقدي' || paymentMethod === 'محفظة/انستا باي'
         ? totalAmount
-        : Math.min(totalAmount, Math.max(0, parseFloat(paidAmountInput) || 0));
+        : enteredPaid;
 
     onSaveSale({
       date: businessDate(),
@@ -415,12 +427,10 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="flex items-center gap-1.5 text-xs text-ink-default font-bold">
                       <span>الكمية ({displayUnit(c.item.baseUnit)}):</span>
-                      <input
-                        type="number"
-                        step="0.125"
+                      <DecimalNumberField
                         value={c.qtyInBaseUnit}
-                        onChange={(e) => {
-                          const val = Math.max(0.05, parseFloat(e.target.value) || 0.125);
+                        onValue={(number) => {
+                          const val = number;
                           setCart((prev) =>
                             prev.map((x) =>
                               x.item.id === c.item.id
@@ -436,18 +446,20 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                             ),
                           );
                         }}
+                        positive
+                        onValidity={valid => trackCartNumber(c.item.id, 'quantity', valid)}
                         className="w-20 min-h-[44px] border border-line-control rounded-sm px-2 py-1 text-xs font-extrabold text-center bg-surface-control"
                       />
                     </label>
                     <label className="flex items-center gap-1.5 text-xs text-ink-default font-bold">
                       <span>السعر:</span>
-                      <input
-                        type="number"
+                      <DecimalNumberField
                         value={c.customUnitPrice}
-                        onChange={(e) => {
-                          const p = Math.max(0, parseFloat(e.target.value) || 0);
+                        onValue={(number) => {
+                          const p = number;
                           setCart((prev) => prev.map((x) => (x.item.id === c.item.id ? { ...x, customUnitPrice: p } : x)));
                         }}
+                        onValidity={valid => trackCartNumber(c.item.id, 'price', valid)}
                         className="w-20 min-h-[44px] border border-line-control rounded-sm px-2 py-1 text-xs font-extrabold text-center bg-surface-control"
                       />
                     </label>
@@ -463,7 +475,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
               <label>
                 خصم خاص على الفاتورة (ج.م)
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   value={discountInput}
                   onChange={(e) => setDiscountInput(e.target.value)}
                   className="operation-input"
@@ -488,7 +500,7 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                 <label className="text-xs font-bold text-status-warn">
                   المبلغ المدفوع تحت الحساب الآن:
                   <input
-                    type="number"
+                    type="text" inputMode="decimal"
                     value={paidAmountInput}
                     onChange={(e) => setPaidAmountInput(e.target.value)}
                     placeholder="0.00"

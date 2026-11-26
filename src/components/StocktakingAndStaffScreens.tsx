@@ -1,3 +1,4 @@
+import {decimalValue} from '../lib/decimalInput';
 import {multiplyMoney, roundMoney, sumMoney} from '../lib/money';
 import {matchesRecordSearch} from '../lib/recordSearch';
 import {RecordTabs} from './RecordTabs';
@@ -720,7 +721,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
       setActionModal(null);
       return;
     }
-    const amt = parseFloat(actionAmount);
+    const amt = decimalValue(actionAmount);
     if (!Number.isFinite(amt) || amt <= 0) {
       setActionError("أدخل مبلغًا صحيحًا أكبر من صفر");
       return;
@@ -746,8 +747,8 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
   };
 
   const handleCreateEmployee = () => {
-    const monthly = Number(newEmpMonthly);
-    const daily = Number(newEmpDaily);
+    const monthly = newEmpMonthly.trim() ? decimalValue(newEmpMonthly) : 0;
+    const daily = newEmpDaily.trim() ? decimalValue(newEmpDaily) : 0;
     if (
       !newEmpName.trim() ||
       !newEmpMonthly.trim() ||
@@ -1056,7 +1057,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
 <label className="block">
               المبلغ (ج.م)
               <input
-                type="number"
+                type="text" inputMode="decimal"
                 aria-label="مبلغ حركة العامل"
                 value={actionAmount}
                 onChange={(e) => {
@@ -1141,7 +1142,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
               <label>
                 الراتب الشهري (ج.م)
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   value={newEmpMonthly}
                   onChange={(e) => setNewEmpMonthly(e.target.value)}
                   className="operation-input font-bold"
@@ -1150,7 +1151,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
               <label>
                 قيمة اليومية (ج.م)
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   value={newEmpDaily}
                   onChange={(e) => setNewEmpDaily(e.target.value)}
                   className="operation-input font-bold"

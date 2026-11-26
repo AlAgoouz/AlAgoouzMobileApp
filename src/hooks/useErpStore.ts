@@ -2,6 +2,7 @@ import {assertUserChanges,canView,type UserAccess} from '../lib/userAccess';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { getSupabaseClient } from '../lib/supabaseSync';
 import { StoreEngine } from '../lib/storeEngine';
+import {offlineTabId, readOfflineJournal, writeOfflineJournal} from '../lib/offlineJournal';
 import { cloudStoreInput, toCloud } from '../lib/storeState';
 import {jsonBytes, STORE_CHANGE_LIMIT, storeChanges} from '../lib/storeChanges';
 import { scrubLegacyPasswords } from '../lib/legacyCache';
@@ -30,7 +31,7 @@ export function useErpStore(loadFull=true) {
   const generation = useRef(0);
   const activeUser = useRef<string | null>(null);
   const draftTabId = useRef<string>(undefined);
-  draftTabId.current ??= crypto.randomUUID();
+  draftTabId.current ??= offlineTabId();
   const tabId = draftTabId.current;
   const engineRef = useRef<StoreEngine>(undefined);
   if (!engineRef.current) {
@@ -125,6 +126,11 @@ export function useErpStore(loadFull=true) {
       () => {
         const owner = accessRef.current;
         if (owner) clearRecoveryDraft(localStorage, userRecoveryDraftKey(owner.userId, tabId));
+      },
+      (journal) => {
+        const owner = accessRef.current;
+        if (!owner) throw Error('سجّل الدخول قبل حفظ مسودة على الجهاز.');
+        writeOfflineJournal(owner.userId, tabId, journal);
       },
     );
   }
@@ -245,12 +251,24 @@ export function useErpStore(loadFull=true) {
     };
   }, [engine]);
   useEffect(()=>{
-    if(!loadFull||member?.role!=='partner'||!canView(member)){setHydrationKey('');return;}
+    if(member?.role!=='partner'||!canView(member)){setHydrationKey('');return;}
     let alive=true;const key=member.userId;
-    const hydrate=async()=>{if(engine.snapshot.status==='signed-out')await engine.load();else await engine.refresh();if(alive)setHydrationKey(key);};
+    const hydrate=async()=>{
+      engine.setConnectivity(navigator.onLine);
+      if(engine.snapshot.status==='signed-out'){
+        let resumed=false;
+        try{
+          const journal=readOfflineJournal(key,tabId);
+          resumed=!!journal&&engine.resumeJournal(journal);
+        }catch{/* Preserve the independently saved recovery copy for review. */}
+        if(resumed)await engine.reconnect();
+        else if(loadFull)await engine.load();
+      }else if(loadFull)await engine.refresh();
+      if(alive)setHydrationKey(loadFull?key:'');
+    };
     void hydrate().catch(()=>{if(alive)setHydrationKey(key);});
     return()=>{alive=false;};
-  },[loadFull,member?.userId,member?.role,member?.permissions.view,engine]);
+  },[loadFull,member?.userId,member?.role,member?.permissions.view,engine,tabId]);
   useEffect(() => {
     if (!member || !canView(member) || member.role==='cashier') return;
     const sb = getSupabaseClient();
@@ -279,8 +297,10 @@ export function useErpStore(loadFull=true) {
       void engine.refresh();
     };
     const reconnect = () => {
-      if (fullRequested.current) void engine.reconnect();
+      engine.setConnectivity(true);
+      if (fullRequested.current || engine.hasPending) void engine.reconnect();
     };
+    const offline = () => engine.setConnectivity(false);
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (engine.hasPending) {
         event.preventDefault();
@@ -288,6 +308,8 @@ export function useErpStore(loadFull=true) {
       }
     };
     window.addEventListener('online', reconnect);
+    window.addEventListener('offline', offline);
+    engine.setConnectivity(navigator.onLine);
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
     window.addEventListener('beforeunload', beforeUnload);
@@ -295,6 +317,7 @@ export function useErpStore(loadFull=true) {
       clearInterval(timer);
       void sb.removeChannel(channel);
       window.removeEventListener('online', reconnect);
+      window.removeEventListener('offline', offline);
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
       window.removeEventListener('beforeunload', beforeUnload);

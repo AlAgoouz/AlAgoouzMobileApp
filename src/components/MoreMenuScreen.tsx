@@ -1,3 +1,5 @@
+import {StoreHistoryArchive} from './StoreHistoryArchive';
+import {decimalValue} from '../lib/decimalInput';
 import React, {useMemo, useState} from 'react';
 import {
   CircleUser as HeaderCircleUser,
@@ -244,6 +246,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
               </div>
             </div>
           )}
+          <StoreHistoryArchive />
         </div>
       </div>
     );
@@ -270,7 +273,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
               />
               <div className="operation-fields">
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   aria-label="مبلغ المصروف"
                   value={expAmount}
                   onChange={(e) => setExpAmount(e.target.value)}
@@ -320,7 +323,7 @@ export const MoreMenuScreen: React.FC<MoreMenuProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  const amt = Number(expAmount);
+                  const amt = decimalValue(expAmount);
                   if (!expTitle.trim() || !Number.isFinite(amt) || amt <= 0) {
                     setExpenseError(
                       "أدخل بيان المصروف ومبلغًا صحيحًا أكبر من صفر",

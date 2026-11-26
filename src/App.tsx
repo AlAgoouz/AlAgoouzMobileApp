@@ -1,5 +1,7 @@
-import {divideMoney, multiplyMoney, roundMoney, sumMoney} from './lib/money';
-import {unitLabel as displayUnit} from './lib/units';
+import {useCashierQueue} from './hooks/useCashierQueue';
+import {useWorkspaceToast} from './hooks/useWorkspaceToast';
+import {checkCustomerDetails, checkSupplierDetails} from './lib/contactDetails';
+import {createInventoryActions} from './lib/inventoryActions';
 import {useDashboardRead} from './hooks/useDashboardRead';
 import {saveFinancialOpening} from './lib/financialOpening';
 import {saveCatalogNameDraft,saveCatalogNameDraftChange} from './lib/catalogNameDrafts';
@@ -22,47 +24,26 @@ import {CashierDayDetail} from './components/CashierDayDetail';
 import {initialPeriod,reportRange} from './lib/reporting';
 import {canView,canWrite,writePermissions} from './lib/userAccess';
 import {SectionsHub} from './components/SectionsHub';
-import type {QueuedCashierReport} from './components/CashierDayScreen';
 import {cashierCostDetails,correctedCashierCost} from './lib/cashierCosts';
 import {attachCashierReport,approveCashierDay,salesForReports} from './lib/cashierDays';
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { LayoutGrid, AlertTriangle, BarChart3, Lock, CheckCircle2, AlertCircle, Info, X, Home, UserCheck } from "lucide-react";
 import {
   InventoryItem,
-  ProductionBatch,
-  PurchaseInvoice,
   SalesInvoice,
-  SalesInvoiceItem,
   Supplier,
   Partner,
   AuditLogEntry,
   Employee,
-  EmployeeTransaction,
-  StocktakingAuditRecord,
-  StocktakingItemVariance,
 } from "./types/erp";
-import { recalculateRecipeCosts } from "./lib/itemCosts";
-import {
-  checkPurchase,
-  prepareSale,
-  checkStocktaking,
-} from "./lib/operationChecks";
 
-import { getSupabaseClient, getSupabaseCredentials } from "./lib/supabaseSync";
+import { getSupabaseCredentials } from "./lib/supabaseSync";
 import { useErpStore } from "./hooks/useErpStore";
 import { parseBackup, createBackup, type StoreState } from "./lib/storeState";
-import { deductInventory, productionNeeds } from "./lib/inventory";
 import { reversePayment, saveSaleReturn, recordPayment, cancelPurchase, receivePurchaseRefund, recordExpense, cancelExpense } from "./lib/ledger";
 import { businessDate } from "./lib/dates";
-import {
-  documentNumberPrefix,
-  nextSequentialNumber,
-} from "./lib/documentNumbers";
-import { recordEmployeeAction, reverseEmployeeAction, closePayrollPeriod, currentPayrollPeriod } from './lib/payroll';
+import { reverseEmployeeAction, closePayrollPeriod, currentPayrollPeriod } from './lib/payroll';
 import { adjustCatalogItem, canDeleteCatalogItem } from './lib/catalogAdjustments';
-import {checkCustomerDetails,checkSupplierDetails} from './lib/contactDetails';
-import {receiveStock} from './lib/costing';
-import {receivePurchaseInventory} from './lib/purchaseInventory';
 import {
   downloadFullBackupJson,
   exportFullStoreExcel,
@@ -183,13 +164,7 @@ export default function App() {
     }
   }, [screenKey]);
   const [reportPeriod,setReportPeriod]=useState(initialPeriod);
-  const [toastNotification, setToastNotification] = useState<{
-    id: number;
-    message: string;
-    tone: 'ok' | 'warn' | 'danger' | 'info';
-  } | null>(null);
-  const toastTimerRef = useRef<number | null>(null);
-
+  const {toastNotification, setToastNotification, scheduleToastDismiss, pauseToastDismiss, showToast}=useWorkspaceToast();
   const [selectedFinancialPartnerId,setSelectedFinancialPartnerId]=useState('');
   const [historyEditing,setHistoryEditing]=useState(false);
   const [salesHistoryView,setSalesHistoryView]=useState(initialSalesHistoryView);
@@ -338,86 +313,8 @@ export default function App() {
   const [receiptModalInvoice, setReceiptModalInvoice] =
     useState<SalesInvoice | null>(null);
 
-  const scheduleToastDismiss = (id: number) => {
-    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = window.setTimeout(() => {
-      setToastNotification((prev) => (prev?.id === id ? null : prev));
-    }, 5000);
-  };
-
-  const pauseToastDismiss = () => {
-    if (toastTimerRef.current !== null) {
-      window.clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = null;
-    }
-  };
-
-  const showToast = (msg: string, explicitTone?: 'ok' | 'warn' | 'danger' | 'info') => {
-    const inferredTone: 'ok' | 'warn' | 'danger' | 'info' =
-      explicitTone ??
-      (/^(?:تعذر|فشل|خطأ)/.test(msg.trim())
-        ? 'danger'
-        : /^(?:لا يمكن|حساب المورد مرتبط|حساب العميل مرتبط|أُلغيت|هذه فاتورة معتمدة)/.test(msg.trim())
-          ? 'warn'
-          : 'ok');
-    const id = Date.now();
-    setToastNotification({ id, message: msg, tone: inferredTone });
-    scheduleToastDismiss(id);
-  };
-
-  const [queueError, setQueueError] = useState("");
-  const queueBusy = React.useRef(false);
-  const returnBusy = React.useRef(false);
-  const [queuedReports,setQueuedReports]=useState<QueuedCashierReport[]>([]);
-  useEffect(() => {
-    if (!member || activeScreen!=="cashier_sync") return;
-    const sb = getSupabaseClient();
-    if (!sb) return;
-    let disposed = false;
-    const processPending = async () => {
-      if (disposed || queueBusy.current || document.visibilityState === "hidden" || !navigator.onLine || engine.snapshot.status !== "ready")
-        return;
-      queueBusy.current = true;
-      try {
-        const { data, error } = await sb
-          .from("cashier_sync_queue")
-          .select("id,file_name,sale_date,content_hash,report_kind,import_job_id")
-          .eq("processed", false)
-          .order("created_at")
-          .limit(20);
-        if (error) throw new Error("تعذر قراءة الملفات المعلقة للكاشير");
-        if(!disposed){setQueuedReports(previous=>previous.length===data?.length&&previous.every((r,i)=>r.id===data[i].id&&r.content_hash===data[i].content_hash)?previous:data??[]);setQueueError('');}
-      } catch (error) {
-        if (!disposed)
-          setQueueError(
-            error instanceof Error ? error.message : "تعذر معالجة ملف الكاشير",
-          );
-      } finally {
-        queueBusy.current = false;
-      }
-    };
-    const channel = sb
-      .channel("erp-cashier-v4")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "cashier_sync_queue" },
-        () => {
-          void processPending();
-        },
-      )
-      .subscribe();
-    const timer = setInterval(() => {
-      void processPending();
-    }, 15000);
-    void processPending();
-    window.addEventListener("online", processPending);
-    return () => {
-      disposed = true;
-      clearInterval(timer);
-      window.removeEventListener("online", processPending);
-      void sb.removeChannel(channel);
-    };
-  }, [member?.userId, engine,activeScreen]);
+  const returnBusy = useRef(false);
+  const {queueError, queuedReports, setQueuedReports}=useCashierQueue(activeScreen==='cashier_sync',member?.userId,engine);
 
   const addAuditLog = (
     actionType: AuditLogEntry["actionType"],
@@ -441,342 +338,12 @@ export default function App() {
     void cloud.signOut().catch((error) => showToast(error.message, 'danger'));
   };
 
-  // إعادة حساب تكلفة جميع التوليفات والمشروبات التي لها وصفة بناءً على أحدث تكلفة للخامات
-  const recalculateAllRecipeCosts = recalculateRecipeCosts;
-
-  // 1. تنفيذ أمر إنتاج وتخليط توليفة في قسم الإنتاج
-  const handleExecuteProduction = (
-    blendId: string,
-    quantityKg: number,
-    notes: string,
-  ): { ok: boolean; message: string } => {
-    const date = businessDate();
-    const blend = engine.state.items.find((i) => i.id === blendId);
-    if (!blend || !blend.recipe || blend.recipe.length === 0) {
-      return { ok: false, message: "هذه التوليفة ليس لها وصفة محددة بعد." };
-    }
-
-    let needs: Map<string, number>;
-    try {
-      needs = productionNeeds(blend, quantityKg, engine.state.items);
-    } catch (error) {
-      return { ok: false, message: (error as Error).message };
-    }
-
-    const consumedDetails: ProductionBatch["ingredientsConsumed"] = [];
-    let totalBatchCost = 0;
-
-    const updatedCatalog = engine.state.items.map((item) => {
-      const needed = needs.get(item.id);
-      if (needed !== undefined) {
-        const usedInBase = Number(needed.toFixed(6));
-        const ingCost = multiplyMoney(usedInBase, item.costPrice);
-        totalBatchCost = sumMoney([totalBatchCost, ingCost]);
-        consumedDetails.push({
-          ingredientId: item.id,
-          ingredientName: item.name,
-          quantityUsed: usedInBase,
-          displayQuantity:
-            item.baseUnit === "kg"
-              ? `${usedInBase} كجم (${Math.round(usedInBase * 1000)} جم)`
-              : `${usedInBase} ${displayUnit(item.baseUnit)}`,
-          cost: ingCost,
-        });
-        return {
-          ...item,
-          stock: Number((item.stock - usedInBase).toFixed(6)),
-        };
-      }
-      return item;
-    });
-
-    const unitCostPerKg = divideMoney(totalBatchCost, quantityKg);
-
-    const batchId = crypto.randomUUID();
-    const finalCatalog = updatedCatalog.map((item) => {
-      if (item.id === blendId) {
-        return receiveStock(item, quantityKg, unitCostPerKg, {id:batchId,date,type:'production'});
-      }
-      return item;
-    });
-
-    const newBatch: ProductionBatch = {
-      id: batchId,
-      batchNumber: nextSequentialNumber(
-        engine.state.productionBatches.map((b) => b.batchNumber),
-        documentNumberPrefix("production", date),
-        15,
-      ),
-      date,
-      blendId: blend.id,
-      blendName: blend.name,
-      quantityProducedKg: quantityKg,
-      unitCostPerKg,
-      totalBatchCost: totalBatchCost,
-      ingredientsConsumed: consumedDetails,
-      partnerName: currentPartner.name,
-      notes,
-    };
-
-    setItems(recalculateAllRecipeCosts(finalCatalog));
-    setProductionBatches((prev) => [newBatch, ...prev]);
-    addAuditLog(
-      "إنتاج توليفة",
-      `تم تصنيع ${quantityKg} كجم من (${blend.name}) وسحب الحبوب الخام والتحويجة من المخزن وإضافتها لرصيد التوليفة`,
-      totalBatchCost,
-    );
-    showToast(
-      `✅ تم تصنيع ${quantityKg} كجم من (${blend.name}) وإضافتها لرصيد المخزن بنجاح!`,
-    );
-    return {
-      ok: true,
-      message: `تم سحب الخامات من المخزن وإضافة ${quantityKg} كجم (${
-        quantityKg * 1000
-      } جرام) إلى رصيد (${blend.name}) بنجاح!`,
-    };
-  };
-
-  // 2. حفظ فاتورة شراء جديدة وتحديث متوسط التكلفة المرجح (WAC) والوصفات
-  const handleSavePurchase = (
-    invoiceData: Omit<PurchaseInvoice, "id" | "invoiceNumber">,
-  ) => {
-    invoiceData = {...invoiceData, accountingVersion:2};
-    const supplier=engine.state.suppliers.find(s=>s.id===invoiceData.supplierId);
-    if(!supplier)throw Error('اختر موردًا مسجلًا');
-    checkSupplierDetails(supplier);
-    invoiceData={...invoiceData,supplierName:supplier.name};
-    checkPurchase(invoiceData, engine.state.items);
-    if (
-      !invoiceData.items.length ||
-      invoiceData.items.some(
-        (l) =>
-          !Number.isFinite(l.quantity) ||
-          l.quantity <= 0 ||
-          !Number.isFinite(l.purchasePrice) ||
-          l.purchasePrice < 0 ||
-          (l.newRetailPrice !== undefined &&
-            (!Number.isFinite(l.newRetailPrice) || l.newRetailPrice < 0)) ||
-          (l.newWholesalePrice !== undefined &&
-            (!Number.isFinite(l.newWholesalePrice) || l.newWholesalePrice < 0)),
-      ) ||
-      !Number.isFinite(invoiceData.totalAmount) ||
-      invoiceData.totalAmount < 0 ||
-      !Number.isFinite(invoiceData.paidAmount) ||
-      invoiceData.paidAmount < 0 ||
-      !Number.isFinite(invoiceData.remainingAmount) ||
-      invoiceData.remainingAmount < 0 ||
-      !engine.state.suppliers.some((s) => s.id === invoiceData.supplierId)
-    )
-      throw new Error(
-        "راجع الأصناف والكميات والأسعار والمورد والمبالغ قبل حفظ الفاتورة",
-      );
-    const invNum = `PUR-${crypto.randomUUID().slice(0, 8)}`;
-    const newInvoice: PurchaseInvoice = {
-      ...invoiceData,
-      id: crypto.randomUUID(),
-      invoiceNumber: invNum,
-      createdAt: new Date().toISOString(),
-    };
-    setItems(receivePurchaseInventory(engine.state.items, newInvoice));
-    setPurchaseInvoices((prev) => [newInvoice, ...prev]);
-
-    setSuppliers((prev) =>
-      prev.map((sup) =>
-        sup.id === invoiceData.supplierId
-          ? {
-              ...sup,
-              balance: sumMoney([sup.balance, invoiceData.remainingAmount]),
-              totalPurchases: sumMoney([sup.totalPurchases, invoiceData.totalAmount]),
-              invoicesCount: sup.invoicesCount + 1,
-            }
-          : sup,
-      ),
-    );
-
-    addAuditLog(
-      "شراء",
-      `فاتورة شراء #${invNum} من (${invoiceData.supplierName}) وتحديث متوسط التكلفة (WAC) وتكلفة التوليفات المرتبطة`,
-      invoiceData.totalAmount,
-    );
-    return newInvoice;
-  };
-
-  // دالة خصم الأصناف من المخزون (خصم مباشر للبن والتوليفات الجاهزة، وفك الوصفة للمشروبات!)
-
-  // 3. حفظ فاتورة بيع (جملة أو قطاعي مباشر)
-  const handleSaveSale = (
-    saleData: Omit<SalesInvoice, "id" | "invoiceNumber">,
-  ) => {
-    let updatedInventory: InventoryItem[];
-    let invoiceItems: SalesInvoiceItem[];
-    let liveTotalCost = 0;
-    try {
-      if(saleData.saleType!=='wholesale'||saleData.items.some(line=>engine.state.items.find(i=>i.id===line.itemId)?.category!=='manufactured_blend'))throw Error('فواتير البيع الجديدة للتوليفات بالجملة فقط');
-      const liveItems = engine.state.items;
-      const customer=engine.state.customers.find(c=>c.id===saleData.customerId);
-      if(!customer)throw Error('اختر عميلًا مسجلًا');
-      checkCustomerDetails(customer);
-      saleData={...saleData,customerName:customer.name};
-      if (
-        saleData.saleType === "wholesale" &&
-        !engine.state.customers.some(
-          (c) => c.id === saleData.customerId,
-        )
-      )
-        throw new Error("اختر عميل جملة موجودًا قبل حفظ الفاتورة");
-      if (
-        !saleData.items.length ||
-        saleData.items.some(
-          (l) =>
-            !Number.isFinite(l.quantity) ||
-            l.quantity <= 0 ||
-            !Number.isFinite(l.unitPrice) ||
-            l.unitPrice < 0,
-        )
-      )
-        throw new Error("أصناف الفاتورة أو كمياتها غير صالحة");
-      if (
-        !Number.isFinite(saleData.subtotal) ||
-        saleData.subtotal < 0 ||
-        !Number.isFinite(saleData.totalAmount) ||
-        saleData.totalAmount < 0 ||
-        !Number.isFinite(saleData.discount) ||
-        saleData.discount < 0 ||
-        saleData.discount > saleData.subtotal + 0.011 ||
-        !Number.isFinite(saleData.paidAmount) ||
-        saleData.paidAmount < 0 ||
-        !Number.isFinite(saleData.remainingAmount) ||
-        saleData.remainingAmount < 0
-      )
-        throw new Error("مبالغ الفاتورة غير صالحة");
-      const prepared = prepareSale(saleData, liveItems);
-      invoiceItems = prepared.items;
-      liveTotalCost = prepared.totalCost;
-      updatedInventory = deductInventory(invoiceItems, liveItems);
-    } catch (error) {
-      showToast((error as Error).message, 'danger');
-      return false;
-    }
-    const prefix = saleData.saleType === "wholesale" ? "WH" : "POS";
-    const invNum = `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
-    const newSale: SalesInvoice = {
-      ...saleData,
-      id: crypto.randomUUID(),
-      invoiceNumber: invNum,
-      items: invoiceItems,
-      totalCost: liveTotalCost,
-      netProfit: sumMoney([saleData.totalAmount, -liveTotalCost]),
-    };
-
-    setItems(updatedInventory);
-    setSalesInvoices((prev) => [newSale, ...prev]);
-
-    if (saleData.customerId) {
-      setCustomers((prev) =>
-        prev.map((c) =>
-          c.id === saleData.customerId
-            ? {
-                ...c,
-                balance: sumMoney([c.balance, saleData.remainingAmount]),
-                totalSales: sumMoney([c.totalSales, saleData.totalAmount]),
-                invoicesCount: c.invoicesCount + 1,
-                lastPurchaseDate: saleData.date,
-              }
-            : c,
-        ),
-      );
-    }
-
-    addAuditLog(
-      saleData.saleType === "wholesale" ? "بيع جملة" : "بيع محل",
-      `فاتورة ${
-        saleData.saleType === "wholesale" ? "بيع جملة" : "بيع محل"
-      } #${invNum} للعميل (${saleData.customerName}) وخصم الأصناف من المخزن`,
-      saleData.totalAmount,
-    );
-    showToast(
-      `تم تسجيل الفاتورة #${invNum}؛ تابع حالة حفظ السحابة أعلى الشاشة.`,
-    );
-    return newSale;
-  };
-
-  // 5. اعتماد محضر الجرد الفعلي على الميزان وتحديث المخزن
-  const handleCommitStocktaking = (
-    variances: StocktakingItemVariance[],
-    notes: string,
-    chargeShortageToEmployeeId?: string,
-  ) => {
-    const date = businessDate();
-    variances = checkStocktaking(variances, engine.state.items);
-    if (
-      chargeShortageToEmployeeId &&
-      !engine.state.employees.some((e) => e.id === chargeShortageToEmployeeId)
-    )
-      throw new Error("العامل المختار لتحميل العجز غير موجود");
-    const changed = variances.filter((v) => Math.abs(v.difference) > 0.0001);
-    const totalShortage = changed
-      .filter((v) => v.difference < 0)
-      .reduce((s, v) => s + Math.abs(v.financialDifference), 0);
-    const totalSurplus = changed
-      .filter((v) => v.difference > 0)
-      .reduce((s, v) => s + v.financialDifference, 0);
-
-    // تحديث الأرصدة الفعلية في المخزن
-    setItems((prev) =>
-      prev.map((item) => {
-        const found = variances.find((v) => v.itemId === item.id);
-        if (!found) return item;
-        return { ...item, stock: found.actualStock };
-      }),
-    );
-
-    const newRecord: StocktakingAuditRecord = {
-      id: crypto.randomUUID(),
-      auditNumber: nextSequentialNumber(
-        engine.state.stocktakingRecords.map((r) => r.auditNumber),
-        documentNumberPrefix("stocktaking", date),
-        2,
-      ),
-      date,
-      partnerName: currentPartner.name,
-      notes,
-      totalShortageValue: roundMoney(totalShortage),
-      totalSurplusValue: roundMoney(totalSurplus),
-      netVarianceValue: sumMoney([totalSurplus, -totalShortage]),
-      itemsAudited: variances,
-    };
-
-    setStocktakingRecords((prev) => [newRecord, ...prev]);
-
-    // إذا تم اختيار تحميل العجز على أحد العمال
-    if (chargeShortageToEmployeeId && totalShortage > 0) {
-      handleRecordEmployeeAction(
-        chargeShortageToEmployeeId,
-        "خصم/عجز",
-        roundMoney(totalShortage),
-        `تحميل عجز محضر الجرد #${newRecord.auditNumber}`,
-      );
-    }
-
-    addAuditLog(
-      "جرد مخزن",
-      `اعتماد محضر الجرد الفعلي #${newRecord.auditNumber} (${changed.length} فروقات على الميزان) — صافي الفرق: ${newRecord.netVarianceValue} ج.م`,
-      Math.abs(newRecord.netVarianceValue),
-    );
-    showToast(
-      `✅ تم اعتماد محضر الجرد #${newRecord.auditNumber} وتحديث أرصدة المخزن!`,
-    );
-  };
-
-  // 6. تسجيل حركة للعامل (سلفة، يومية حضور، خصم/عجز، مكافأة، صرف راتب)
-  const handleRecordEmployeeAction = (employeeId:string,type:EmployeeTransaction['type'],amount:number,notes:string,paidFrom?:EmployeeTransaction['paidFrom']) => {
-    engine.replace(recordEmployeeAction(engine.state,employeeId,type,amount,notes,requireFinancialPartner().id,paidFrom));
-    addAuditLog('شؤون عمال', `${type} للعامل: ${employeeId} — ${notes}`,amount);
-    showToast('تم تسجيل حركة العامل وربط الصرف بمصروفه؛ تابع تأكيد الحفظ.');
-  };
+  const {handleExecuteProduction, handleSavePurchase, handleSaveSale, handleCommitStocktaking, handleRecordEmployeeAction} =
+    createInventoryActions({engine, currentPartner, requireFinancialPartner, addAuditLog, showToast});
 
   // 7. أدوات التحكم الشامل في البيانات (تصفير وحذف الداتا التجريبية)
   const handleClearTransactionsKeepCatalog = () => {
+    if(engine.isOffline)throw Error('أدوات تصفير البيانات تحتاج اتصالًا بالخادم.');
     setItems((prev) =>
       prev.map((item) => ({
         ...item,
@@ -831,6 +398,7 @@ export default function App() {
   };
 
   const handleClearAllDemoData = () => {
+    if(engine.isOffline)throw Error('أدوات تصفير البيانات تحتاج اتصالًا بالخادم.');
     setItems([]);
     setSalesInvoices([]);
     engine.field("cashierDays", []);
@@ -867,7 +435,7 @@ export default function App() {
 
 
   async function saveInvoice<T extends {id:string;invoiceNumber:string}>(kind:'purchase'|'sale',data:unknown,create:()=>T,records:()=>T[]){
-    if(engine.hasPending)await confirmSave();
+    if(engine.hasPending && !engine.isOffline)await confirmSave();
     const draft=JSON.stringify(data);
     const pending=pendingInvoice.current;
     if(pending?.kind===kind&&pending.userId===member?.userId){
@@ -878,7 +446,7 @@ export default function App() {
     let invoice:T|undefined;
     if(!safeAction(()=>{invoice=create();})||!invoice)return undefined;
     pendingInvoice.current={kind,id:invoice.id,userId:member?.userId,draft};
-    await confirmSave();
+    if(!engine.isOffline)await confirmSave();
     pendingInvoice.current=undefined;
     return invoice;
   }
@@ -910,9 +478,11 @@ export default function App() {
   if(member.role==='cashier')return <CashierUploadScreen name={member.displayName} onLogout={handleLogout}/>;
   if(!canView(member))return <main dir="rtl" className="agouz-login"><section className="login-panel p-6 space-y-4"><h1 className="font-black">الحساب غير مخوّل لعرض بيانات المحل</h1><p>اطلب من المالك تحديد صلاحياتك ثم سجّل الدخول مجددًا.</p><button className="login-submit w-full" onClick={handleLogout}>تسجيل الخروج</button></section></main>;
   const recoveryAccess={userId:member.userId,activeKey:cloud.recoveryDraftKey,includeLegacy:member.isOwner};
-  const blocked = (needsFullStore||engine.hasPending)&&!["ready", "dirty", "saving"].includes(cloud.status);
+  const blocked = (needsFullStore||engine.hasPending)&&!["ready", "dirty", "saving", "offline"].includes(cloud.status);
   const statusText =
-    cloud.status === "saving"
+    cloud.status === "offline"
+      ? engine.hasPending ? "مسودات محفوظة على الجهاز وبانتظار المزامنة" : "الاتصال مقطوع. العمليات الجديدة ستُحفظ كمسودات على هذا الجهاز."
+      : cloud.status === "saving"
       ? "جارٍ الحفظ على السحابة…"
       : cloud.status === "dirty"
         ? "تعديلات بانتظار الحفظ"
@@ -936,7 +506,7 @@ export default function App() {
           بيئة اختبار محلية — بيانات تجريبية منفصلة
         </div>
       )}
-      <SaveStatus savedAt={cloud.savedAt} ready={cloud.status === 'ready'} message={needsFullStore || engine.hasPending ? statusText : ''}/>
+      <SaveStatus savedAt={cloud.savedAt} ready={cloud.status === 'ready'} message={needsFullStore || engine.hasPending || cloud.status==='offline' ? statusText : ''}/>
       {cloud.recoveryWarning&&<p role="status" className="w-full p-3 bg-status-warn-bg text-status-warn border-b border-status-warn-line text-sm">{cloud.recoveryWarning}</p>}
       <RecoveryDraftNotice key={member.userId} {...recoveryAccess}/>
       {queueError && (
@@ -1082,10 +652,10 @@ export default function App() {
             onSavePurchase={canWrite(member,'purchases') ? async data=>{
               const invoice=await saveInvoice('purchase',data,()=>handleSavePurchase(data),()=>engine.state.purchaseInvoices);
               if(!invoice)return false;
-              showToast('تم حفظ فاتورة المشتريات '+invoice.invoiceNumber);
+              showToast(engine.isOffline ? 'مسودة فاتورة الشراء محفوظة على الجهاز وبانتظار المزامنة.' : 'تم حفظ فاتورة المشتريات '+invoice.invoiceNumber);
               return true;
             } : undefined}
-            onReceiveRefund={canWrite(member,'purchases') ? async (invoiceId, amount, date) => {
+            onReceiveRefund={canWrite(member,'purchases') && !engine.isOffline ? async (invoiceId, amount, date) => {
               if(engine.hasPending)throw Error('انتظر تأكيد الحفظ الحالي ثم أعد المحاولة.');
               engine.replace(receivePurchaseRefund(engine.state,invoiceId,amount,date,{id:member.userId,name:currentPartner.name}));
               await engine.flush();
@@ -1162,13 +732,14 @@ export default function App() {
             return result;
           },()=>engine.state.salesInvoices);
           if(!invoice)return false;
-          setReceiptModalInvoice(invoice);
+          if(engine.isOffline)showToast('مسودة فاتورة البيع محفوظة على الجهاز وبانتظار المزامنة.');
+          else setReceiptModalInvoice(invoice);
           setActiveScreen('home');
           return true;
         }}/> : <OperationHeader title="فواتير الجملة" description="هذا الحساب يمكنه مراجعة سجل البيع. إنشاء الفواتير يتطلب صلاحية المبيعات." icon={Lock} onBack={()=>setActiveScreen('sections')}>
           <button type="button" onClick={()=>navigateScreen('sales_invoices')}>فتح سجل البيع</button>
         </OperationHeader>)}
-        {activeScreen === 'cashier_sync' && <CashierDayScreen items={items} days={cashierDaysForDisplay} queued={queuedReports} canManage={canWrite(member,'cashier')} onBack={()=>setActiveScreen('home')} onAttach={async(date,report)=>{if(engine.hasPending)await confirmSave();engine.attachCashier(attachCashierReport(engine.state,date,report),report.file.sourceQueueId);await confirmSave();if(report.file.sourceQueueId)setQueuedReports(rows=>rows.filter(r=>r.id!==report.file.sourceQueueId));}} onApprove={async(id)=>{engine.replace(approveCashierDay(engine.state,id,currentPartner.name));await confirmSave();}}/>}
+        {activeScreen === 'cashier_sync' && <CashierDayScreen items={items} days={cashierDaysForDisplay} queued={queuedReports} canManage={canWrite(member,'cashier')} onBack={()=>setActiveScreen('home')} onAttach={async(date,report)=>{if(engine.hasPending)await confirmSave();engine.attachCashier(attachCashierReport(engine.state,date,report),report.file.sourceQueueId);await confirmSave();if(report.file.sourceQueueId)setQueuedReports(rows=>rows.filter(r=>r.id!==report.file.sourceQueueId));}} onApprove={async(id)=>{if(engine.isOffline)throw Error('اعتماد تقارير الكاشير يحتاج اتصالًا بالخادم.');engine.replace(approveCashierDay(engine.state,id,currentPartner.name));await confirmSave();}}/>}
 
         {activeScreen === "products" && (
           <ProductsCatalogScreen onOpenMovement={setMovementId}

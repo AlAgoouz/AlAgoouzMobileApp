@@ -818,3 +818,32 @@ it.skipIf(!active)('shares a bounded export quota per account and restricts back
  expect(asUser(owner,reserve).split('\n').at(-1)).toBe('t');
  expect(()=>asUser(cashier,reserve)).toThrow('USER_PERMISSION_DENIED');
 });
+
+it.skipIf(!active)('projects store documents by section and archives overflow audit entries transactionally',()=>{
+  const before=stockState();
+  const stock=receiveStock(bean,1,1,{id:'archive-test-receipt',date:businessDate(),type:'purchase'});
+  const audits=Array.from({length:252},(_,position)=>({
+    id:'archive-copy-'+position,
+    timestamp:'2026-11-20T00:00:00.000Z',
+    actionType:'شراء' as const,
+    partnerName:'Owner',
+    description:'archive fixture '+position,
+  }));
+  seed({...before,items:[stock],auditLogs:audits});
+  expect(sql("select jsonb_array_length(audit_logs) from public.bon_elagouz_store where id='main_store'")).toBe('250');
+  const activeItems=JSON.parse(sql("select payload::text from bon_erp_private.erp_documents where store_id='main_store' and section='items'"));
+  expect(activeItems.id).toBe(bean.id);
+  expect(activeItems.costHistory).toBeUndefined();
+  const auditPage=readJson("select public.bon_erp_history_archive('audit',null,1)");
+  expect(auditPage).toHaveLength(1);
+  const earlier=readJson(`select public.bon_erp_history_archive('audit',${auditPage[0].sequence},40)`);
+  expect([auditPage[0].entry.id,...earlier.map((row:{entry:{id:string}})=>row.entry.id)]).toEqual(expect.arrayContaining(['archive-copy-250','archive-copy-251']));
+  const costs=readJson("select public.bon_erp_history_archive('cost',null,100)");
+  expect(costs.some((row:{entry:{sourceId:string}})=>row.entry.sourceId==='archive-test-receipt')).toBe(true);
+  expect(()=>sql("begin;set local role anon;select public.bon_erp_history_archive('audit');rollback;")).toThrow(/permission denied/i);
+
+  seed(before);
+  expect(sql("select count(*) from bon_erp_private.erp_documents where store_id='main_store' and section='audit_logs'")).toBe('0');
+  const preserved=readJson("select public.bon_erp_history_archive('audit')");
+  expect(preserved.some((row:{entry:{id:string}})=>row.entry.id==='archive-copy-251')).toBe(true);
+});

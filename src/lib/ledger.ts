@@ -155,6 +155,7 @@ export function returnSale(
 // Confirm each return separately. An uncertain retry keeps the original operation
 // id and receipt instead of recording twice after a lost acknowledgement.
 export async function saveSaleReturn(engine: StoreEngine, invoiceId: string, actor: string, actorId?: string) {
+  if (engine.isOffline) throw Error('العملية دي تحتاج اتصالًا مباشرًا بالخادم.');
   const confirm = async () => {
     await engine.flush();
     if (engine.snapshot.status !== 'ready')
