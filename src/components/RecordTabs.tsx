@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function RecordTabs<T extends string>({label, tabs, value, onChange}: {
   label: string;

@@ -15,7 +15,7 @@ import {ItemDefinitionModal} from './ItemDefinitionModal';
 import React, { useState, useMemo, useRef } from "react";
 import {ActionButton} from './ActionButton';
 import {Money} from './Money';
-import {Truck, Search, AlertTriangle, Plus, Minus, Trash2, Edit3, Clock, Package, Tag, Check, FileText, X, ShoppingBag, Eye, UserPlus} from 'lucide-react';
+import { Truck, Search, AlertTriangle, Plus, Minus, Trash2, Edit3, Clock, Package, Tag, Check, ShoppingBag, UserPlus } from 'lucide-react';
 import {
   InventoryItem,
   Supplier,
@@ -28,7 +28,7 @@ import {movingAverageCost} from '../lib/costing';
 import {checkSupplierDetails} from '../lib/contactDetails';
 import { businessDate } from "../lib/dates";
 import { outstandingPurchaseRefund } from '../lib/ledger';
-import { parseLocalizedNumber } from '../lib/cashierRows';
+import { parseDecimalInput } from '../lib/cashierRows';
 
 interface PurchaseScreenProps {
   items: InventoryItem[];
@@ -85,7 +85,7 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
   const receiveRefund = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!refundInvoice || !onReceiveRefund || receivingRefund) return;
-    const amount = parseLocalizedNumber(refundAmount);
+    const amount = parseDecimalInput(refundAmount);
     if (amount === undefined || amount <= 0 || amount > refundBalance) {
       setRefundError('أدخل مبلغًا موجبًا لا يتجاوز المتبقي للاسترداد.');
       return;

@@ -2,9 +2,9 @@
 
 These Linux x86-64 shared libraries are built from the official Amazon Linux
 2023 RPM packages by `scripts/pdf/build-native.sh`, for the hosted Python
-runtime. The application verifies `SHA256SUMS` before loading them. Rebuild with
+runtime. The application unpacks `libraries.zip` once per warm Linux worker and verifies each library against `SHA256SUMS` before loading it. Rebuild with
 the `Agouz PDF native runtime` GitHub workflow; inspect the artifact and commit
-the complete library set, checksums, package manifest and license notices.
+the archive, checksums, package manifest and license notices. Use `python3 scripts/pdf/pack-native.py` to package freshly collected libraries.
 
 `RPM-PACKAGES.txt` identifies the distribution packages. Corresponding source
 RPMs are available from the Amazon Linux 2023 source repositories:

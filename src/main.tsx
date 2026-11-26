@@ -38,3 +38,13 @@ void screenModule.then(
   ({ default: Screen }) => renderScreen(<Screen />),
   error => renderScreen(<ScreenLoadError error={error} />),
 );
+
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  const registerOfflinePage = () => {
+    void navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Offline support is optional when browser policy blocks registration.
+    });
+  };
+  if (document.readyState === 'complete') registerOfflinePage();
+  else window.addEventListener('load', registerOfflinePage, {once: true});
+}

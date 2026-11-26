@@ -133,6 +133,11 @@ export interface PurchaseInvoice {
   refundReceipts?: {id: string; amount: number; date: string; actorId: string; recordedAt: string}[];
   inventoryBefore?: InventoryItem[];
   inventoryAfter?: InventoryItem[];
+  inventoryHistory?: Array<{
+    itemId: string;
+    costEntries: number | null;
+    supplierEntries: number;
+  }>;
 }
 
 export interface SalesInvoiceItem {

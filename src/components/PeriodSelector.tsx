@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import { useState } from 'react';
 import {CalendarDays,Check} from 'lucide-react';
 import {reportRange,type PeriodKind,type PeriodSelection} from '../lib/reporting';
 

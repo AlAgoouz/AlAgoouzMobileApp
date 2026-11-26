@@ -1,9 +1,10 @@
-import type { Employee, EmployeeTransaction, Expense } from '../types/erp';
+import {roundMoney as money} from './money';
+import type { Employee, EmployeeTransaction } from '../types/erp';
 import type { StoreState } from './storeState';
 import { businessDate } from './dates';
 import { recordExpense, cancelExpense } from './ledger';
 
-const money = (value:number) => Number(value.toFixed(2));
+
 export const currentPayrollPeriod = () => businessDate().slice(0,7);
 export function payrollBalance(employee:Employee) {
   const earned = employee.salaryType === 'يومية' ? money(employee.workedDaysThisMonth * employee.dailyRate) : employee.baseMonthlySalary;

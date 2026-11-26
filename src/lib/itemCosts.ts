@@ -1,4 +1,5 @@
 import type { InventoryItem, RecipeIngredient, UnitType } from "../types/erp";
+import {multiplyMoney, sumMoney} from './money';
 import {isCountUnit} from './units';
 
 export function getIngredientCostContribution(
@@ -13,7 +14,7 @@ export function getIngredientCostContribution(
     ingredient.unit,
     target.baseUnit,
   );
-  return Number((multiplier * target.costPrice).toFixed(2));
+  return multiplyMoney(multiplier, target.costPrice);
 }
 
 export function calculateRecipeTotalCost(
@@ -21,11 +22,7 @@ export function calculateRecipeTotalCost(
   allItems: InventoryItem[],
 ): number {
   if (!recipe || recipe.length === 0) return 0;
-  const total = recipe.reduce(
-    (sum, ing) => sum + getIngredientCostContribution(ing, allItems),
-    0,
-  );
-  return Number(total.toFixed(2));
+  return sumMoney(recipe.map(ingredient => getIngredientCostContribution(ingredient, allItems)));
 }
 
 export function convertToBaseUnit(
@@ -54,26 +51,14 @@ export function recalculateRecipeCosts(
     visiting.add(id);
     const value =
       item.hasRecipe && item.recipe?.length && !(item.category==='manufactured_blend'&&item.costingVersion===2)
-        ? Number(
-            item.recipe
-              .reduce((total, ingredient) => {
-                const raw = byId.get(ingredient.ingredientId);
-                if (!raw) throw new Error("مكون الوصفة غير موجود");
-                return (
-                  total +
-                  Number(
-                    (
-                      convertToBaseUnit(
-                        ingredient.quantity,
-                        ingredient.unit,
-                        raw.baseUnit,
-                      ) * cost(raw.id)
-                    ).toFixed(2),
-                  )
-                );
-              }, 0)
-              .toFixed(2),
-          )
+        ? sumMoney(item.recipe.map(ingredient => {
+            const raw = byId.get(ingredient.ingredientId);
+            if (!raw) throw new Error("مكون الوصفة غير موجود");
+            return multiplyMoney(
+              convertToBaseUnit(ingredient.quantity, ingredient.unit, raw.baseUnit),
+              cost(raw.id),
+            );
+          }))
         : item.costPrice;
     visiting.delete(id);
     costs.set(id, value);

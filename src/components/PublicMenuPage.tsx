@@ -1,4 +1,4 @@
-import React, {useEffect, useId, useState} from 'react';
+import { useEffect, useId, useState } from 'react';
 import {fetchPublishedMenu, type MenuPublication} from '../lib/shopMenu';
 import {hasMenuTranscript} from '../lib/menuTranscript';
 import {MenuTranscript} from './MenuTranscript';

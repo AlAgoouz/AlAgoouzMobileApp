@@ -5,6 +5,8 @@ import io
 import contextlib
 import os
 import sys
+import tempfile
+from zipfile import ZipFile
 from pathlib import Path
 from string import Template
 from threading import Lock
@@ -12,6 +14,7 @@ from decimal import Decimal
 
 _lock=Lock()
 _libraries=[]
+_native_directory=None
 _ready=False
 _ASSETS=Path(__file__).parent/'assets'
 _SHOP_ADDRESS='3 شارع المطافي، الزيتون - القاهرة'
@@ -37,6 +40,37 @@ def render_pdf(markup, resources):
 
 
 
+def load_native_libraries(root):
+    global _native_directory
+    if _native_directory is not None:
+        return
+    directory = tempfile.TemporaryDirectory(prefix='agouz-pdf-')
+    location = Path(directory.name)
+    try:
+        with ZipFile(root / 'libraries.zip') as archive:
+            for line in (root / 'SHA256SUMS').read_text(encoding='ascii').splitlines():
+                digest, name = line.split()
+                path = location / name
+                if path.resolve().parent != location.resolve() or not name.startswith('lib'):
+                    raise RuntimeError('PDF_NATIVE_INTEGRITY_FAILED')
+                data = archive.read(name)
+                if hashlib.sha256(data).hexdigest() != digest:
+                    raise RuntimeError('PDF_NATIVE_INTEGRITY_FAILED')
+                path.write_bytes(data)
+        handles = [
+            ctypes.CDLL(str(location / name), mode=ctypes.RTLD_GLOBAL)
+            for name in (
+                'libfontconfig.so.1', 'libharfbuzz.so.0', 'libharfbuzz-subset.so.0',
+                'libgobject-2.0.so.0', 'libpango-1.0.so.0', 'libpangoft2-1.0.so.0',
+            )
+        ]
+    except Exception:
+        directory.cleanup()
+        raise
+    _libraries.extend(handles)
+    _native_directory = directory
+
+
 def initialize_pdf():
     global _ready
     with _lock:
@@ -47,13 +81,7 @@ def initialize_pdf():
             if (ucrt_dlls/'libpango-1.0-0.dll').is_file():
                 os.environ.setdefault('WEASYPRINT_DLL_DIRECTORIES', str(ucrt_dlls))
         if sys.platform == 'linux' and (root/'SHA256SUMS').exists():
-            for line in (root/'SHA256SUMS').read_text().splitlines():
-                digest,name=line.split()
-                path=root/name
-                if path.resolve().parent!=root.resolve() or hashlib.sha256(path.read_bytes()).hexdigest()!=digest:
-                    raise RuntimeError('PDF_NATIVE_INTEGRITY_FAILED')
-            for name in ['libfontconfig.so.1','libharfbuzz.so.0','libharfbuzz-subset.so.0','libgobject-2.0.so.0','libpango-1.0.so.0','libpangoft2-1.0.so.0']:
-                _libraries.append(ctypes.CDLL(str(root/name),mode=ctypes.RTLD_GLOBAL))
+            load_native_libraries(root)
         # Native import failures contain environment diagnostics, never report data.
         with contextlib.redirect_stderr(io.StringIO()):
             from weasyprint import HTML

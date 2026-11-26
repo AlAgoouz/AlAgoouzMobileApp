@@ -1,6 +1,6 @@
 import { OperationalHealth } from './OperationalHealth';
 import { ScreenLoading } from './ScreenLoading';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ArrowUpLeft,
   ArrowDownLeft,

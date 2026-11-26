@@ -1,3 +1,6 @@
+import type {PurchaseInvoice} from '../src/types/erp';
+import {cancelPurchase} from '../src/lib/ledger';
+import {receivePurchaseInventory} from '../src/lib/purchaseInventory';
 import {beforeAll,beforeEach,afterAll,expect,it} from 'vitest';
 import {setup,dispose,sql,literal} from './integration/postgres.mjs';
 import {emptyStore,toCloud} from '../src/lib/storeState';
@@ -575,6 +578,27 @@ it.skipIf(!active)('requires separate purchase tax, full payment, moving average
  reject({...after,items:[{...after.items[0],costHistory:[]}]},'PURCHASE_COST_HISTORY_REQUIRED');
  seed(after);reject({...after,items:[{...after.items[0],costPrice:2}]},'COST_FROM_DOCUMENT_REQUIRED');
  reject({...after,items:[{...after.items[0],costHistory:[]}]},'COST_HISTORY_IMMUTABLE');
+});
+it.skipIf(!active)('saves compact purchase evidence, rounds the midpoint and restores the previous receipts on cancellation',()=>{
+ const supplier={id:'supplier',name:'Supplier',phone:'01012345678',address:'Cairo',representativeName:'Agent',category:'Raw',balance:0,totalPurchases:0,invoicesCount:0};
+ const item={...bean,stock:1,openingStock:1,costPrice:1};
+ const before={...stockState(),items:[item],suppliers:[supplier]};seed(before);
+ const invoice:PurchaseInvoice={
+   id:'compact',invoiceNumber:'P-COMPACT',date:businessDate(),createdAt:new Date().toISOString(),
+   supplierId:supplier.id,supplierName:supplier.name,accountingVersion:2,
+   items:[{itemId:item.id,itemName:item.name,quantity:1,unit:'kg',purchasePrice:1.01,previousLastPrice:1,previousWacCost:1,cheapestSupplierPrice:1.01,cheapestSupplierName:supplier.name,updateProductCost:true}],
+   netAmount:1.01,taxAmount:0,totalAmount:1.01,paidAmount:1.01,remainingAmount:0,paymentMethod:'نقدي',partnerName:'Owner',
+ };
+ const items=receivePurchaseInventory(before.items,invoice);
+ expect(items[0].costPrice).toBe(1.01);
+ const after={...before,items,purchaseInvoices:[invoice],suppliers:[{...supplier,totalPurchases:1.01,invoicesCount:1}]};
+ accept(after);
+ reject({...after,purchaseInvoices:[{...invoice,inventoryHistory:[{itemId:item.id,costEntries:0,supplierEntries:9}]}]},'PURCHASE_SNAPSHOT_MISMATCH');
+ seed(after);
+ const cancelled=cancelPurchase(after,invoice.id,'Owner');
+ expect(cancelled.items).toEqual(before.items);
+ accept(cancelled);
+ reject({...cancelled,items:[{...cancelled.items[0],costPrice:0}]},'PURCHASE_CANCELLED_STOCK_MISMATCH');
 });
 it.skipIf(!active)('rejects negative initial stock and missing new contact information',()=>{
  seed(state);reject({...state,items:[{...bean,stock:-1,openingStock:0}]},'INVENTORY_MOVEMENT_MISMATCH');

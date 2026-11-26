@@ -1,4 +1,4 @@
-import React, {useId, useState} from 'react';
+import { useId, useState } from 'react';
 import {ChevronDown, ChevronLeft, FolderSync, Receipt, Search} from 'lucide-react';
 import {sectionLinks, workspaceGroups} from './workspaceSections';
 import './workspace-directory.css';

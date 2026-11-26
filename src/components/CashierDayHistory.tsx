@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { CashierDay } from '../types/erp';
 import { RecordPagination, useRecordPage } from './RecordPagination';
 import { EmptyState } from './EmptyState';

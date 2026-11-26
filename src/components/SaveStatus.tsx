@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import { useEffect, useState } from 'react';
 
 export function SaveStatus({savedAt, ready, message}: {savedAt?: number; ready: boolean; message: string}) {
   const [visibleAt, setVisibleAt] = useState<number>();

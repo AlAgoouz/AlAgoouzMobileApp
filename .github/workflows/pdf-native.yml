@@ -2,7 +2,7 @@ name: Agouz PDF native runtime
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['scripts/pdf/build-native.sh', '.github/workflows/pdf-native.yml']
+    paths: ['scripts/pdf/build-native.sh', 'scripts/pdf/pack-native.py', '.github/workflows/pdf-native.yml']
 permissions:
   contents: read
 jobs:
@@ -12,7 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash scripts/pdf/build-native.sh
+      - run: python3 scripts/pdf/pack-native.py
       - uses: actions/upload-artifact@v4
         with:
           name: agouz-pdf-native
-          path: backend/native/
+          path: |
+            backend/native/libraries.zip
+            backend/native/licenses/
+            backend/native/README.md
+            backend/native/RPM-PACKAGES.txt
+            backend/native/SHA256SUMS

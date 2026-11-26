@@ -1,4 +1,3 @@
-import React from 'react';
 import {money} from '../lib/reporting';
 
 export function Money({value}: {value: number | null}) {

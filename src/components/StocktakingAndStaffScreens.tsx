@@ -1,3 +1,4 @@
+import {multiplyMoney, roundMoney, sumMoney} from '../lib/money';
 import {matchesRecordSearch} from '../lib/recordSearch';
 import {RecordTabs} from './RecordTabs';
 import {unitLabel as displayUnit} from '../lib/units';
@@ -6,10 +7,10 @@ import {OperationHeader} from './OperationHeader';
 import {Modal} from './Modal';
 import {RecordPagination,useRecordPage} from './RecordPagination';
 import {isStockItem} from '../lib/itemPolicy';
-import {parseLocalizedNumber} from '../lib/cashierRows';
+import {parseDecimalInput} from '../lib/cashierRows';
 import React, { useState, useMemo, useRef } from "react";
 import { payrollBalance, currentPayrollPeriod } from '../lib/payroll';
-import {Scale, CheckCircle2, History, Search, Users, Wallet, CalendarCheck, Award, AlertOctagon, Banknote, Check, UserPlus, Trash2} from 'lucide-react';
+import { CheckCircle2, Search, Wallet, CalendarCheck, Award, AlertOctagon, Banknote, Check, UserPlus, Trash2 } from 'lucide-react';
 import {
   InventoryItem,
   StocktakingAuditRecord,
@@ -96,7 +97,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
       const actual =
         typed !== undefined && Number.isFinite(typed) ? typed : item.stock;
       const diff = Number((actual - item.stock).toFixed(3));
-      const finDiff = Number((diff * item.costPrice).toFixed(2));
+      const finDiff = multiplyMoney(diff, item.costPrice);
       return {
         itemId: item.id,
         itemName: item.name,
@@ -133,9 +134,9 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
     }
 
     return {
-      totalShortage: Number(totalShortage.toFixed(2)),
-      totalSurplus: Number(totalSurplus.toFixed(2)),
-      netVariance: Number((totalSurplus - totalShortage).toFixed(2)),
+      totalShortage: roundMoney(totalShortage),
+      totalSurplus: roundMoney(totalSurplus),
+      netVariance: sumMoney([totalSurplus, -totalShortage]),
       shortageCount,
       surplusCount,
       matchingCount: allVariances.filter(v=>typedActuals[v.itemId]!==undefined&&Math.abs(v.difference)<=0.0001).length,
@@ -146,7 +147,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
     // نحفظ النص الخام للعرض، ونُحدّث الرصيد الفعلي فقط بقيمة صالحة
     // (إدخال فارغ أو غير صحيح لا يصفّر الرصيد؛ يبقى آخر قيمة سليمة)
     setRawInputs((prev) => ({ ...prev, [item.id]: rawVal }));
-    const num = parseLocalizedNumber(rawVal) ?? NaN;
+    const num = parseDecimalInput(rawVal) ?? NaN;
     if (!Number.isFinite(num) || num < 0) {
       setTypedActuals(current=>{
         const next={...current};
@@ -177,7 +178,7 @@ export const StocktakingScreen: React.FC<StocktakingScreenProps> = ({
     if (
       Object.values(rawInputs).some(
         (value) =>
-          !value.trim() || (parseLocalizedNumber(value) ?? -1) < 0,
+          !value.trim() || (parseDecimalInput(value) ?? -1) < 0,
       )
     ) {
       setAuditError(
@@ -648,7 +649,6 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
   const [newEmployeeError, setNewEmployeeError] = useState("");
   const [newEmpName, setNewEmpName] = useState("");
   const [newEmpRole, setNewEmpRole] = useState<Employee["role"]>("باريستا");
-  const [newEmpPhone, setNewEmpPhone] = useState("");
   const [newEmpSalaryType, setNewEmpSalaryType] =
     useState<Employee["salaryType"]>("شهري");
   const [newEmpMonthly, setNewEmpMonthly] = useState("5500");
@@ -763,7 +763,7 @@ export const StaffAndPayrollScreen: React.FC<StaffAndPayrollScreenProps> = ({
     const accepted = onAddNewEmployee({
       name: newEmpName.trim(),
       role: newEmpRole,
-      phone: newEmpPhone || "-",
+      phone: "-",
       salaryType: newEmpSalaryType,
       baseMonthlySalary: monthly,
       dailyRate: daily,

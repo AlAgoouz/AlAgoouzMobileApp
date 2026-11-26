@@ -1,4 +1,4 @@
-import React,{useMemo,useState} from 'react';
+import { useMemo, useState } from 'react';
 import type {CatalogNameDraft,InventoryItem,RecipeProductDefinition} from '../types/erp';
 import {ItemDefinitionModal} from './ItemDefinitionModal';
 import {useRecordPage} from './RecordPagination';

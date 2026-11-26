@@ -1,5 +1,5 @@
 import {Modal} from './Modal';
-import React,{useRef,useState} from 'react';
+import { useRef, useState } from 'react';
 import type {InventoryItem,ItemCategory,RecipeProductDefinition} from '../types/erp';
 import {itemCategories,requiresRecipe,isRecipeOnUse} from '../lib/itemPolicy';
 import {nextItemCode} from '../lib/operationChecks';

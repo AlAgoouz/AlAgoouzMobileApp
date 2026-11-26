@@ -1,5 +1,5 @@
 import {unitLabel as displayUnit} from '../lib/units';
-import React,{useEffect,useState} from 'react';
+import { useEffect, useState } from 'react';
 import {Search,ChevronLeft} from 'lucide-react';
 import {itemResultsSchema,readRpc,type ItemSearchResult} from '../lib/readModels';
 import {money} from '../lib/reporting';

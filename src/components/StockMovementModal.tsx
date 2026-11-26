@@ -1,4 +1,4 @@
-import React, {useMemo} from 'react';
+import { useMemo } from 'react';
 import type {InventoryItem} from '../types/erp';
 import type {StoreState} from '../lib/storeState';
 import {stockMovementHistory} from '../lib/stockMovementHistory';

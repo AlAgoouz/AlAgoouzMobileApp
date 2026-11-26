@@ -207,7 +207,10 @@ def parse_report(data: bytes, filename: str, kind: str, catalog=None, expected_d
             code = normalize(row.get(code_column, "")) if code_column else ""
             name = normalize(row.get(name_column, "")) if name_column else ""
             candidates = by_code.get(code, []) if code else by_name.get(name, [])
-            quantity = localized_number(row.get(quantity_column, "")) if quantity_column else None
+            raw_quantity = row.get(quantity_column, "") if quantity_column else ""
+            quantity_text = unicodedata.normalize("NFKC", str(raw_quantity)).strip()
+            ambiguous = re.fullmatch(r"[+-]?\d{1,3},\d{3}", quantity_text)
+            quantity = None if ambiguous else localized_number(raw_quantity)
             matches.append({"itemId": candidates[0] if len(candidates) == 1 else None, "quantity": quantity, "requiresReview": len(candidates) != 1 or quantity is None or Decimal(quantity) <= 0 or bool(row.get('sourceIssue'))})
         if any(m["requiresReview"] for m in matches):
             warnings.append("ITEMS_REQUIRE_REVIEW")

@@ -1,5 +1,5 @@
 import { Modal } from './Modal';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import type { Customer, Supplier } from '../types/erp';
 import { checkCustomerDetails, checkSupplierDetails } from '../lib/contactDetails';
 

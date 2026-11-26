@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Moon, Search, Sun } from 'lucide-react';
 import { canWrite, type UserAccess } from '../lib/userAccess';
 import { useThemePreference } from '../lib/theme';

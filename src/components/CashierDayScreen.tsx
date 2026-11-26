@@ -1,5 +1,5 @@
 import {unitLabel as displayUnit} from '../lib/units';
-import React,{useEffect,useState,useMemo,useRef} from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {FileSpreadsheet, FolderSync, Receipt} from 'lucide-react';
 import type {ImportJob} from '../lib/importJobs';
 import {queuedRows} from '../lib/importJobs';

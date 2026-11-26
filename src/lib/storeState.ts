@@ -1,3 +1,4 @@
+import {multiplyMoney} from './money';
 import { z } from "zod";
 import { convertToBaseUnit } from "./itemCosts";
 import type {
@@ -204,6 +205,9 @@ export const schema = z.object({
       supplierName: text,
       inventoryBefore: z.array(item).optional(),
       inventoryAfter: z.array(item).optional(),
+      inventoryHistory: z.array(z.object({
+        itemId: id, costEntries: z.int().nonnegative().max(2147483646).nullable(), supplierEntries: z.int().nonnegative().max(2147483646),
+      })).min(1).optional(),
       items: z.array(
         z
           .object({
@@ -431,7 +435,7 @@ export function validateStore(value: unknown): StoreState {
     for(const line of day.itemsReport?.lines??[]){const raw=itemsById.get(line.itemId);if(!raw||Math.abs(convertToBaseUnit(line.quantity,line.unitLabel as import('../types/erp').UnitType,raw.baseUnit)-line.normalizedQtyInBaseUnit)>0.000001)throw Error('كمية تقرير الكاشير أو وحدته غير صحيحة');}
     if(day.status==='approved'){
       const costs=day.consumption!;
-      if(new Set(costs.map(l=>l.itemId)).size!==costs.length||costs.some(l=>!itemsById.has(l.itemId)||Math.abs(Number((l.quantity*l.unitCost).toFixed(2))-l.totalCost)>0.011)||Math.abs(costs.reduce((sum,l)=>sum+l.totalCost,0)-day.totalCost!)>0.011)throw Error('تكلفة يوم الكاشير لا تطابق المكونات المستهلكة');
+      if(new Set(costs.map(l=>l.itemId)).size!==costs.length||costs.some(l=>!itemsById.has(l.itemId)||Math.abs(multiplyMoney(l.quantity,l.unitCost)-l.totalCost)>0.011)||Math.abs(costs.reduce((sum,l)=>sum+l.totalCost,0)-day.totalCost!)>0.011)throw Error('تكلفة يوم الكاشير لا تطابق المكونات المستهلكة');
     }else if(day.totalCost!==undefined||day.consumption||day.approvedAt||day.shortages)throw Error('يوم الكاشير لم يعتمد؛ لا يمكن تسجيل تكلفته بعد');
   }
   for (const [key, rows] of Object.entries(parsed)) {

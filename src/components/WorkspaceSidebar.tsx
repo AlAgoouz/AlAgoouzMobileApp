@@ -1,4 +1,3 @@
-import React from 'react';
 import { ChevronLeft, Home, LayoutGrid, Moon, Sun, UserRound } from 'lucide-react';
 import { sectionLinks, workspaceGroups } from './workspaceSections';
 import { useThemePreference } from '../lib/theme';

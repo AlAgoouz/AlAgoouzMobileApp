@@ -1,3 +1,4 @@
+import {compactPurchaseItem, restorePurchasedItem} from './purchaseInventory';
 import {roundMoney as money,sumMoney} from './money';
 import type { StoreState } from './storeState';
 import { businessDate, validCalendarDate } from './dates';
@@ -50,16 +51,14 @@ export function reversePayment(
       return amount
         ? {
             ...invoice,
-            paidAmount: Number((invoice.paidAmount - amount).toFixed(2)),
-            remainingAmount: Number(
-              (invoice.remainingAmount + amount).toFixed(2),
-            ),
+            paidAmount: money(invoice.paidAmount - amount),
+            remainingAmount: money(invoice.remainingAmount + amount),
           }
         : invoice;
     }),
     [field]: state[field].map((a) =>
       a.id === payment.targetId
-        ? { ...a, balance: Number((a.balance + payment.amount).toFixed(2)) }
+        ? { ...a, balance: money(a.balance + payment.amount) }
         : a,
     ),
     accountPayments: state.accountPayments.map((p) =>
@@ -97,12 +96,9 @@ export function returnSale(
     throw new Error('المتبقي على الفاتورة أكبر من مديونية العميل؛ راجع التحصيلات قبل اعتماد المرتجع');
   const debtReversed = invoice.remainingAmount;
   const refundAmount = invoice.paidAmount;
-  const consumedCost = Number(
-    invoice.items
-      .filter((line) => ['drink_recipe', 'seasoning_recipe'].includes(line.category))
-      .reduce((sum, line) => sum + line.totalCost, 0)
-      .toFixed(2),
-  );
+  const consumedCost = sumMoney(invoice.items
+    .filter(line => ['drink_recipe', 'seasoning_recipe'].includes(line.category))
+    .map(line => line.totalCost));
   return {
     ...state,
     expenses:
@@ -135,7 +131,7 @@ export function returnSale(
       c.id === invoice.customerId
         ? {
             ...c,
-            balance: Number((c.balance - debtReversed).toFixed(2)),
+            balance: money(c.balance - debtReversed),
             totalSales: money(Math.max(0, c.totalSales - invoice.totalAmount)),
             invoicesCount: Math.max(0, c.invoicesCount - 1),
           }
@@ -200,12 +196,10 @@ export function recordPayment(
   for (const invoice of [...invoices].sort(
     (a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id),
   )) {
-    const paid = Number(
-      Math.min(remaining, invoice.remainingAmount).toFixed(2),
-    );
+    const paid = money(Math.min(remaining, invoice.remainingAmount));
     if (paid > 0) {
       allocations.push({ invoiceId: invoice.id, amount: paid });
-      remaining = Number((remaining - paid).toFixed(2));
+      remaining = money(remaining - paid);
     }
     if (remaining <= 0) break;
   }
@@ -215,7 +209,7 @@ export function recordPayment(
     ...state,
     [field]: state[field].map((a) =>
       a.id === id
-        ? { ...a, balance: Number((a.balance - amount).toFixed(2)) }
+        ? { ...a, balance: money(a.balance - amount) }
         : a,
     ),
     [invoiceField]: state[invoiceField].map((invoice) => {
@@ -224,10 +218,8 @@ export function recordPayment(
       return paid
         ? {
             ...invoice,
-            paidAmount: Number((invoice.paidAmount + paid).toFixed(2)),
-            remainingAmount: Number(
-              (invoice.remainingAmount - paid).toFixed(2),
-            ),
+            paidAmount: money(invoice.paidAmount + paid),
+            remainingAmount: money(invoice.remainingAmount - paid),
           }
         : invoice;
     }),
@@ -275,7 +267,7 @@ export function cancelPurchase(
     const current = state.items.find((i) => i.id === after.id);
     if (
       !current ||
-      JSON.stringify(canonical(current)) !== JSON.stringify(canonical(after))
+      JSON.stringify(canonical(invoice.inventoryHistory ? compactPurchaseItem(current, true) : current)) !== JSON.stringify(canonical(after))
     )
       throw new Error(
         'حدثت حركة لاحقة على أصناف الفاتورة؛ لا يمكن إلغاؤها قبل تسوية تلك الحركة.',
@@ -284,9 +276,10 @@ export function cancelPurchase(
   const supplier = state.suppliers.find((s) => s.id === invoice.supplierId);
   if (!supplier || supplier.balance + 0.001 < invoice.remainingAmount)
     throw new Error('رصيد المورد يحتاج مراجعة قبل الإلغاء');
-  const restoredItems = state.items.map(
-    (item) => invoice.inventoryBefore!.find((old) => old.id === item.id) ?? item,
-  );
+  const restoredItems = state.items.map(item => {
+    const before = invoice.inventoryBefore!.find(old => old.id === item.id);
+    return before ? restorePurchasedItem(item, before, invoice) : item;
+  });
   return {
     ...state,
     items: recalculateRecipeCosts(restoredItems),
@@ -294,7 +287,7 @@ export function cancelPurchase(
       s.id === invoice.supplierId
         ? {
             ...s,
-            balance: Number((s.balance - invoice.remainingAmount).toFixed(2)),
+            balance: money(s.balance - invoice.remainingAmount),
             totalPurchases: money(
               Math.max(0, s.totalPurchases - invoice.totalAmount),
             ),

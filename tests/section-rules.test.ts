@@ -1,6 +1,8 @@
 import {expect,it} from 'vitest';
 import {emptyStore,validateStore,createBackup,parseBackup} from '../src/lib/storeState';
-import {receiveStock} from '../src/lib/costing';
+import {movingAverageCost,receiveStock} from '../src/lib/costing';
+import {cancelPurchase} from '../src/lib/ledger';
+import {receivePurchaseInventory} from '../src/lib/purchaseInventory';
 import {deductInventory,productionNeeds} from '../src/lib/inventory';
 import {attachCashierReport,approveCashierDay,salesForReports} from '../src/lib/cashierDays';
 import {checkPurchase} from '../src/lib/operationChecks';
@@ -45,6 +47,11 @@ it('adds receipts to the signed stock and values only physically available stock
  const first=receiveStock({...raw,stock:2},2,200,{id:'P1',date:'2026-11-01',type:'purchase'});expect(first.costPrice).toBe(150);expect(first.stock).toBe(4);
  const second=receiveStock({...raw,stock:-3},2,200,{id:'P2',date:'2026-11-03',type:'purchase'});expect(second.stock).toBe(-1);expect(second.costPrice).toBe(200);expect(second.costHistory?.[0]).toMatchObject({date:'2026-11-03',sourceId:'P2',quantity:2,unitCost:200});
 });
+it('rounds exact weighted midpoints using the same rule as PostgreSQL numeric',()=>{
+ expect(movingAverageCost(1,1,1,1.01)).toBe(1.01);
+ expect(movingAverageCost(0.14,1,0.14,1.15)).toBe(1.08);
+});
+
 it('keeps batch cost controlled by documents after the first purchase',()=>{
  const received=receiveStock(raw,2,200,{id:'P1',date:'2026-11-03',type:'purchase'});
  expect(()=>adjustCatalogItem({...emptyStore,items:[received]},raw.id,{costPrice:1},'Owner')).toThrow('لا تعدلها يدويًا');
@@ -60,6 +67,23 @@ it('validates separate purchase tax and rejects new unpaid purchases or a season
  expect(()=>checkPurchase(purchase,[raw])).not.toThrow();expect(()=>checkPurchase({...purchase,paidAmount:200,remainingAmount:28},[raw])).toThrow('مدفوعة بالكامل');
  expect(()=>checkPurchase({...purchase,totalAmount:200},[raw])).toThrow();expect(()=>checkPurchase({...purchase,items:[{...purchase.items[0],itemId:seasoning.id}]},[seasoning])).toThrow();
 });
+it('keeps the receipt history once and restores it across sequential purchase cancellations',()=>{
+ const invoice={...purchase};
+ const nextInvoice={...purchase,id:'next',invoiceNumber:'P2'};
+ const supplied={id:'supplier',name:'مورد',phone:'01012345678',address:'القاهرة',representativeName:'مندوب',category:'بن',balance:0,totalPurchases:456,invoicesCount:2};
+ const firstItems=receivePurchaseInventory([raw],invoice);
+ const secondItems=receivePurchaseInventory(firstItems,nextInvoice);
+ expect(secondItems[0].costHistory).toHaveLength(2);
+ expect(nextInvoice.inventoryBefore?.[0]).toMatchObject({supplierPrices:[]});
+ expect(nextInvoice.inventoryBefore?.[0].costHistory).toBeUndefined();
+ expect(nextInvoice.inventoryAfter?.[0].costHistory).toEqual([secondItems[0].costHistory?.[1]]);
+ const state=validateStore({...emptyStore,items:secondItems,purchaseInvoices:[nextInvoice,invoice],suppliers:[supplied]});
+ expect(()=>cancelPurchase(state,invoice.id,'Owner')).toThrow();
+ const first=cancelPurchase(state,nextInvoice.id,'Owner');
+ expect(first.items).toEqual(firstItems);
+ expect(cancelPurchase(first,invoice.id,'Owner').items).toEqual([raw]);
+});
+
 it('compares the latest dated supplier price while retaining every older batch',()=>{
  const result=supplierPurchaseHistory([purchase,{...purchase,id:'old',date:'2026-11-01',items:[{...purchase.items[0],purchasePrice:50}]}],'supplier');expect(result.latest[0].purchasePrice).toBe(100);expect(result.history).toHaveLength(2);
 });

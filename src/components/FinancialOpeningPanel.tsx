@@ -5,13 +5,13 @@ import type {ReportRange} from '../lib/reporting';
 import {money} from '../lib/reporting';
 import {businessDate} from '../lib/dates';
 import {financialPosition} from '../lib/financialOpening';
-import {parseLocalizedNumber} from '../lib/cashierRows';
+import {parseDecimalInput} from '../lib/cashierRows';
 export function FinancialOpeningPanel({state,range,onSave}:{state:StoreState;range:ReportRange;onSave?:(date:string,amount:number,reason:string)=>Promise<void>}){
  const opening=state.financialOpenings[0],today=businessDate(),end=range.to<today?range.to:today;
  const position=useMemo(()=>financialPosition(state,range.from,end),[state,range.from,end]);
  const [editing,setEditing]=useState(false),[date,setDate]=useState(''),[amount,setAmount]=useState(''),[reason,setReason]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const edit=()=>{setDate(opening?.date??today.slice(0,7)+'-01');setAmount(opening?String(opening.amount):'');setReason('');setError('');setEditing(true);};
- const save=async(e:React.FormEvent)=>{e.preventDefault();if(!onSave||busy)return;setError('');const value=parseLocalizedNumber(amount);if(!amount.trim()||value===undefined){setError('أدخل الرصيد الفعلي؛ الصفر مقبول عند تأكيد عدم وجود رصيد.');return;}setBusy(true);try{await onSave(date,value,reason);setEditing(false);}catch(e){setError(e instanceof Error?e.message:'لم يتأكد حفظ الرصيد.');}finally{setBusy(false);}};
+ const save=async(e:React.FormEvent)=>{e.preventDefault();if(!onSave||busy)return;setError('');const value=parseDecimalInput(amount);if(!amount.trim()||value===undefined){setError('أدخل الرصيد الفعلي؛ الصفر مقبول عند تأكيد عدم وجود رصيد.');return;}setBusy(true);try{await onSave(date,value,reason);setEditing(false);}catch(e){setError(e instanceof Error?e.message:'لم يتأكد حفظ الرصيد.');}finally{setBusy(false);}};
  const display=(value:number|null)=>value===null?'غير متاح':money(value)+' ج.م';
  return <section className="visual-card space-y-4" aria-label="بداية المدة المالية"><div className="record-heading"><div><h2 className="font-bold">بداية المدة المالية والرصيد الدفتري</h2><p className="operation-note">رصيد مرحّل من الفترات التي تمت تسويتها، ويُضاف إلى أموال النشاط. مبيعات الفترة وأرباحها وحصص الشركاء تُحسب بصورة مستقلة.</p></div>{onSave&&<button className="record-action" onClick={edit}>{opening?'تصحيح رصيد البداية':'تحديد رصيد أول المدة'}</button>}</div>
   {!opening?<p className="record-state">رصيد أول المدة لم يُحدد بعد.</p>:<><p>رصيد البداية في خزنة الشركة: <strong>{money(opening.amount)} ج.م</strong> · بدءًا من {opening.date}</p>

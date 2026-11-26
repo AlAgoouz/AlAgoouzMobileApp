@@ -3,24 +3,33 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const STORAGE_URL_KEY = 'bon_elagouz_supabase_url';
 const STORAGE_ANON_KEY = 'bon_elagouz_supabase_anon_key';
 
-export function getSupabaseCredentials(): { url: string; anonKey: string } {
-  const envUrl =
-    (import.meta as unknown as { env?: Record<string, string> }).env
-      ?.VITE_SUPABASE_URL || '';
-  const envKey =
-    (import.meta as unknown as { env?: Record<string, string> }).env
-      ?.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    (import.meta as unknown as { env?: Record<string, string> }).env
-      ?.VITE_SUPABASE_ANON_KEY ||
-    '';
-  const savedUrl = envUrl || localStorage.getItem(STORAGE_URL_KEY) || '';
-  const savedKey = envKey || localStorage.getItem(STORAGE_ANON_KEY) || '';
-  return { url: savedUrl.trim(), anonKey: savedKey.trim() };
+function environmentCredentials() {
+  const env = (import.meta as unknown as {env?: Record<string, string>}).env;
+  return {
+    url: env?.VITE_SUPABASE_URL?.trim() || '',
+    anonKey: env?.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() || env?.VITE_SUPABASE_ANON_KEY?.trim() || '',
+  };
+}
+
+export function getSupabaseSettings() {
+  const environment = environmentCredentials();
+  return {
+    url: environment.url || localStorage.getItem(STORAGE_URL_KEY)?.trim() || '',
+    anonKey: environment.anonKey || localStorage.getItem(STORAGE_ANON_KEY)?.trim() || '',
+    urlFromEnvironment: Boolean(environment.url),
+    keyFromEnvironment: Boolean(environment.anonKey),
+  };
+}
+
+export function getSupabaseCredentials() {
+  const {url, anonKey} = getSupabaseSettings();
+  return {url, anonKey};
 }
 
 export function saveSupabaseCredentials(url: string, anonKey: string) {
-  localStorage.setItem(STORAGE_URL_KEY, url.trim());
-  localStorage.setItem(STORAGE_ANON_KEY, anonKey.trim());
+  const environment = environmentCredentials();
+  if (!environment.url) localStorage.setItem(STORAGE_URL_KEY, url.trim());
+  if (!environment.anonKey) localStorage.setItem(STORAGE_ANON_KEY, anonKey.trim());
 }
 
 let clientInstance: SupabaseClient | null = null;

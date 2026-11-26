@@ -1,5 +1,5 @@
 import {Modal} from './Modal';
-import React,{useEffect,useState} from 'react';
+import { useEffect, useState } from 'react';
 import {ShieldCheck,UserPlus,Users} from 'lucide-react';
 import {OperationHeader} from './OperationHeader';
 import {RecordPagination,useRecordPage} from './RecordPagination';
