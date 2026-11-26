@@ -49,10 +49,12 @@ begin
 end
 $$;
 
-create function bon_erp_private.validate_new_purchase_snapshots()
+create function bon_erp_private.validate_purchase_snapshots()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare
   invoice jsonb;
+  earlier_invoice jsonb;
+  after_snapshot jsonb;
   line jsonb;
   previous jsonb;
   current_item jsonb;
@@ -105,13 +107,34 @@ begin
       then raise exception 'PURCHASE_SNAPSHOT_MISMATCH'; end if;
     end loop;
   end loop;
+
+  for earlier_invoice in
+    select value from jsonb_array_elements(old.purchase_invoices) prior
+    where value ? 'inventoryHistory' and not coalesce((value->>'isCancelled')::boolean,false)
+  loop
+    select value into invoice from jsonb_array_elements(new.purchase_invoices)
+      where value->>'id'=earlier_invoice->>'id';
+    if invoice is null then continue; end if;
+    if (invoice->'inventoryHistory') is distinct from (earlier_invoice->'inventoryHistory')
+      or (invoice->'inventoryBefore') is distinct from (earlier_invoice->'inventoryBefore')
+      or (invoice->'inventoryAfter') is distinct from (earlier_invoice->'inventoryAfter')
+    then raise exception 'PURCHASE_SNAPSHOT_MISMATCH'; end if;
+    if not coalesce((invoice->>'isCancelled')::boolean,false) then continue; end if;
+
+    for after_snapshot in select value from jsonb_array_elements(earlier_invoice->'inventoryAfter') loop
+      select value into current_item from jsonb_array_elements(old.items)
+        where value->>'id'=after_snapshot->>'id';
+      perform bon_erp_private.check_purchase_snapshot_cancellation(
+        earlier_invoice,after_snapshot,current_item,new.items);
+    end loop;
+  end loop;
   return new;
 end
 $$;
 
 create trigger verify_purchase_snapshot_history before update of purchase_invoices on public.bon_elagouz_store
 for each row when (old.purchase_invoices is distinct from new.purchase_invoices)
-execute function bon_erp_private.validate_new_purchase_snapshots();
+execute function bon_erp_private.validate_purchase_snapshots();
 
 do $migration$
 declare
@@ -135,13 +158,17 @@ begin
   execute replace(definition,'$schema$'||source_schema||'$schema$','$schema$'||next_schema::text||'$schema$');
 
   definition := pg_get_functiondef('bon_erp_private.validate_changes(jsonb,jsonb)'::regprocedure);
-  if position(old_check in definition)=0 then raise exception 'PURCHASE_SNAPSHOT_TRANSITION_PATCH_REFUSED'; end if;
-  execute replace(definition,old_check,$sql$
-    if n ? 'inventoryHistory' then
-      perform bon_erp_private.check_purchase_snapshot_cancellation(n,i,r,s->'items');
-    elsif r is distinct from i then raise exception 'PURCHASE_HAS_LATER_MOVEMENTS';
-    end if;
-  $sql$);
+  -- Some deployed revisions use a separate cancellation trigger. Leave that
+  -- revision's financial rules in place. The trigger above verifies compact invoices.
+  if position(old_check in definition)>0 then
+    execute replace(definition,old_check,$sql$
+      if not (n ? 'inventoryHistory') and r is distinct from i then
+        raise exception 'PURCHASE_HAS_LATER_MOVEMENTS';
+      end if;
+    $sql$);
+  elsif position('PURCHASE_HAS_LATER_MOVEMENTS' in definition)>0 then
+    raise exception 'PURCHASE_SNAPSHOT_TRANSITION_PATCH_REFUSED';
+  end if;
 
   -- Older screens preserve the compact snapshots but their schema omits the checkpoint.
   -- Keep the accepted checkpoint unless a newer client explicitly supplies one.
@@ -167,7 +194,7 @@ $migration$;
 
 revoke all on function bon_erp_private.compact_purchase_item(jsonb,boolean),
   bon_erp_private.check_purchase_snapshot_cancellation(jsonb,jsonb,jsonb,jsonb),
-  bon_erp_private.validate_new_purchase_snapshots()
+  bon_erp_private.validate_purchase_snapshots()
 from public, anon, authenticated;
 
 commit;
