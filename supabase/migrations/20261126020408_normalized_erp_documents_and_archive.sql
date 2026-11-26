@@ -12,6 +12,11 @@ create table bon_erp_private.erp_documents (
 
 alter table bon_erp_private.erp_documents enable row level security;
 revoke all on bon_erp_private.erp_documents from public, anon, authenticated;
+grant select on bon_erp_private.erp_documents to authenticated;
+create policy erp_documents_store_read on bon_erp_private.erp_documents
+for select to authenticated
+using (exists (select 1 from public.bon_elagouz_store store where store.id=erp_documents.store_id));
+
 create index erp_document_order on bon_erp_private.erp_documents(store_id,section,position);
 
 do $$
@@ -168,6 +173,13 @@ begin
     'jsonb_array_elements(case when kind=''cashier'' then s.cashier_days else s.sales_invoices end) with ordinality t(v,ord)',
     '(select payload as v, position as ord from bon_erp_private.erp_documents where store_id=s.id and section=case when kind=''cashier'' then ''cashier_days'' else ''sales_invoices'' end) t');
   if patched=body then raise exception 'ERP_DOCUMENT_HISTORY_PATCH_REFUSED'; end if;
+  execute patched;
+
+  body:=pg_get_functiondef('public.bon_erp_sale_detail(text,text)'::regprocedure);
+  patched:=replace(body,
+    'cross join lateral jsonb_array_elements(case when p_kind=''cashier'' then s.cashier_days else s.sales_invoices end) v',
+    'cross join lateral (select payload as v from bon_erp_private.erp_documents where store_id=s.id and section=case when p_kind=''cashier'' then ''cashier_days'' else ''sales_invoices'' end and document_id=p_id) records');
+  if patched=body then raise exception 'ERP_DOCUMENT_DETAIL_PATCH_REFUSED'; end if;
   execute patched;
 
   body:=pg_get_functiondef('public.bon_erp_item_search(text,integer)'::regprocedure);

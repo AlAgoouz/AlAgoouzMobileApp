@@ -1,4 +1,4 @@
-import {useState, type ComponentPropsWithoutRef} from 'react';
+import {useEffect, useRef, useState, type ComponentPropsWithoutRef} from 'react';
 import {parseDecimalInput} from '../lib/decimalInput';
 
 interface DecimalNumberFieldProps extends Omit<ComponentPropsWithoutRef<'input'>,'value'|'type'|'onChange'|'min'> {
@@ -11,6 +11,10 @@ interface DecimalNumberFieldProps extends Omit<ComponentPropsWithoutRef<'input'>
 export function DecimalNumberField({value, positive, onValue, onValidity, ...props}: DecimalNumberFieldProps) {
   const [draft, setDraft] = useState<string>();
   const [invalid, setInvalid] = useState(false);
+  const validity = useRef(onValidity);
+  validity.current = onValidity;
+  useEffect(() => () => validity.current(true), []);
+
   function parse(text: string) {
     const number = parseDecimalInput(text);
     return number === undefined || number < 0 || (positive && number === 0) ? undefined : number;

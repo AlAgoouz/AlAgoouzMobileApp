@@ -1,3 +1,5 @@
+import {useCashierQueue} from './hooks/useCashierQueue';
+import {useWorkspaceToast} from './hooks/useWorkspaceToast';
 import {checkCustomerDetails, checkSupplierDetails} from './lib/contactDetails';
 import {createInventoryActions} from './lib/inventoryActions';
 import {useDashboardRead} from './hooks/useDashboardRead';
@@ -22,7 +24,6 @@ import {CashierDayDetail} from './components/CashierDayDetail';
 import {initialPeriod,reportRange} from './lib/reporting';
 import {canView,canWrite,writePermissions} from './lib/userAccess';
 import {SectionsHub} from './components/SectionsHub';
-import type {QueuedCashierReport} from './components/CashierDayScreen';
 import {cashierCostDetails,correctedCashierCost} from './lib/cashierCosts';
 import {attachCashierReport,approveCashierDay,salesForReports} from './lib/cashierDays';
 import React, { useState, useEffect, useMemo, useRef } from "react";
@@ -36,7 +37,7 @@ import {
   Employee,
 } from "./types/erp";
 
-import { getSupabaseClient, getSupabaseCredentials } from "./lib/supabaseSync";
+import { getSupabaseCredentials } from "./lib/supabaseSync";
 import { useErpStore } from "./hooks/useErpStore";
 import { parseBackup, createBackup, type StoreState } from "./lib/storeState";
 import { reversePayment, saveSaleReturn, recordPayment, cancelPurchase, receivePurchaseRefund, recordExpense, cancelExpense } from "./lib/ledger";
@@ -163,13 +164,7 @@ export default function App() {
     }
   }, [screenKey]);
   const [reportPeriod,setReportPeriod]=useState(initialPeriod);
-  const [toastNotification, setToastNotification] = useState<{
-    id: number;
-    message: string;
-    tone: 'ok' | 'warn' | 'danger' | 'info';
-  } | null>(null);
-  const toastTimerRef = useRef<number | null>(null);
-
+  const {toastNotification, setToastNotification, scheduleToastDismiss, pauseToastDismiss, showToast}=useWorkspaceToast();
   const [selectedFinancialPartnerId,setSelectedFinancialPartnerId]=useState('');
   const [historyEditing,setHistoryEditing]=useState(false);
   const [salesHistoryView,setSalesHistoryView]=useState(initialSalesHistoryView);
@@ -318,86 +313,8 @@ export default function App() {
   const [receiptModalInvoice, setReceiptModalInvoice] =
     useState<SalesInvoice | null>(null);
 
-  const scheduleToastDismiss = (id: number) => {
-    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = window.setTimeout(() => {
-      setToastNotification((prev) => (prev?.id === id ? null : prev));
-    }, 5000);
-  };
-
-  const pauseToastDismiss = () => {
-    if (toastTimerRef.current !== null) {
-      window.clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = null;
-    }
-  };
-
-  const showToast = (msg: string, explicitTone?: 'ok' | 'warn' | 'danger' | 'info') => {
-    const inferredTone: 'ok' | 'warn' | 'danger' | 'info' =
-      explicitTone ??
-      (/^(?:تعذر|فشل|خطأ)/.test(msg.trim())
-        ? 'danger'
-        : /^(?:لا يمكن|حساب المورد مرتبط|حساب العميل مرتبط|أُلغيت|هذه فاتورة معتمدة)/.test(msg.trim())
-          ? 'warn'
-          : 'ok');
-    const id = Date.now();
-    setToastNotification({ id, message: msg, tone: inferredTone });
-    scheduleToastDismiss(id);
-  };
-
-  const [queueError, setQueueError] = useState("");
-  const queueBusy = React.useRef(false);
-  const returnBusy = React.useRef(false);
-  const [queuedReports,setQueuedReports]=useState<QueuedCashierReport[]>([]);
-  useEffect(() => {
-    if (!member || activeScreen!=="cashier_sync") return;
-    const sb = getSupabaseClient();
-    if (!sb) return;
-    let disposed = false;
-    const processPending = async () => {
-      if (disposed || queueBusy.current || document.visibilityState === "hidden" || !navigator.onLine || engine.snapshot.status !== "ready")
-        return;
-      queueBusy.current = true;
-      try {
-        const { data, error } = await sb
-          .from("cashier_sync_queue")
-          .select("id,file_name,sale_date,content_hash,report_kind,import_job_id")
-          .eq("processed", false)
-          .order("created_at")
-          .limit(20);
-        if (error) throw new Error("تعذر قراءة الملفات المعلقة للكاشير");
-        if(!disposed){setQueuedReports(previous=>previous.length===data?.length&&previous.every((r,i)=>r.id===data[i].id&&r.content_hash===data[i].content_hash)?previous:data??[]);setQueueError('');}
-      } catch (error) {
-        if (!disposed)
-          setQueueError(
-            error instanceof Error ? error.message : "تعذر معالجة ملف الكاشير",
-          );
-      } finally {
-        queueBusy.current = false;
-      }
-    };
-    const channel = sb
-      .channel("erp-cashier-v4")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "cashier_sync_queue" },
-        () => {
-          void processPending();
-        },
-      )
-      .subscribe();
-    const timer = setInterval(() => {
-      void processPending();
-    }, 15000);
-    void processPending();
-    window.addEventListener("online", processPending);
-    return () => {
-      disposed = true;
-      clearInterval(timer);
-      window.removeEventListener("online", processPending);
-      void sb.removeChannel(channel);
-    };
-  }, [member?.userId, engine,activeScreen]);
+  const returnBusy = useRef(false);
+  const {queueError, queuedReports, setQueuedReports}=useCashierQueue(activeScreen==='cashier_sync',member?.userId,engine);
 
   const addAuditLog = (
     actionType: AuditLogEntry["actionType"],
@@ -426,6 +343,7 @@ export default function App() {
 
   // 7. أدوات التحكم الشامل في البيانات (تصفير وحذف الداتا التجريبية)
   const handleClearTransactionsKeepCatalog = () => {
+    if(engine.isOffline)throw Error('أدوات تصفير البيانات تحتاج اتصالًا بالخادم.');
     setItems((prev) =>
       prev.map((item) => ({
         ...item,
@@ -480,6 +398,7 @@ export default function App() {
   };
 
   const handleClearAllDemoData = () => {
+    if(engine.isOffline)throw Error('أدوات تصفير البيانات تحتاج اتصالًا بالخادم.');
     setItems([]);
     setSalesInvoices([]);
     engine.field("cashierDays", []);

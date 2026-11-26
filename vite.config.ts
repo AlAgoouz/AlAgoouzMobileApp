@@ -52,10 +52,24 @@ const offlineBundle = (): Plugin => ({
   apply: 'build',
   generateBundle(_options,bundle) {
     const assets = Object.keys(bundle).filter(path => /^assets\/.+\.(js|css|woff2|webp)$/.test(path)).sort().map(path => '/'+path);
+    const prepared = new Set<string>();
+    const follow = (file:string) => {
+      const item=bundle[file];
+      if(item?.type!=='chunk'||prepared.has(file))return;
+      prepared.add(file);
+      item.viteMetadata?.importedCss.forEach(css=>prepared.add(css));
+      item.imports.forEach(follow);
+    };
+    for(const item of Object.values(bundle)){
+      if(item.type==='chunk' && /\/(PurchaseScreen|WholesaleInvoiceScreen|ProductionAndRecipesScreen|StocktakingAndStaffScreens|ManagementScreens)\.tsx$/.test(item.facadeModuleId??''))
+        follow(item.fileName);
+    }
+    const offlineScreens = assets.filter(path=>prepared.has(path.slice(1)));
     const template = readFileSync(new URL('./src/workers/offline.js', import.meta.url), 'utf8');
-    const release = createHash('sha256').update(template).update(JSON.stringify(assets)).digest('hex').slice(0,16);
+    const release = createHash('sha256').update(template).update(JSON.stringify(assets)).update(JSON.stringify(offlineScreens)).digest('hex').slice(0,16);
     this.emitFile({type:'asset', fileName:'sw.js', source:template
-      .replace('__RELEASE__',release).replace('/* @offline-assets */ []',JSON.stringify(assets))});
+      .replace('__RELEASE__',release).replace('/* @offline-assets */ []',JSON.stringify(assets))
+      .replace('/* @offline-screens */ []',JSON.stringify(offlineScreens))});
   },
 });
 

@@ -737,8 +737,8 @@ export const PurchaseScreen: React.FC<PurchaseScreenProps> = ({
                                   name="purchase-price"
                                   value={purchasePrice}
                                   onValue={number => updateCartItem(item.id, {purchasePrice: number})}
-onValidity={valid => trackCartNumber(item.id, 'price', valid)}
-className="w-full text-sm font-black text-ink-strong bg-transparent"
+                                  onValidity={valid => trackCartNumber(item.id, 'price', valid)}
+                                  className="w-full text-sm font-black text-ink-strong bg-transparent"
                                 />
                                 <span className="text-xs text-ink font-bold">
                                   ج.م
@@ -771,9 +771,9 @@ className="w-full text-sm font-black text-ink-strong bg-transparent"
                                   name="purchase-quantity"
                                   value={quantity}
                                   onValue={number => updateCartItem(item.id, {quantity: number})}
-positive
-onValidity={valid => trackCartNumber(item.id, 'quantity', valid)}
-className="w-16 text-center font-black text-sm text-ink-strong bg-transparent"
+                                  positive
+                                  onValidity={valid => trackCartNumber(item.id, 'quantity', valid)}
+                                  className="w-16 text-center font-black text-sm text-ink-strong bg-transparent"
                                 />
                                 <button
                                   type="button"

@@ -580,10 +580,39 @@ export async function verifyDesign(){
       assert.equal(ledgerState.sales_invoices[0].totalAmount,666);
       assert.equal(ledgerState.items.find(item=>item.id===blend.id).stock,998);
       assert.equal(requestedPdf,true);
+      await operator.getByRole('button',{name:'إغلاق النافذة',exact:true}).click();
+      await operator.getByRole('button',{name:'الأقسام',exact:true}).last().click();
+      await operator.locator('.section-tile').filter({has:operator.locator('.section-tile-title',{hasText:'فواتير الجملة'})}).click();
+      await operator.getByRole('button',{name:'اختيار العميل',exact:true}).click();
+      await operator.getByRole('dialog').getByRole('button',{name:/مقهى الاختبار/}).click();
+      await operator.getByRole('button',{name:'إضافة توليفة',exact:true}).click();
+      await operator.getByRole('dialog').getByRole('button',{name:/توليفة الاختبار/}).click();
+      await workflow.setOffline(true);
+      try {
+        await operator.waitForFunction(()=>!navigator.onLine);
+        await operator.getByLabel('الكمية بالكيلو',{exact:true}).fill('١');
+        await operator.getByLabel('سعر الكيلو المتفق عليه',{exact:true}).fill('٣٣٣');
+        await operator.getByRole('button',{name:'مراجعة الفاتورة',exact:true}).click();
+        await operator.getByRole('button',{name:'اعتماد الفاتورة وخصم المخزون',exact:true}).click();
+        await operator.getByText('مسودات محفوظة على الجهاز وبانتظار المزامنة',{exact:true}).waitFor({state:'visible'});
+        assert.equal(saves.length,2);
+        assert.equal(ledgerState.sales_invoices.length,1);
+        const operation=await operator.evaluate(()=>{
+          const key=Object.keys(localStorage).find(item=>item.startsWith('agouz-offline-v1:'));
+          return key && JSON.parse(localStorage.getItem(key)).pending.id;
+        });
+        assert.ok(operation);
+        const synced=operator.waitForResponse(response=>response.url().endsWith('/rpc/bon_erp_save_store')&&response.ok());
+        await workflow.setOffline(false);
+        await synced;
+        assert.equal(saves.length,3);
+        assert.equal(saves[2].p_operation_id,operation);
+        assert.equal(ledgerState.sales_invoices.length,2);
+        assert.equal(ledgerState.items.find(item=>item.id===blend.id).stock,997);
+      } finally { await workflow.setOffline(false); }
       const day='2026-11-01';
       rows[0].result={sha256:'a'.repeat(64),rows:[{metric:'Begun',businessDate:day,amount:'120.00'}]};
       rows[1].result={sha256:'b'.repeat(64),businessDate:day,rows:[{code:raw.code,quantity:'2',unit:'kg'}]};
-      await operator.getByRole('button',{name:'إغلاق النافذة',exact:true}).click();
       await operator.getByRole('button',{name:'الأقسام',exact:true}).last().click();
       await operator.locator('.section-tile').filter({has:operator.locator('.section-tile-title',{hasText:'تقارير يوم الكاشير'})}).click();
       await operator.setViewportSize({width:320,height:700});

@@ -5,7 +5,7 @@ import { unitLabel as displayUnit } from '../lib/units';
 import { ReceiptText as HeaderReceiptText, FolderSync as HeaderFolderSync } from 'lucide-react';
 import { OperationHeader } from './OperationHeader';
 import { businessDate } from '../lib/dates';
-import React, { useState, useMemo , useRef } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   ShoppingBag,
   Users,
@@ -446,9 +446,9 @@ export const SalesPosScreen: React.FC<SalesPosScreenProps> = ({
                             ),
                           );
                         }}
-positive
-onValidity={valid => trackCartNumber(c.item.id, 'quantity', valid)}
-className="w-20 min-h-[44px] border border-line-control rounded-sm px-2 py-1 text-xs font-extrabold text-center bg-surface-control"
+                        positive
+                        onValidity={valid => trackCartNumber(c.item.id, 'quantity', valid)}
+                        className="w-20 min-h-[44px] border border-line-control rounded-sm px-2 py-1 text-xs font-extrabold text-center bg-surface-control"
                       />
                     </label>
                     <label className="flex items-center gap-1.5 text-xs text-ink-default font-bold">
@@ -459,8 +459,8 @@ className="w-20 min-h-[44px] border border-line-control rounded-sm px-2 py-1 tex
                           const p = number;
                           setCart((prev) => prev.map((x) => (x.item.id === c.item.id ? { ...x, customUnitPrice: p } : x)));
                         }}
-onValidity={valid => trackCartNumber(c.item.id, 'price', valid)}
-className="w-20 min-h-[44px] border border-line-control rounded-sm px-2 py-1 text-xs font-extrabold text-center bg-surface-control"
+                        onValidity={valid => trackCartNumber(c.item.id, 'price', valid)}
+                        className="w-20 min-h-[44px] border border-line-control rounded-sm px-2 py-1 text-xs font-extrabold text-center bg-surface-control"
                       />
                     </label>
                     <div className="text-sm font-extrabold text-gold [font-variant-numeric:tabular-nums]">
