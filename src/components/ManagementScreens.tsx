@@ -1,3 +1,4 @@
+import {decimalValue} from '../lib/decimalInput';
 import {unitLabel as displayUnit} from '../lib/units';
 import {
   Tag as HeaderTag,
@@ -36,7 +37,7 @@ import { itemEditPatch } from "../lib/operationChecks";
 // التحقق أن كل القيم أرقام صحيحة غير سالبة (لحقول النص في النوافذ)
 function allValidNumbers(values: string[]): boolean {
   return values.every((v) => {
-    const n = Number(v);
+    const n = decimalValue(v);
     return typeof v === "string" && !!v.trim() && Number.isFinite(n) && n >= 0;
   });
 }
@@ -157,7 +158,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
       return;
     }
     // نأخذ الاسم من النافذة (التعديل النصي)، مع الرجوع لاسم الكتالوج لو تُرك فارغًا
-    if(!editDraft.stock?.trim()||!Number.isFinite(Number(editDraft.stock))||(Number(editDraft.stock)<0&&Number(editDraft.stock)!==editingOriginal?.stock)){setEditError('الجرد الفعلي لا يقل عن صفر؛ يمكن إبقاء العجز الحالي دون تعديله');return;}
+    if(!editDraft.stock?.trim()||!Number.isFinite(decimalValue(editDraft.stock))||(decimalValue(editDraft.stock)<0&&decimalValue(editDraft.stock)!==editingOriginal?.stock)){setEditError('الجرد الفعلي لا يقل عن صفر؛ يمكن إبقاء العجز الحالي دون تعديله');return;}
     const live = items.find((i) => i.id === editingItem.id);
     try {
       const code=editingItem.code.trim();
@@ -167,11 +168,11 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
         code,
         name: editingItem.name.trim() || (live ? live.name : "صنف"),
         category: editingItem.category,
-        costPrice: parseFloat(editDraft.costPrice),
-        retailPrice: parseFloat(editDraft.retailPrice),
-        wholesalePrice: parseFloat(editDraft.wholesalePrice),
-        stock: parseFloat(editDraft.stock),
-        minStock: parseFloat(editDraft.minStock),
+        costPrice: decimalValue(editDraft.costPrice),
+        retailPrice: decimalValue(editDraft.retailPrice),
+        wholesalePrice: decimalValue(editDraft.wholesalePrice),
+        stock: decimalValue(editDraft.stock),
+        minStock: decimalValue(editDraft.minStock),
       });
       if (onUpdateItem(editingItem.id, patch) === false) {
         setEditError("لم تُحفظ التعديلات؛ راجع التنبيه");
@@ -271,7 +272,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
               <label>
                 سعر التكلفة (ج.م)
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   value={editDraft.costPrice ?? ""}
                   onChange={(e) =>
                     setEditDraft({ ...editDraft, costPrice: e.target.value })
@@ -282,7 +283,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
               <label>
                 سعر البيع القطاعي (ج.م)
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   value={editDraft.retailPrice ?? ""}
                   onChange={(e) =>
                     setEditDraft({ ...editDraft, retailPrice: e.target.value })
@@ -293,7 +294,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
               <label>
                 سعر البيع الجملة (ج.م)
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   value={editDraft.wholesalePrice ?? ""}
                   onChange={(e) =>
                     setEditDraft({
@@ -307,8 +308,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
               <label>
                 الرصيد الحالي بالمخزن
                 <input
-                  type="number"
-                  step="0.25"
+                  type="text" inputMode="decimal"
                   value={editDraft.stock ?? ""}
                   onChange={(e) =>
                     setEditDraft({ ...editDraft, stock: e.target.value })
@@ -319,7 +319,7 @@ export const ProductsCatalogScreen: React.FC<ProductsCatalogScreenProps> = ({
               <label>
                 حد النواقص
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   value={editDraft.minStock ?? ""}
                   onChange={(e) =>
                     setEditDraft({ ...editDraft, minStock: e.target.value })
@@ -430,17 +430,17 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
       setEditError("أدخل أرقامًا صحيحة غير سالبة؛ لا تعتمد القيمة حتى تكتمل");
       return;
     }
-    if(!editDraft.stock?.trim()||!Number.isFinite(Number(editDraft.stock))||(Number(editDraft.stock)<0&&Number(editDraft.stock)!==editingOriginal?.stock)){setEditError('الجرد الفعلي لا يقل عن صفر؛ يمكن إبقاء العجز الحالي دون تعديله');return;}
+    if(!editDraft.stock?.trim()||!Number.isFinite(decimalValue(editDraft.stock))||(decimalValue(editDraft.stock)<0&&decimalValue(editDraft.stock)!==editingOriginal?.stock)){setEditError('الجرد الفعلي لا يقل عن صفر؛ يمكن إبقاء العجز الحالي دون تعديله');return;}
     const live = items.find((i) => i.id === editingItem.id);
     try {
       const patch = itemEditPatch(editingOriginal!, live, {
         name: editingItem.name.trim() || (live ? live.name : "صنف"),
         category: editingItem.category,
-        stock: parseFloat(editDraft.stock),
-        minStock: parseFloat(editDraft.minStock),
-        costPrice: parseFloat(editDraft.costPrice),
-        retailPrice: parseFloat(editDraft.retailPrice),
-        wholesalePrice: parseFloat(editDraft.wholesalePrice),
+        stock: decimalValue(editDraft.stock),
+        minStock: decimalValue(editDraft.minStock),
+        costPrice: decimalValue(editDraft.costPrice),
+        retailPrice: decimalValue(editDraft.retailPrice),
+        wholesalePrice: decimalValue(editDraft.wholesalePrice),
       });
       if (onUpdateItemPricesAndStock(editingItem.id, patch) === false) {
         setEditError("لم تُحفظ التعديلات؛ راجع التنبيه");
@@ -645,8 +645,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               <label>
                 الرصيد ({displayUnit(editingItem.baseUnit)})
                 <input
-                  type="number"
-                  step="0.25"
+                  type="text" inputMode="decimal"
                   value={editDraft.stock ?? ""}
                   onChange={(e) =>
                     setEditDraft({ ...editDraft, stock: e.target.value })
@@ -657,7 +656,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               <label>
                 التكلفة (ج.م)
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   value={editDraft.costPrice ?? ""}
                   onChange={(e) =>
                     setEditDraft({ ...editDraft, costPrice: e.target.value })
@@ -668,7 +667,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               <label>
                 حد النواقص
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   value={editDraft.minStock ?? ""}
                   onChange={(e) =>
                     setEditDraft({ ...editDraft, minStock: e.target.value })
@@ -679,7 +678,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               <label>
                 سعر القطاعي
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   value={editDraft.retailPrice ?? ""}
                   onChange={(e) =>
                     setEditDraft({ ...editDraft, retailPrice: e.target.value })
@@ -690,7 +689,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               <label>
                 سعر الجملة
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   value={editDraft.wholesalePrice ?? ""}
                   onChange={(e) =>
                     setEditDraft({
@@ -904,7 +903,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
       setAddModalError("أدخل الاسم أولاً");
       return;
     }
-    const balance = parseFloat(newBalance);
+    const balance = decimalValue(newBalance);
     if (!Number.isFinite(balance) || balance < 0) {
       setAddModalError("الرصيد الافتتاحي يجب أن يكون رقمًا غير سالب");
       return;
@@ -1082,7 +1081,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
               <button
                 type="button"
                 onClick={() => {
-                  const val = parseFloat(amountInput);
+                  const val = decimalValue(amountInput);
                   if (!Number.isFinite(val) || val <= 0) {
                     setPayModalError("أدخل مبلغًا صحيحًا أكبر من صفر");
                     return;
@@ -1122,7 +1121,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
               </b>
             </div>
 <input
-              type="number"
+              type="text" inputMode="decimal"
               aria-label="المبلغ"
               value={amountInput}
               onChange={(e) => {
@@ -1176,7 +1175,7 @@ export const SuppliersAndCustomersScreen: React.FC<{
             </>}
 {addModalError && <p role="alert" className="field-error">{addModalError}</p>}
 {mode==='customers'&&<input
-              type="number"
+              type="text" inputMode="decimal"
               aria-label="الرصيد الافتتاحي"
               value={newBalance}
               onChange={(e) => setNewBalance(e.target.value)}

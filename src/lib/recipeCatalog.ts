@@ -47,6 +47,7 @@ export function updateCatalogRecipe(state:StoreState,original:InventoryItem,reci
 }
 async function confirm(engine:StoreEngine){await engine.flush();if(engine.snapshot.status!=='ready')throw Error(engine.snapshot.error||'لم يصل تأكيد حفظ الوصفة');}
 export async function saveRecipeDefinition(engine:StoreEngine,id:string,name:string,definition:RecipeProductDefinition,actor:Actor,original?:CatalogNameDraft){
+  if (engine.isOffline) throw Error('العملية دي تحتاج اتصالًا مباشرًا بالخادم.');
  if(engine.hasPending)await confirm(engine);
  const current=engine.state.catalogNameDrafts.find(d=>d.id===id);
  if(current?.name===name.trim()&&equal(current.definition,definition))return;
@@ -54,6 +55,7 @@ export async function saveRecipeDefinition(engine:StoreEngine,id:string,name:str
  engine.replace(recordRecipeDefinition(engine.state,id,name,definition,actor));await confirm(engine);
 }
 export async function saveRecipe(engine:StoreEngine,target:{draft:CatalogNameDraft}|{item:InventoryItem},recipe:RecipeIngredient[],actor:Actor){
+  if (engine.isOffline) throw Error('العملية دي تحتاج اتصالًا مباشرًا بالخادم.');
  if(engine.hasPending){
   await confirm(engine);
   if('draft'in target){const d=target.draft;if(!engine.state.catalogNameDrafts.some(x=>x.id===d.id)&&engine.state.items.some(i=>i.code===d.definition?.code&&equal(i.recipe,recipe)))return;}

@@ -434,3 +434,14 @@ describe("backup validation, reports and print safety", () => {
     expect(isInPeriod("2026-11-02", "today", now)).toBe(false);
   });
 });
+
+it('rejects ambiguous localized decimals without silently substituting a different amount',async()=>{
+  const {parseDecimalInput,decimalValue}=await import('../src/lib/decimalInput');
+  for(const value of ['1,500','١,٥٠٠','1, 500','(1,500)','１,５００']){
+    expect(parseDecimalInput(value)).toBeUndefined();
+    expect(decimalValue(value)).toBeNaN();
+  }
+  expect(parseDecimalInput('١٫٥٠٠')).toBe(1.5);
+  expect(parseDecimalInput('١٬٥٠٠')).toBe(1500);
+  expect(parseDecimalInput('٠')).toBe(0);
+});

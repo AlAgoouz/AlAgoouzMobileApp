@@ -1,3 +1,5 @@
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -44,12 +46,25 @@ function preloadErpEntry(): Plugin {
   };
 }
 
+// Cache immutable build assets only. The worker never caches API responses or account pages.
+const offlineBundle = (): Plugin => ({
+  name: 'agouz-offline-bundle',
+  apply: 'build',
+  generateBundle(_options,bundle) {
+    const assets = Object.keys(bundle).filter(path => /^assets\/.+\.(js|css|woff2|webp)$/.test(path)).sort().map(path => '/'+path);
+    const template = readFileSync(new URL('./src/workers/offline.js', import.meta.url), 'utf8');
+    const release = createHash('sha256').update(template).update(JSON.stringify(assets)).digest('hex').slice(0,16);
+    this.emitFile({type:'asset', fileName:'sw.js', source:template
+      .replace('__RELEASE__',release).replace('/* @offline-assets */ []',JSON.stringify(assets))});
+  },
+});
+
 export default defineConfig({
   define: {
     'import.meta.env.VITE_AGOUZ_RELEASE': JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.VITE_AGOUZ_RELEASE ?? ''),
     'import.meta.env.VITE_AGOUZ_ENVIRONMENT': JSON.stringify(process.env.VERCEL_ENV ?? ''),
   },
-  plugins: [react(), preloadErpEntry()],
+  plugins: [react(), preloadErpEntry(), offlineBundle()],
   server: {
     host: '127.0.0.1',
     port: 5173,

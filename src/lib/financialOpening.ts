@@ -19,6 +19,7 @@ export function recordFinancialOpening(state:StoreState,date:string,amount:numbe
 }
 
 export async function saveFinancialOpening(engine:StoreEngine,date:string,amount:number,reason:string,actor:{id:string;name:string}){
+  if (engine.isOffline) throw Error('العملية دي تحتاج اتصالًا مباشرًا بالخادم.');
  const confirm=async()=>{await engine.flush();if(engine.snapshot.status!=='ready')throw Error(engine.snapshot.error||'لم يصل تأكيد حفظ رصيد البداية');};
  // Retry an uncertain operation with its existing id before making a correction.
  // Otherwise a lost acknowledgement could append two events against one version.

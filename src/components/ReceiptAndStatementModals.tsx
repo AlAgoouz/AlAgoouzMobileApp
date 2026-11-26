@@ -1,3 +1,4 @@
+import {decimalValue} from '../lib/decimalInput';
 import { serverInvoicePdf, downloadExport } from '../lib/reportExports';
 import { Modal } from './Modal';
 import { RecordPagination, useRecordPage } from './RecordPagination';
@@ -413,8 +414,8 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
   }, [mode, target, accountPayments]);
 
   const handleQuickPay = () => {
-    const amt = parseFloat(newPayAmount) || 0;
-    if (!onRecordPayment || amt <= 0) return;
+    const amt = decimalValue(newPayAmount);
+    if (!onRecordPayment || !Number.isFinite(amt) || amt <= 0) return;
     const accepted = onRecordPayment(
       amt,
       newPayNotes.trim() || (mode === 'supplier' ? 'سداد دفعة للمورد' : 'تحصيل دفعة من العميل'),
@@ -598,7 +599,7 @@ export const AccountStatementModal: React.FC<AccountStatementModalProps> = ({
             <div className="flex flex-wrap gap-2 items-center">
               <input
                 aria-label="مبلغ الدفعة"
-                type="number"
+                type="text" inputMode="decimal"
                 value={newPayAmount}
                 onChange={(e) => setNewPayAmount(e.target.value)}
                 placeholder="المبلغ (ج.م)"

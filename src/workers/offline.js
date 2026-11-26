@@ -1,9 +1,10 @@
-const CACHE_NAME = 'agouz-offline-v1';
+const CACHE_NAME = 'agouz-offline-__RELEASE__';
 const OFFLINE_PAGE = '/offline.html';
+const assets = new Set(/* @offline-assets */ []);
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache =>
-    cache.add(new Request(OFFLINE_PAGE, {cache: 'reload'}))
+    cache.addAll([OFFLINE_PAGE, ...assets].map(url => new Request(url, {cache:'reload'})))
   ));
 });
 
@@ -19,9 +20,14 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const {request} = event;
   const url = new URL(request.url);
-  if (request.method !== 'GET' || request.mode !== 'navigate' ||
-      url.origin !== self.location.origin ||
-      !['/', '/menu', '/menu/'].includes(url.pathname)) return;
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (!url.search && assets.has(url.pathname)) {
+    event.respondWith(caches.open(CACHE_NAME).then(async cache =>
+      await cache.match(request) ?? await fetch(request)
+    ));
+    return;
+  }
+  if (request.mode !== 'navigate' || !['/', '/menu', '/menu/'].includes(url.pathname)) return;
 
   event.respondWith(fetch(request).catch(async () => {
     const cache = await caches.open(CACHE_NAME);

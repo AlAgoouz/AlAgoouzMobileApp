@@ -424,3 +424,75 @@ it.each(['saved', 'discarded'] as const)('reconciles a cashier attachment report
   await vi.advanceTimersByTimeAsync(20000);
   expect(transport.save).toHaveBeenCalledTimes(1);
 });
+
+it('writes durable offline drafts and submits the same operation after reopening online',async()=>{
+  const journal=vi.fn();
+  const save=vi.fn().mockResolvedValue(8);
+  const transport={load:async()=>({state:emptyStore,version:7}),save};
+  const engine=new StoreEngine(transport,undefined,undefined,undefined,journal);
+  await engine.load();
+  engine.setConnectivity(false);
+  engine.replace(structuredClone(emptyStore));
+  await engine.flush();
+  expect(save).not.toHaveBeenCalled();
+  expect(engine.snapshot.status).toBe('offline');
+
+  const saved=structuredClone(journal.mock.lastCall![0]);
+  const reopened=new StoreEngine(transport,undefined,undefined,undefined,journal);
+  expect(reopened.resumeJournal(saved)).toBe(true);
+  await reopened.reconnect();
+  expect(save.mock.calls[0].slice(1,3)).toEqual([7,saved.pending.id]);
+  expect(reopened.snapshot.status).toBe('ready');
+  expect(journal.mock.lastCall![0]).toBeNull();
+});
+
+it('does not acknowledge an offline operation when device storage fails',async()=>{
+  const engine=new StoreEngine({load:async()=>({state:emptyStore,version:2}),save:vi.fn()},
+    undefined,undefined,undefined,()=>{throw Error('storage full');});
+  await engine.load();
+  engine.setConnectivity(false);
+  expect(()=>engine.replace(structuredClone(emptyStore))).toThrow('storage full');
+  expect(engine.hasPending).toBe(false);
+});
+
+it('holds a sent payload intact when the network drops and additional edits arrive',async()=>{
+  vi.useFakeTimers();
+  let reject!: (error:Error)=>void;
+  const save=vi.fn()
+    .mockImplementationOnce(()=>new Promise((_resolve,fail)=>{reject=fail;}))
+    .mockResolvedValueOnce(2).mockResolvedValueOnce(3);
+  const journal=vi.fn();
+  const engine=new StoreEngine({load:async()=>({state:emptyStore,version:1}),save},
+    undefined,undefined,undefined,journal);
+  await engine.load();
+  engine.replace(emptyStore);
+  const first=engine.flush();
+  engine.setConnectivity(false);
+  reject(new StoreWriteFailure('NETWORK','disconnected',true));
+  await first;
+  engine.replace(emptyStore);
+  const persisted=journal.mock.lastCall![0];
+  expect(persisted.pending.id).toBe(save.mock.calls[0][2]);
+  expect(persisted.queued.id).not.toBe(persisted.pending.id);
+  engine.setConnectivity(true);
+  await engine.reconnect();
+  expect(save.mock.calls.map(call=>call.slice(1,3))).toEqual([
+    [1,persisted.pending.id],[1,persisted.pending.id],[2,persisted.queued.id]
+  ]);
+});
+
+it('keeps a conflicting offline draft for review instead of applying it to a newer store',async()=>{
+  const journal=vi.fn();
+  const save=vi.fn().mockRejectedValue(new StoreWriteFailure('STORE_CONFLICT','modified'));
+  const engine=new StoreEngine({load:async()=>({state:emptyStore,version:1}),save},
+    undefined,undefined,undefined,journal);
+  await engine.load();
+  engine.setConnectivity(false);
+  engine.replace(emptyStore);
+  engine.setConnectivity(true);
+  await engine.reconnect();
+  expect(engine.snapshot.status).toBe('conflict');
+  expect(engine.hasPending).toBe(true);
+  expect(journal.mock.lastCall![0]).not.toBeNull();
+  expect(save).toHaveBeenCalledTimes(1);
+});
