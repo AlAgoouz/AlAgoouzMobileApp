@@ -25,3 +25,14 @@ __pycache__/
 audit/*.local.jpg
 
 .hypothesis/
+
+# Generated test reports and screenshots
+/.playwright-cli/
+/baseline-performance.json
+/current-performance.json
+/design-review-performance.json
+/baseline-mobile.png
+/current-mobile.png
+/design-*.png
+/layout-comparison/
+/complete-backup-recovery-proof.json

@@ -5,7 +5,7 @@
 - المشروع على Vercel: `agouz` داخل `AlAgoouz`.
 - قاعدة Supabase الجديدة: `Agouz` (`srinizbfqozvdqsuvvbc`).
 - رابط المشروع: [Agouz](https://agouz.vercel.app).
-- راجع [مراجعة النظام والواجهة](audit/SYSTEM_REVIEW_2026_11_03_AR.md) و[ملاحظات الإصدار](RELEASE.md) ونتائج الاختبارات داخل `audit` للتمييز بين ما اختُبر وما يحتاج جهازًا أو تأكيدًا من المالك.
+- راجع [نتائج التحقق على GitHub Actions](https://github.com/AlAgoouz/AlAgoouzMobileApp/actions/workflows/verify.yml) و[ملاحظات الإصدار](RELEASE.md).
 
 ## أول استخدام
 
@@ -19,6 +19,8 @@
 
 ```sh
 npm ci
+npm run check
+npm run lint
 npm test
 npm run build
 ```
@@ -46,17 +48,9 @@ py -3 -m venv .venv
 
 الحفظ يمر عبر `bon_erp_save_store`، والرفع عبر `bon_erp_enqueue_export`. إعداد أعضاء إضافيين يتم بصورة صريحة عبر نسخة خاصة من `supabase/member-mapping.example.json` وأداة `supabase/generate-member-setup.mjs` التي تولد SQL للمراجعة دون الاتصال بالخادم أو استبدال متجر موجود.
 
-## تجربة متصفح قديمة
+## اختبارات PostgreSQL والمتصفح
 
-هذه أداة تاريخية للدورة الأولى وتطبق الترقية الأولى فقط؛ ليست قبولًا لقواعد التشغيل الحالية. الفحص المعتمد يستخدم جميع الترقيات في PostgreSQL المعزول عبر Verify Agouz، وفحص العرض عبر Agouz slow mobile performance. لإعادة تجربة الدورة القديمة فقط، شغّل `node tests/support/local-server.mjs`، ثم في PowerShell منفصل:
-
-```powershell
-$env:VITE_SUPABASE_URL='http://127.0.0.1:5281'
-$env:VITE_SUPABASE_PUBLISHABLE_KEY='local-disposable-public-test-key'
-npm run dev -- --port 5280 --strictPort
-```
-
-افتح `http://127.0.0.1:5280`. المستخدمون `owner1@local.test` إلى `owner4@local.test` وكلمة المرور `Local-Test-Only-123!` تخص هذه التجربة فقط. تُمحى القاعدة المؤقتة عند إيقاف خادمها ولا تتصل بأي مشروع حقيقي. لا تحاكي هذه التجربة خدمة Realtime المستضافة؛ يعمل التحديث الدوري كبديل.
+يشغّل [Verify Agouz](https://github.com/AlAgoouz/AlAgoouzMobileApp/actions/workflows/verify.yml) كل الترقيات على PostgreSQL معزول لاختبار قواعد الحسابات والصلاحيات. وتشغّل [مراجعة المتصفح](https://github.com/AlAgoouz/AlAgoouzMobileApp/actions/workflows/visual-review.yml) و[اختبارات الأداء](https://github.com/AlAgoouz/AlAgoouzMobileApp/actions/workflows/performance.yml) التطبيق على بيانات تجريبية. النتائج واللقطات متاحة في تشغيل GitHub Actions الخاص بكل نسخة.
 
 ## الكاشير
 
@@ -74,7 +68,6 @@ npm run dev -- --port 5280 --strictPort
 - يُرفض إلغاء شراء إذا تغير مخزونه بعد اعتماده؛ يلزم تسوية الحركة اللاحقة أولًا.
 - عند التعارض، احتفظ بنسخة من المسودة ثم أعد تحميل بيانات السحابة وراجع عمليتك. لا يوجد دمج تلقائي قد يمسح عمل جهاز آخر.
 - استرجاع النسخة يُراجع قبل تطبيقه. الحد الحالي للملف 10 MB وسعة المسودة المحلية محدودة بسعة المتصفح.
-- ملفات التشخيص القديمة في `audit` أدلة للفحص الأول؛ مجموعة قبول النسخة الحالية هي `npm test`.
 
 ### نطاق النسخ الاحتياطي للملفات
 
