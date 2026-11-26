@@ -1,4 +1,5 @@
 begin;
+set local lock_timeout = '5s';
 
 -- Keep only the current receipt with each purchase snapshot. Earlier receipts stay on the item.
 create function bon_erp_private.compact_purchase_item(p_item jsonb, p_keep_receipt boolean)
@@ -157,18 +158,13 @@ begin
        }}}'::jsonb);
   execute replace(definition,'$schema$'||source_schema||'$schema$','$schema$'||next_schema::text||'$schema$');
 
-  definition := pg_get_functiondef('bon_erp_private.validate_changes(jsonb,jsonb)'::regprocedure);
-  -- Some deployed revisions use a separate cancellation trigger. Leave that
-  -- revision's financial rules in place. The trigger above verifies compact invoices.
-  if position(old_check in definition)>0 then
-    execute replace(definition,old_check,$sql$
-      if not (n ? 'inventoryHistory') and r is distinct from i then
-        raise exception 'PURCHASE_HAS_LATER_MOVEMENTS';
-      end if;
-    $sql$);
-  elsif position('PURCHASE_HAS_LATER_MOVEMENTS' in definition)>0 then
-    raise exception 'PURCHASE_SNAPSHOT_TRANSITION_PATCH_REFUSED';
-  end if;
+  definition := pg_get_functiondef('bon_erp_private.validate_financial_details(jsonb,jsonb)'::regprocedure);
+  if position(old_check in definition)=0 then raise exception 'PURCHASE_SNAPSHOT_TRANSITION_PATCH_REFUSED'; end if;
+  execute replace(definition,old_check,$sql$
+    if not (n ? 'inventoryHistory') and r is distinct from i then
+      raise exception 'PURCHASE_HAS_LATER_MOVEMENTS';
+    end if;
+  $sql$);
 
   -- Older screens preserve the compact snapshots but their schema omits the checkpoint.
   -- Keep the accepted checkpoint unless a newer client explicitly supplies one.
