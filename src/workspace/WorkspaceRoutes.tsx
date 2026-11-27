@@ -1,4 +1,4 @@
-import {lazy} from 'react';
+import {lazy, Suspense} from 'react';
 import type { ActiveWorkspace } from './useWorkspaceController';
 import { OperationsRoutes } from './OperationsRoutes';
 import { CatalogRoutes } from './CatalogRoutes';
@@ -6,6 +6,7 @@ import { ContactRoutes } from './ContactRoutes';
 import { FinanceRoutes } from './FinanceRoutes';
 import { SettingsRoutes } from './SettingsRoutes';
 import type { ExcelSection } from '../lib/excelWorkbook';
+import { OperationToolbarAction } from '../components/OperationHeader';
 
 const ExcelTools=lazy(()=>import('../components/ExcelSectionTools').then(module=>({default:module.ExcelSectionTools})));
 const excelSections:ReadonlySet<string>=new Set<ExcelSection>([
@@ -46,10 +47,14 @@ function renderScreen(workspace:ActiveWorkspace) {
 export function WorkspaceRoutes({ workspace }: { workspace: ActiveWorkspace }) {
   const {activeScreen,moreInitialTab,engine,member,partners,financialPartner,navigateScreen}=workspace;
   const section=activeScreen==='more'?moreInitialTab:activeScreen;
-  return <>
-    {excelSections.has(section)&&<ExcelTools key={section} section={section as ExcelSection} member={member}
-      partners={partners} selectedPartnerId={financialPartner?.id} hasPending={()=>engine.hasPending}
-      refresh={()=>engine.refresh()} openStocktaking={()=>navigateScreen('stocktaking')}/>}
+  const excelAction=excelSections.has(section)?(
+    <Suspense fallback={null}>
+      <ExcelTools key={section} section={section as ExcelSection} member={member}
+        partners={partners} selectedPartnerId={financialPartner?.id} hasPending={()=>engine.hasPending}
+        refresh={()=>engine.refresh()} openStocktaking={()=>navigateScreen('stocktaking')}/>
+    </Suspense>
+  ):null;
+  return <OperationToolbarAction.Provider value={excelAction}>
     {renderScreen(workspace)}
-  </>;
+  </OperationToolbarAction.Provider>;
 }
