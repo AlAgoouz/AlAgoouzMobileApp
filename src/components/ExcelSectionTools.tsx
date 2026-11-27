@@ -83,9 +83,7 @@ export function ExcelSectionTools(props:Props){
   };
   const eligible=!!staged?.checked&&!receipt;
   return <>
-    <div className="excel-tools-bar">
-      <button type="button" className="record-action excel-tools-trigger" onClick={()=>setOpen(true)}><FileSpreadsheet size={17} aria-hidden="true"/> Excel</button>
-    </div>
+    <button type="button" className="record-action excel-tools-trigger" aria-haspopup="dialog" onClick={()=>setOpen(true)}><FileSpreadsheet size={17} aria-hidden="true"/> Excel</button>
     {open&&<Modal title={'Excel — '+config.title} wide busy={busy} onClose={()=>setOpen(false)} footer={eligible&&<button className="action-button excel-approve" disabled={busy} type="button" onClick={()=>void approve()}>اعتماد وحفظ الدفعة</button>}>
       <div className="excel-tools">
         <form className="excel-tools-block" aria-labelledby={id+'-export'} method="post" onSubmit={event=>{event.preventDefault();void download();}}>

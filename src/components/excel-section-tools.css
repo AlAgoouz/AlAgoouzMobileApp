@@ -1,10 +1,11 @@
-.excel-tools-bar {
-  display: flex;
-  justify-content: flex-end;
-  margin-block-end: .65rem;
+.operation-toolbar > .excel-tools-trigger {
+  flex: none;
+  inline-size: auto;
+  min-block-size: 44px;
+  padding-inline: 12px;
+  margin-inline-start: auto;
 }
 
-.excel-tools-trigger,
 .excel-tools .record-action {
   display: inline-flex;
   align-items: center;
