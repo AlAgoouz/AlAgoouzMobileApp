@@ -849,3 +849,18 @@ it.skipIf(!active)('projects store documents by section and archives overflow au
   const preserved=readJson("select public.bon_erp_history_archive('audit')");
   expect(preserved.some((row:{entry:{id:string}})=>row.entry.id==='archive-copy-251')).toBe(true);
 });
+
+it.skipIf(!active)('Excel preview validates real section writes without posting, and approval is atomic and idempotent',()=>{
+  const before=stockState();seed(before);
+  const next={...before,items:[{...bean,name:'Updated via Excel'}]};
+  const id=crypto.randomUUID();
+  const changes=literal(storeChanges(toCloud(before),toCloud(next)));
+  const query=(version:number,preview:boolean,operation=id)=>`select public.bon_erp_apply_excel(${version},${changes},'${operation}',${preview})`;
+  const inspect=`select version, items->0->>'name', (select count(*) from public.bon_erp_store_receipts where operation_id='${id}') from public.bon_elagouz_store`;
+  expect(asUser(owner,`${query(0,true)};${inspect}`).split('\n').at(-1)).toBe(`0|${bean.name}|0`);
+  expect(asUser(owner,`${query(0,true)};${query(0,false)};${query(0,false)};${inspect}`).split('\n').at(-1)).toBe('1|Updated via Excel|1');
+  expect(()=>asUser(owner,`${query(0,false)};${query(0,true,crypto.randomUUID())}`)).toThrow('STORE_CONFLICT');
+  const denied='22222222-2222-4222-8222-222222220098';
+  userAccessFixture(denied,{view:true,sales:true});
+  expect(()=>asUser(denied,query(0,true))).toThrow('USER_PERMISSION_DENIED');
+});

@@ -14,7 +14,7 @@ import {recordEmployeeAction} from './payroll';
 
 type ToastTone = 'ok' | 'warn' | 'danger' | 'info';
 interface InventoryActionsOptions {
-  engine: StoreEngine;
+  engine: Pick<StoreEngine, 'state' | 'field' | 'replace'>;
   currentPartner: Pick<Partner,'name'>;
   requireFinancialPartner: () => Partner;
   addAuditLog: (type: AuditLogEntry['actionType'], description: string, amount?: number) => void;
